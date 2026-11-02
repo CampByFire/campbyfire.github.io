@@ -1,5 +1,6 @@
-// Что помнит само устройство, а не игра: подсказки, знакомство, когда делали копию.
+// Что помнит само устройство, а не игра: подсказки, знакомство, когда делали копию, сила магии.
 // В сохранение и в GitHub это не попадает.
+import type { Motion } from './magic/mode';
 
 const KEY = 'taskcraft-lager-device';
 
@@ -12,6 +13,8 @@ export interface Local {
   introDone: boolean;
   /** До какого времени молчит подсказка. */
   quiet: Partial<Record<'ios' | 'backup' | 'token', number>>;
+  /** Сила магии, выбранная в Летописи. Пока не выбрана, решает настройка системы «Уменьшить движение». */
+  magic?: Motion;
 }
 
 export function loadLocal(now: number): Local {

@@ -1,7 +1,8 @@
 // Все слова мира в одном месте: экраны берут названия только отсюда.
+import { periodEnd, periodKind, periodOf, periodStart, shiftPeriod, type PeriodKey, type PeriodKind } from './period';
 import type { UndeadRank } from './rules';
-import type { Shift } from './time';
-import type { Level, QuestColor, QuestKind, Repeat } from './types';
+import { parseDay, type Shift } from './time';
+import type { Level, QuestKind, QuestPreset, Repeat } from './types';
 
 export type ClassId = 'rogue' | 'barbarian' | 'mage' | 'knight';
 
@@ -50,7 +51,8 @@ export const QUEST_KIND_HINT: Record<QuestKind, string> = {
   any: 'без привязки ко времени',
 };
 
-export const QUEST_COLOR_NAME: Record<QuestColor, string> = {
+/** Готовые знамёна словами: так их называет экранный диктор. */
+export const QUEST_COLOR_NAME: Record<QuestPreset, string> = {
   red: 'алое',
   blue: 'синее',
   green: 'зелёное',
@@ -79,6 +81,73 @@ export function repeatName(r: Repeat): string {
   if (r.every === 'day') return 'каждый день';
   if (r.every === 'workday') return 'по рабочим дням';
   return ON_WEEKDAY[r.weekday];
+}
+
+export const PERIOD_KIND_NAME: Record<PeriodKind, string> = {
+  week: 'Неделя',
+  month: 'Месяц',
+  quarter: 'Квартал',
+  year: 'Год',
+};
+
+export const MONTH_NAME = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+/** «2 ноября», «до 15 декабря». */
+export const MONTH_OF = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+const QUARTER_ROMAN = ['I', 'II', 'III', 'IV'];
+
+/** «2–8 ноября», «27 октября – 2 ноября», «29 декабря 2026 – 4 января 2027». */
+export function weekRange(key: PeriodKey): string {
+  const a = parseDay(periodStart(key));
+  const b = parseDay(periodEnd(key));
+  if (a.getFullYear() !== b.getFullYear()) {
+    return `${a.getDate()} ${MONTH_OF[a.getMonth()]} ${a.getFullYear()} – ${b.getDate()} ${MONTH_OF[b.getMonth()]} ${b.getFullYear()}`;
+  }
+  if (a.getMonth() !== b.getMonth()) return `${a.getDate()} ${MONTH_OF[a.getMonth()]} – ${b.getDate()} ${MONTH_OF[b.getMonth()]}`;
+  return `${a.getDate()}–${b.getDate()} ${MONTH_OF[b.getMonth()]}`;
+}
+
+/**
+ * Название периода относительно сегодняшнего дня: «Эта неделя», «Следующая неделя», «Ноябрь»,
+ * «Январь 2027», «IV квартал», «2026 год». Год пишется, только если он не нынешний.
+ */
+export function periodName(key: PeriodKey, today: string): string {
+  const kind = periodKind(key);
+  const year = Number(key.slice(0, 4));
+  const thisYear = parseDay(today).getFullYear();
+  const tail = year === thisYear ? '' : ` ${year}`;
+  if (kind === 'week') {
+    const now = periodOf('week', today);
+    if (key === now) return 'Эта неделя';
+    if (key === shiftPeriod(now, 1)) return 'Следующая неделя';
+    if (key === shiftPeriod(now, -1)) return 'Прошлая неделя';
+    return `Неделя ${weekRange(key)}`;
+  }
+  if (kind === 'month') return `${MONTH_NAME[Number(key.slice(5)) - 1]}${tail}`;
+  if (kind === 'quarter') return `${QUARTER_ROMAN[Number(key.slice(6)) - 1]} квартал${tail}`;
+  return `${year} год`;
+}
+
+/** Коротко для строки задачи: «неделя», «ноябрь», «IV кв.», «2027». */
+export function periodShort(key: PeriodKey, today: string): string {
+  const kind = periodKind(key);
+  if (kind === 'week') {
+    const now = periodOf('week', today);
+    if (key === now) return 'эта неделя';
+    if (key === shiftPeriod(now, 1)) return 'след. неделя';
+    return `нед. ${parseDay(periodStart(key)).getDate()} ${MONTH_OF[parseDay(periodStart(key)).getMonth()].slice(0, 3)}`;
+  }
+  if (kind === 'month') return periodName(key, today).toLowerCase();
+  if (kind === 'quarter') return `${QUARTER_ROMAN[Number(key.slice(6)) - 1]} кв.${Number(key.slice(0, 4)) === parseDay(today).getFullYear() ? '' : ` ${key.slice(0, 4)}`}`;
+  return key;
+}
+
+/** «на эту неделю», «на ноябрь», «на IV квартал», «на 2026 год»: куда перенести хвост. */
+export function periodTo(key: PeriodKey, today: string): string {
+  const name = periodName(key, today);
+  const kind = periodKind(key);
+  if (kind === 'week') return `на ${name.replace('Эта неделя', 'эту неделю').replace('Следующая неделя', 'следующую неделю').replace(/^Неделя/, 'неделю')}`;
+  if (kind === 'quarter' || kind === 'year') return `на ${name}`;
+  return `на ${name.toLowerCase()}`;
 }
 
 export const SHIFT_NAME: Record<Shift, string> = {

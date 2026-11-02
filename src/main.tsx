@@ -5,6 +5,7 @@ import '@fontsource/alegreya-sans/500.css';
 import '@fontsource/alegreya-sans/700.css';
 import '@fontsource/alegreya-sans/800.css';
 import './ui/styles.css';
+import './ui/magic/magic.css';
 import { render } from 'preact';
 import { Store } from './game/store';
 import { Sync } from './sync/sync';

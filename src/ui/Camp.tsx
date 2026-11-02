@@ -23,7 +23,9 @@ import { SCENE, SCENE_H, SCENE_W, assetUrl } from '../scene/scene';
 import type { Ui } from './App';
 import { useSize } from './hooks';
 import { GIcon, LIcon } from './Icon';
-import { LevelMark, TaskMeta } from './parts';
+import { interrupt } from './magic/engine';
+import { done, rest, summon } from './magic/spells';
+import { LevelMark, TaskMeta, numLook } from './parts';
 import { Scene } from './Scene';
 import { syncTrouble } from './SyncPanel';
 
@@ -113,7 +115,15 @@ export function Camp({ ui }: { ui: Ui }) {
         <div ref={rowsRef}>
           {!v.asleep &&
             shown.map((t) => (
-              <TaskRow key={t.id} s={s} t={t} n={v.numbers.get(t.id) ?? 0} tone={v.tones.get(t.id) ?? 'today'} onClick={() => ui.open({ kind: 'task', taskId: t.id })} />
+              <TaskRow
+                key={t.id}
+                s={s}
+                t={t}
+                n={v.numbers.get(t.id) ?? 0}
+                tone={v.tones.get(t.id) ?? 'today'}
+                color={v.colors.get(t.id)}
+                onClick={() => ui.open({ kind: 'task', taskId: t.id })}
+              />
             ))}
           {!v.asleep && hidden > 0 && (
             <button class="row row-more" onClick={() => ui.go('plan')}>
@@ -126,7 +136,7 @@ export function Camp({ ui }: { ui: Ui }) {
           <button class="row row-later" onClick={() => ui.go('plan')}>
             <span class="num-stack" aria-hidden="true">
               {v.later.slice(0, 2).map((t) => (
-                <span key={t.id} class="num num-evening num-sm">
+                <span key={t.id} {...numLook('evening', v.colors.get(t.id), 'num-sm')}>
                   {v.numbers.get(t.id)}
                 </span>
               ))}
@@ -208,20 +218,27 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
         <span class="sr-only">{`${formatDate(s.day)}, ${formatClock(now)}, ${SHIFT_NAME[v.asleep ? 'night' : v.shift]}`}</span>
       </div>
       <SyncBadge ui={ui} />
-      <div class="chip chip-gold">
+      <div class="chip chip-gold" data-magic="gold">
         <GIcon name="coins" size={17} />
-        <span aria-hidden="true">{s.hero.gold.toLocaleString('ru-RU')}</span>
-        <span class="chip-level" aria-hidden="true">
-          ур. {lvl.level}
+        <span aria-hidden="true" data-magic="gold-n" data-v={s.hero.gold}>
+          {s.hero.gold.toLocaleString('ru-RU')}
+        </span>
+        <span class="chip-level" aria-hidden="true" data-magic="level">
+          ур.{' '}
+          <span data-magic="level-n" data-v={lvl.level}>
+            {lvl.level}
+          </span>
         </span>
         <span class="sr-only">{`${W.gold}: ${s.hero.gold}, уровень героя ${lvl.level}`}</span>
       </div>
-      <div class="chip chip-mana">
+      <div class={`chip chip-mana${v.onBreak ? ' is-regen' : ''}`} data-magic="mana">
         <span class="mana-gem" aria-hidden="true" />
         <span class="bar" aria-hidden="true">
           <span style={{ width: `${(mana / MANA_MAX) * 100}%` }} />
         </span>
-        <span aria-hidden="true">{mana}</span>
+        <span aria-hidden="true" data-magic="mana-n" data-v={mana}>
+          {mana}
+        </span>
         <span class="sr-only">{`${W.mana}: ${mana} из ${MANA_MAX}`}</span>
       </div>
     </div>
@@ -294,6 +311,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           <h2 class="sc">Сделано!</h2>
           {r.reward.frog && <span class="pill pill-frog">лягушка съедена</span>}
           <button class="link-btn" onClick={() => {
+            interrupt();
             store.act((st) => undoComplete(st, cheer.taskId));
             ui.setCheer(null);
             ui.toast('Задача снова в плане');
@@ -304,10 +322,10 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
         </div>
         {t && <div class="card-title card-title-sm">{t.title}</div>}
         <div class="rewards">
-          <span class="rw rw-gold">
+          <span class="rw rw-gold" data-magic="rw-gold">
             <GIcon name="coins" size={15} />+{r.reward.gold} золота
           </span>
-          <span class="rw rw-xp">
+          <span class="rw rw-xp" data-magic="rw-xp">
             +{r.reward.xp} опыта
             {r.reward.frog && (
               <>
@@ -317,7 +335,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             )}
           </span>
           {r.lair && (
-            <span class="rw rw-lair">
+            <span class="rw rw-lair" data-magic="rw-lair">
               <span aria-hidden="true">
                 {W.lair} {r.lair.before} → {r.lair.after}
               </span>
@@ -332,7 +350,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           <>
             <div class="next">
               <span class="next-label">Дальше:</span>
-              <span class={`num num-${v.tones.get(next.id) === 'undead' ? 'undead' : 'today'} num-sm`} aria-hidden="true">
+              <span {...numLook(v.tones.get(next.id) === 'undead' ? 'undead' : 'today', v.colors.get(next.id), 'num-sm')} aria-hidden="true">
                 {v.numbers.get(next.id)}
               </span>
               <span class="next-title">{next.title}</span>
@@ -342,7 +360,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
                 <GIcon name="campfire" size={18} />
                 {next.id === v.current?.id ? W.resume : <CallLabel />}
               </button>
-              <button class="btn btn-ghost" onClick={() => { ui.setCheer(null); store.act((st, n) => toggleBreak(st, n)); }}>
+              <button class="btn btn-ghost" onClick={() => toggleRest(ui)}>
                 {W.rest}
               </button>
             </div>
@@ -379,7 +397,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
         </div>
         <SecondWind ui={ui} />
         <div class="btns btns-one">
-          <button class="btn btn-gold" onClick={() => store.act((st, n) => toggleBreak(st, n))}>
+          <button class="btn btn-gold" onClick={() => toggleRest(ui)}>
             {W.backOnRoad}
           </button>
         </div>
@@ -419,7 +437,9 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
     return (
       <div class="card">
         <div class="card-head">
-          <span class="num num-current num-sm" aria-hidden="true">{v.numbers.get(cur.id)}</span>
+          <span {...numLook('current', v.colors.get(cur.id), 'num-sm')} aria-hidden="true">
+            {v.numbers.get(cur.id)}
+          </span>
           <h2 class="sc">{W.nowAtFire}</h2>
           {s.frogId === cur.id && (
             <span class="pill pill-frog">
@@ -455,12 +475,12 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             {W.done}
           </button>
           {v.running ? (
-            <button class="btn btn-ghost" onClick={() => store.act((st, n) => toggleBreak(st, n))}>
+            <button class="btn btn-ghost" onClick={() => toggleRest(ui)}>
               <GIcon name="campfire" size={19} class="ic-fire" />
               {W.rest}
             </button>
           ) : (
-            <button class="btn btn-ghost" onClick={() => store.act((st, n) => resume(st, n))}>
+            <button class="btn btn-ghost" onClick={() => backToWork(ui)}>
               <LIcon name="play" size={16} />
               {W.resume}
             </button>
@@ -479,7 +499,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           <h2 class="sc">{W.atFireEmpty}</h2>
         </div>
         <div class="next next-big">
-          <span class={`num num-${v.tones.get(next.id) ?? 'today'} num-sm`} aria-hidden="true">
+          <span {...numLook(v.tones.get(next.id) ?? 'today', v.colors.get(next.id), 'num-sm')} aria-hidden="true">
             {v.numbers.get(next.id)}
           </span>
           <span class="next-title">{next.title}</span>
@@ -491,7 +511,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             <GIcon name="campfire" size={18} />
             <CallLabel />
           </button>
-          <button class="btn btn-ghost" onClick={() => store.act((st, n) => toggleBreak(st, n))}>
+          <button class="btn btn-ghost" onClick={() => toggleRest(ui)}>
             {W.rest}
           </button>
         </div>
@@ -540,26 +560,44 @@ function SecondWind({ ui }: { ui: Ui }) {
   );
 }
 
+// Действия карточки. Состояние меняется сразу, а заклинание догоняет его, пока на экране ещё прежняя сцена.
+
 export function callToFire(ui: Ui, t: Task): void {
   ui.setCheer(null);
   const s = ui.store.state;
-  if (s.current?.taskId === t.id) {
-    ui.store.act((st, n) => resume(st, n));
-    return;
-  }
+  if (s.current?.taskId === t.id) return backToWork(ui);
+  const mana = Math.round(s.hero.mana);
   const { switchCost } = ui.store.act((st, n) => start(st, n, t.id));
+  summon(t.id, switchCost, mana);
   if (switchCost) ui.toast(`Смена похода: −${switchCost} маны`);
 }
 
 export function finish(ui: Ui, t: Task, level?: 1 | 2 | 3 | 4): void {
+  const s = ui.store.state;
+  const before = { gold: s.hero.gold, level: heroLevel(s.hero.xp).level };
   const result = ui.store.act((st, n) => complete(st, n, t.id, level));
-  if (result) ui.setCheer({ taskId: t.id, result, until: 0 });
+  if (!result) return;
+  ui.setCheer({ taskId: t.id, result, until: 0 });
+  done(t.id, result, before, heroLevel(ui.store.state.hero.xp).level);
 }
 
-function TaskRow({ s, t, n, tone, onClick }: { s: State; t: Task; n: number; tone: Tone; onClick: () => void }) {
+/** Привал или «Снова в путь». */
+function toggleRest(ui: Ui): void {
+  ui.setCheer(null);
+  ui.store.act((st, n) => toggleBreak(st, n));
+  rest(ui.store.state.breakSince !== null);
+}
+
+/** Таймер снова идёт: спутник у огня встаёт за работу. */
+function backToWork(ui: Ui): void {
+  ui.store.act((st, n) => resume(st, n));
+  rest(false);
+}
+
+function TaskRow({ s, t, n, tone, color, onClick }: { s: State; t: Task; n: number; tone: Tone; color: string | undefined; onClick: () => void }) {
   return (
     <button class="row" onClick={onClick}>
-      <span class={`num num-${tone} num-sm`} aria-hidden="true">
+      <span {...numLook(tone, color, 'num-sm')} aria-hidden="true">
         {n}
       </span>
       <span class="row-title">{t.title}</span>

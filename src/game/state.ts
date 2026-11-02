@@ -15,6 +15,7 @@ import {
   XP_BY_LEVEL,
   levelForEstimate,
 } from './rules';
+import { BIGGER, isPast, periodKind, periodOf, within, type PeriodKey } from './period';
 import { addDays, dayKey, daysBetween, parseDay, repeatsOn, shiftAt } from './time';
 import type { DayKey, DayLog, Level, Quest, QuestColor, QuestKind, Repeat, Reward, Routine, Settings, State, Task } from './types';
 
@@ -203,7 +204,7 @@ export function removeQuest(s: State, id: string): void {
   for (const t of s.tasks) {
     if (t.questId === id) {
       t.questId = null;
-      if (t.status === 'open' && !(t.routineId && t.day)) t.status = 'inbox';
+      if (t.status === 'open' && !(t.routineId && t.day) && !t.period) t.status = 'inbox';
     }
   }
 }
@@ -218,6 +219,8 @@ export interface TaskInput {
   day?: DayKey | null;
   due?: DayKey | null;
   at?: string | null;
+  /** Горизонт задачи (period.ts), null или нет поля: без горизонта. */
+  period?: PeriodKey | null;
 }
 
 export function addTask(s: State, now: number, input: TaskInput): string {
@@ -231,7 +234,7 @@ export function addTask(s: State, now: number, input: TaskInput): string {
     questId: input.questId,
     level,
     estimateMin,
-    status: input.questId || day ? 'open' : 'inbox',
+    status: input.questId || day || input.period ? 'open' : 'inbox',
     day,
     order: day ? nextOrder(s, day) : 0,
     due: input.due ?? null,
@@ -239,18 +242,39 @@ export function addTask(s: State, now: number, input: TaskInput): string {
     spentMs: 0,
     createdAt: now,
   };
+  if (input.period) t.period = input.period;
   s.tasks.push(t);
   return id;
 }
 
-export function updateTask(s: State, id: string, patch: Partial<Omit<Task, 'id' | 'status' | 'spentMs'>>): void {
+/** Правка задачи. period: null снимает горизонт. */
+export function updateTask(
+  s: State,
+  id: string,
+  patch: Partial<Omit<Task, 'id' | 'status' | 'spentMs' | 'period'>> & { period?: PeriodKey | null },
+): void {
   const t = findTask(s, id);
   if (!t) return;
   if (patch.day !== undefined && patch.day !== t.day && patch.day !== null) {
     t.order = nextOrder(s, patch.day);
   }
-  Object.assign(t, patch);
-  if (t.status === 'inbox' && t.questId) t.status = 'open';
+  const { period, ...rest } = patch;
+  Object.assign(t, rest);
+  if (period !== undefined) setPeriod(s, id, period);
+  if (t.status === 'inbox' && (t.questId || t.period)) t.status = 'open';
+}
+
+/** Поставить задаче горизонт или снять его. Письмо с горизонтом встаёт в отряд. */
+export function setPeriod(s: State, id: string, period: PeriodKey | null): void {
+  const t = findTask(s, id);
+  if (!t) return;
+  if (period && periodKind(period)) {
+    t.period = period;
+    if (t.status === 'inbox') t.status = 'open';
+  } else {
+    delete t.period;
+    if (t.status === 'open' && !t.questId && !t.day && !t.routineId) t.status = 'inbox';
+  }
 }
 
 function nextOrder(s: State, day: DayKey): number {
@@ -543,7 +567,7 @@ export function unrelease(s: State, id: string, frog = false): void {
   delete t.releasedFrom;
   delete t.releasedAt;
   if (t.day && t.day < s.day) t.day = null;
-  if (!t.questId && !t.day) t.status = 'inbox';
+  if (!t.questId && !t.day && !t.period) t.status = 'inbox';
   if (frog && !s.frogId && t.day === s.day) s.frogId = id;
 }
 
@@ -657,6 +681,38 @@ export function backlogOf(s: State): Task[] {
   return s.tasks
     .filter((t) => t.status === 'open' && t.day !== s.day)
     .sort((a, b) => (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.createdAt - b.createdAt);
+}
+
+// ---------- горизонты ----------
+
+/** Задачи периода: в отряде и сделанные. Сначала незакрытые со сроком, потом без, сделанные в конце. */
+export function periodTasks(s: State, key: PeriodKey): Task[] {
+  return s.tasks.filter((t) => t.period === key && (t.status === 'open' || t.status === 'done')).sort(byPeriodOrder);
+}
+
+/** Задачи меньших периодов внутри этого: недели месяца, месяцы и недели квартала и так далее. */
+export function nestedTasks(s: State, key: PeriodKey): Task[] {
+  return s.tasks.filter((t) => t.period && t.period !== key && within(t.period, key) && (t.status === 'open' || t.status === 'done')).sort(byPeriodOrder);
+}
+
+function byPeriodOrder(a: Task, b: Task): number {
+  const done = Number(a.status === 'done') - Number(b.status === 'done');
+  if (done) return done;
+  return (a.period ?? '').localeCompare(b.period ?? '') || (a.due ?? '9999').localeCompare(b.due ?? '9999') || a.createdAt - b.createdAt;
+}
+
+/** Хвосты: незакрытые задачи периодов, которые уже кончились. Давние первыми. */
+export function tailsOf(s: State): Task[] {
+  return s.tasks
+    .filter((t) => t.status === 'open' && t.period && periodKind(t.period) && isPast(t.period, s.day))
+    .sort((a, b) => a.period!.localeCompare(b.period!) || a.createdAt - b.createdAt);
+}
+
+/** Куда можно перенести хвост: в нынешний период того же вида или в нынешний побольше. */
+export function tailTargets(s: State, t: Task): { same: PeriodKey; bigger: PeriodKey | null } {
+  const kind = periodKind(t.period ?? '') ?? 'week';
+  const big = BIGGER[kind];
+  return { same: periodOf(kind, s.day), bigger: big ? periodOf(big, s.day) : null };
 }
 
 export function doneOn(s: State, day: DayKey): Task[] {

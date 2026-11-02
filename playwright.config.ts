@@ -1,6 +1,7 @@
 /// <reference types="node" />
 // Автотесты экранов: собранный сайт из dist/ в настоящем браузере. День проходит на трёх размерах экрана,
-// остальные проверки на одном телефоне. Перед запуском нужна сборка: npm run build, затем npm run e2e.
+// остальные проверки на одном телефоне. День и магия ещё раз идут на телефоне с «Уменьшить движение»
+// в системе: там магия спокойная. Перед запуском нужна сборка: npm run build, затем npm run e2e.
 import { existsSync } from 'node:fs';
 import { defineConfig, devices } from '@playwright/test';
 
@@ -35,6 +36,7 @@ export default defineConfig({
     { name: 'phone', use: phone(390, 844) },
     { name: 'small-phone', use: phone(360, 640), testMatch: 'day.spec.ts' },
     { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } }, testMatch: 'day.spec.ts' },
+    { name: 'calm', use: { ...phone(390, 844), reducedMotion: 'reduce' }, testMatch: ['day.spec.ts', 'magic.spec.ts'] },
   ],
   webServer: {
     command: `npx vite preview --port ${PORT} --strictPort`,

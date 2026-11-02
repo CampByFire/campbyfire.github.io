@@ -78,15 +78,6 @@ const AXE = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.mi
 
 /** Нарушения WCAG 2.2 AA и лучших практик на странице как есть, по axe. Пустой список, если всё чисто. */
 export async function axe(page: Page): Promise<string[]> {
-  // Лист проявляется из прозрачного: пока идёт анимация, axe считает контраст по полупрозрачному цвету.
-  await page.evaluate(() =>
-    Promise.all(
-      document
-        .getAnimations()
-        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => undefined)),
-    ),
-  );
   await page.evaluate(AXE);
   return page.evaluate(async () => {
     const tags = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'];

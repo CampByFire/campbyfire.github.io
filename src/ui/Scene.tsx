@@ -5,16 +5,21 @@ import type { Task } from '../game/types';
 import { CLASS_NAME, UNDEAD_NAME } from '../game/words';
 import { SCENE, SCENE_H, SCENE_W, assetUrl, pct, spriteKey, type Sprite } from '../scene/scene';
 import { LIcon } from './Icon';
+import { numLook } from './parts';
 
 interface Figure {
   key: string;
   spot: string;
+  /** Какая картинка: место, класс и поза. По ней магия находит макушку и ноги фигуры. */
+  art: string;
   sprite: Sprite | undefined;
   fallback: string;
   label: string;
   task: Task;
   n: number;
   tone: Tone;
+  /** Цвет знамени похода: в него красится номер. */
+  color?: string;
   extra?: preact.ComponentChildren;
   pulse?: boolean;
   zz?: boolean;
@@ -37,39 +42,47 @@ export function Scene(p: {
 
   if (v.ring) {
     const spot = 'ring';
+    const art = spriteKey(spot, v.ring.cls, v.ring.pose);
     figures.push({
       key: `ring-${v.ring.task.id}`,
       spot,
-      sprite: SCENE.sprites[spriteKey(spot, v.ring.cls, v.ring.pose)],
+      art,
+      sprite: SCENE.sprites[art],
       fallback: v.ring.cls,
       label: `${CLASS_NAME[v.ring.cls]} у огня: ${v.ring.task.title}`,
       task: v.ring.task,
       n: v.numbers.get(v.ring.task.id) ?? 0,
       tone: 'current',
+      color: v.colors.get(v.ring.task.id),
       pulse: v.ring.pose === 'work',
       extra: p.timer && v.ring.pose !== 'cheer' ? <span class="tag tag-timer" aria-hidden="true">{p.timer}</span> : null,
     });
   }
   for (const f of v.seats) {
     const spot = `seat${f.seat}`;
+    const art = spriteKey(spot, f.cls, f.pose);
     figures.push({
       key: `seat-${f.task.id}`,
       spot,
-      sprite: SCENE.sprites[spriteKey(spot, f.cls, f.pose)],
+      art,
+      sprite: SCENE.sprites[art],
       fallback: f.cls,
       label: `${CLASS_NAME[f.cls]} у костра: ${f.task.title}`,
       task: f.task,
       n: v.numbers.get(f.task.id) ?? 0,
       tone: f.tone,
+      color: v.colors.get(f.task.id),
       zz: f.pose === 'lie',
     });
   }
   for (const r of v.road) {
     const spot = `road${r.spot}`;
+    const art = spriteKey(spot, `skeleton-${r.rank}`, 'stand');
     figures.push({
       key: `road-${r.task.id}`,
       spot,
-      sprite: SCENE.sprites[spriteKey(spot, `skeleton-${r.rank}`, 'stand')],
+      art,
+      sprite: SCENE.sprites[art],
       fallback: 'skeleton',
       // Сколько дней просрочено, видно в списке и в карточке: на дороге метки сроков налезали бы друг на друга.
       label: `${UNDEAD_NAME[r.rank]} на дороге, ${r.days} ${plural(r.days, 'день', 'дня', 'дней')}: ${r.task.title}`,
@@ -100,6 +113,8 @@ export function Scene(p: {
       ) : (
         <div class="scene-bg scene-bg-fallback" />
       )}
+      {/* Земля для магии: круг рун ложится под фигуры. */}
+      <div class="scene-ground" aria-hidden="true" />
       <div
         class="scene-fire"
         aria-hidden="true"
@@ -111,8 +126,12 @@ export function Scene(p: {
           <FigureFallback key={f.key} f={f} />
         ))}
       {layers.map((l) => (
-        <SpriteImg key={l.key} s={l.sprite} undead={l.f?.tone === 'undead'} />
+        <SpriteImg key={l.key} s={l.sprite} undead={l.f?.tone === 'undead'} f={l.f} />
       ))}
+      {/* Воздух для магии: копии фигур тают поверх новых мест. Потом угли над костром и светлячки ночью. */}
+      <div class="scene-fx" aria-hidden="true" />
+      <Embers />
+      {v.light === 'night' && <Fireflies />}
       {sorted.map((f) => (
         <FigureBadge key={`b-${f.key}`} f={f} hit={hitOf(f, sorted, p.unit)} onTask={p.onTask} />
       ))}
@@ -135,15 +154,69 @@ function feetOf(f: Figure): number {
   return SCENE.spots[f.spot]?.[1] ?? (f.sprite ? f.sprite.y + f.sprite.h : 0);
 }
 
-function SpriteImg({ s, undead }: { s: Sprite; undead: boolean }) {
+function SpriteImg({ s, undead, f }: { s: Sprite; undead: boolean; f?: Figure }) {
   return (
     <img
       class={`fig${undead ? ' fig-undead' : ''}${s.lit ? ' fig-lit' : ''}`}
       src={assetUrl(s.file)}
       alt=""
       draggable={false}
+      data-task={f?.task.id}
+      data-art={f?.art}
       style={{ left: pct(s.x, SCENE_W), top: pct(s.y, SCENE_H), width: pct(s.w, SCENE_W) }}
     />
+  );
+}
+
+/** Угли над костром: днём их меньше. Только CSS, без JavaScript. */
+function Embers() {
+  const [fx, fy] = SCENE.fire;
+  return (
+    <div class="embers" aria-hidden="true">
+      {Array.from({ length: 8 }, (_, i) => {
+        const d = 2.4 + ((i * 0.37) % 1.2);
+        return (
+          <i
+            key={i}
+            class={i >= 5 ? 'arc' : undefined}
+            style={{
+              left: pct(fx + (i % 2 ? 1 : -1) * (6 + ((i * 37) % 30)), SCENE_W),
+              top: pct(fy - 39 + ((i * 13) % 22), SCENE_H),
+              '--s': `${3 + (i % 3)}px`,
+              '--d': `${d.toFixed(2)}s`,
+              '--dl': `${(-((i * 0.71) % d)).toFixed(2)}s`,
+              '--dx': `${((i * 23) % 30) - 15}px`,
+              '--dy': `${-(58 + ((i * 17) % 40))}px`,
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
+/** Светлячки ночью: где на поляне, какой путь, сколько секунд путь и мерцание. */
+const FIREFLIES: [number, number, string, number, number][] = [
+  [118, 300, 'p2', 13, 3.1],
+  [640, 250, '', 11, 2.6],
+  [86, 560, 'p3 cold', 15, 3.4],
+  [712, 520, 'p2', 12, 2.8],
+  [236, 690, '', 14, 3.6],
+  [560, 716, 'p3', 10, 2.4],
+  [300, 236, 'cold', 16, 3.2],
+  [176, 410, 'p3', 12.5, 2.9],
+  [742, 690, 'p2 cold', 13.5, 3.3],
+];
+
+function Fireflies() {
+  return (
+    <div class="fireflies" aria-hidden="true">
+      {FIREFLIES.map(([x, y, c, d, g], i) => (
+        <i key={i} class={c || undefined} style={{ left: pct(x, SCENE_W), top: pct(y, SCENE_H), '--d': `${d}s`, '--dl': `${(-i * 1.7).toFixed(1)}s` }}>
+          <b style={{ '--g': `${g}s` }} />
+        </i>
+      ))}
+    </div>
   );
 }
 
@@ -179,15 +252,17 @@ function hitOf(f: Figure, all: Figure[], unit: number | undefined): number {
 
 function FigureBadge({ f, hit, onTask }: { f: Figure; hit: number; onTask: (id: string) => void }) {
   const [x, y] = badgeAt(f);
+  const look = numLook(f.tone, f.color, f.pulse ? 'is-pulse' : '');
   return (
     <div
       class={`fig-mark${f.n > 0 ? '' : ' fig-mark-free'}${x > SCENE_W * 0.62 ? ' fig-mark-left' : ''}`}
       style={{ left: pct(x, SCENE_W), top: pct(y, SCENE_H) }}
+      data-task={f.task.id}
     >
       {f.n > 0 && (
         <button
-          class={`num num-${f.tone}${f.pulse ? ' is-pulse' : ''}`}
-          style={hit < BADGE_HIT ? { '--hit': `${hit}px` } : undefined}
+          class={look.class}
+          style={{ ...look.style, ...(hit < BADGE_HIT ? { '--hit': `${hit}px` } : {}) }}
           aria-label={`${f.n}. ${f.label}`}
           onClick={() => onTask(f.task.id)}
         >

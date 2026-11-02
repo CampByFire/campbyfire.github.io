@@ -1,0 +1,603 @@
+/* ===== Магия: слои эффектов, дыхание лагеря, листы и вкладки, Спокойная магия и Без анимаций ===== */
+
+/*
+ * Сила магии стоит на корне страницы: data-motion="full", "calm" или "off".
+ * Спокойная: смена состояний мягким наплывом, без частиц, полётов и сдвигов, фон лагеря замирает.
+ * Без анимаций: ни одного перехода.
+ */
+
+:root {
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  --ease-float: cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+/* ---------- слои поверх приложения ---------- */
+
+/* Притушение и эффекты ниже листов (20), холст частиц выше листов и ниже сообщений (30), касания поверх всего.
+   Касаний слои не ловят, экранному диктору их не видно. */
+.fx-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 11;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle at 50% 36%, rgba(30, 18, 60, 0.2), rgba(6, 4, 12, 0.62) 70%);
+}
+
+.fx-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.fx-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 25;
+  pointer-events: none;
+}
+
+.fx-touch {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.fx-layer *,
+.fx-touch * {
+  pointer-events: none !important;
+}
+
+/* Земля и воздух сцены: круг рун под фигурами, копии фигур поверх. */
+.scene-ground,
+.scene-fx {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.scene-fx * {
+  pointer-events: none !important;
+}
+
+/* ---------- дыхание лагеря: угли над костром ---------- */
+
+.embers {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.embers i {
+  position: absolute;
+  width: var(--s, 4px);
+  height: var(--s, 4px);
+  margin: calc(var(--s, 4px) / -2) 0 0 calc(var(--s, 4px) / -2);
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff6d6 0 30%, #ffc45e 45%, rgba(255, 140, 40, 0) 72%);
+  opacity: 0;
+  animation: ember var(--d, 2.8s) linear infinite;
+  animation-delay: var(--dl, 0s);
+}
+
+.embers i.arc {
+  background: radial-gradient(circle, #f2eeff 0 30%, #a99bff 45%, rgba(110, 90, 255, 0) 72%);
+}
+
+/* Днём углей меньше и без синих. */
+.scene.light-day .embers i.arc,
+.scene.light-day .embers i:nth-child(n + 6) {
+  display: none;
+}
+
+@keyframes ember {
+  0% {
+    transform: translate(0, 0) scale(1);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: translate(var(--dx, 6px), var(--dy, -70px)) scale(0.3);
+    opacity: 0;
+  }
+}
+
+/* ---------- дыхание лагеря: светлячки ночью ---------- */
+
+.fireflies {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  animation: fx-fade-in 1.4s ease both;
+}
+
+.fireflies i {
+  position: absolute;
+  width: 0;
+  height: 0;
+  animation: ff-path var(--d, 12s) var(--ease-float) infinite alternate;
+  animation-delay: var(--dl, 0s);
+}
+
+.fireflies i.p2 {
+  animation-name: ff-path2;
+}
+
+.fireflies i.p3 {
+  animation-name: ff-path3;
+}
+
+.fireflies b {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fdffd8 0 14%, rgba(222, 255, 120, 0.75) 26%, rgba(170, 230, 90, 0.18) 52%, rgba(170, 230, 90, 0) 70%);
+  animation: ff-glow var(--g, 3s) ease-in-out infinite;
+}
+
+.fireflies i.cold b {
+  background: radial-gradient(circle, #f0f6ff 0 14%, rgba(150, 190, 255, 0.75) 26%, rgba(110, 150, 255, 0.18) 52%, rgba(110, 150, 255, 0) 70%);
+}
+
+@keyframes ff-glow {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.7);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 0.9;
+    transform: scale(0.95);
+  }
+}
+
+@keyframes ff-path {
+  0% {
+    transform: translate(0, 0);
+  }
+  25% {
+    transform: translate(18px, -12px);
+  }
+  50% {
+    transform: translate(6px, -26px);
+  }
+  75% {
+    transform: translate(-14px, -14px);
+  }
+  100% {
+    transform: translate(-6px, 4px);
+  }
+}
+
+@keyframes ff-path2 {
+  0% {
+    transform: translate(0, 0);
+  }
+  30% {
+    transform: translate(-20px, -8px);
+  }
+  60% {
+    transform: translate(-8px, 14px);
+  }
+  100% {
+    transform: translate(16px, 6px);
+  }
+}
+
+@keyframes ff-path3 {
+  0% {
+    transform: translate(0, 0);
+  }
+  35% {
+    transform: translate(10px, 18px);
+  }
+  70% {
+    transform: translate(24px, 0);
+  }
+  100% {
+    transform: translate(8px, -16px);
+  }
+}
+
+/* ---------- Привал: камень маны дышит, пока идёт отдых ---------- */
+
+.chip-mana {
+  position: relative;
+}
+
+.chip-mana.is-regen .mana-gem {
+  animation: gem-breathe 2.6s var(--ease-float) infinite;
+}
+
+@keyframes gem-breathe {
+  0%,
+  100% {
+    transform: rotate(45deg) scale(1);
+    box-shadow: 0 0 6px rgba(91, 140, 255, 0.9);
+  }
+  50% {
+    transform: rotate(45deg) scale(1.3);
+    box-shadow: 0 0 12px rgba(140, 180, 255, 1);
+  }
+}
+
+/* Из камня поднимается искра маны. */
+.chip-mana.is-regen::after {
+  content: '';
+  position: absolute;
+  left: 10.5px;
+  top: 11px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #eaf1ff 0 30%, rgba(120, 160, 255, 0.6) 50%, rgba(91, 140, 255, 0) 72%);
+  animation: mote-up 1.6s var(--ease-out) infinite;
+  pointer-events: none;
+}
+
+@keyframes mote-up {
+  0% {
+    transform: translate(0, 4px) scale(0.6);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(3px, -16px) scale(1);
+    opacity: 0;
+  }
+}
+
+/* Уровень сменяется «барабаном»: числу нужен свой блок. */
+[data-magic='level-n'] {
+  display: inline-block;
+}
+
+/* ---------- Искра под пальцем ---------- */
+
+/* Рябь живёт в слое касаний и обрезается по форме кнопки. */
+.ripple-clip {
+  position: absolute;
+  overflow: hidden;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 248, 225, 0.3), rgba(255, 236, 190, 0.14) 40%, rgba(255, 236, 190, 0) 68%);
+}
+
+.ripple.is-gold {
+  background: radial-gradient(circle, rgba(255, 255, 245, 0.62), rgba(255, 250, 225, 0.28) 40%, rgba(255, 250, 225, 0) 68%);
+}
+
+.bloom {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  margin: -22px 0 0 -22px;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+  background: radial-gradient(circle, rgba(255, 244, 200, 0.6), rgba(255, 215, 106, 0.22) 45%, rgba(255, 215, 106, 0) 70%);
+}
+
+/* ---------- Свиток: лист выезжает с лёгким перелётом и уезжает быстрее ---------- */
+
+[data-motion='full'] .overlay {
+  animation: fx-fade-in 180ms ease both;
+}
+
+[data-motion='full'] .overlay .modal {
+  animation: sheet-in 300ms cubic-bezier(0.2, 1.15, 0.35, 1) both;
+}
+
+/* Лист, который уже закрыт, но ещё уезжает: сквозь него нажимается экран. */
+.sheet-layer {
+  display: contents;
+}
+
+.sheet-layer.is-closing > .overlay {
+  animation: fx-fade-out 200ms ease both;
+  pointer-events: none;
+}
+
+.sheet-layer.is-closing .modal {
+  animation: sheet-out 200ms var(--ease-in) both;
+}
+
+[data-motion='calm'] .sheet-layer.is-closing .modal {
+  animation: none;
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(46px);
+    opacity: 0.4;
+  }
+}
+
+@keyframes sheet-out {
+  to {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+
+@keyframes fx-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes fx-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* По заголовку открытого листа проходит блик. */
+.modal-head h2 {
+  position: relative;
+  overflow: hidden;
+}
+
+/* ---------- Перелистывание: копия старой страницы гаснет поверх новой ---------- */
+
+.page-ghost {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ---------- эффекты заклинаний ---------- */
+
+.glint {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+}
+
+.glint svg {
+  display: block;
+  filter: drop-shadow(0 0 4px rgba(255, 236, 170, 0.95));
+}
+
+.float {
+  position: absolute;
+  font-weight: 800;
+  font-size: 15px;
+  white-space: nowrap;
+  transform: translate(-50%, -50%);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 10px var(--g, rgba(255, 215, 106, 0.6));
+  color: var(--c, #ffe08a);
+}
+
+.sweep-clip {
+  position: absolute;
+  overflow: hidden;
+}
+
+.sweep {
+  position: absolute;
+  top: -30%;
+  bottom: -30%;
+  left: 0;
+  width: 55%;
+  pointer-events: none;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 252, 235, 0.7) 50%, rgba(255, 255, 255, 0));
+  transform: translateX(-120%);
+}
+
+.sweep.soft {
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0), rgba(255, 252, 235, 0.35) 50%, rgba(255, 255, 255, 0));
+}
+
+.sweep.red {
+  background: linear-gradient(100deg, rgba(255, 120, 100, 0), rgba(255, 170, 150, 0.75) 50%, rgba(255, 120, 100, 0));
+}
+
+.flare,
+.wave {
+  position: absolute;
+  border-radius: 50%;
+  mix-blend-mode: screen;
+}
+
+.wave {
+  background: radial-gradient(circle, rgba(255, 220, 150, 0) 50%, rgba(255, 220, 150, 0.6) 62%, rgba(255, 200, 120, 0.18) 68%, rgba(255, 200, 120, 0) 72%);
+}
+
+.wave.arcane {
+  background: radial-gradient(circle, rgba(140, 180, 255, 0) 50%, rgba(170, 200, 255, 0.75) 62%, rgba(120, 150, 255, 0.2) 68%, rgba(120, 150, 255, 0) 72%);
+}
+
+.pillar {
+  position: absolute;
+  border-radius: 50% / 14%;
+  background: linear-gradient(to top, rgba(255, 215, 106, 0) 0%, rgba(255, 236, 170, 0.9) 22%, rgba(255, 244, 210, 0.45) 62%, rgba(255, 244, 210, 0) 100%);
+  filter: blur(5px);
+  mix-blend-mode: screen;
+  transform-origin: 50% 100%;
+}
+
+.rune-ring {
+  position: absolute;
+  aspect-ratio: 1;
+  mix-blend-mode: screen;
+  transform: translate(-50%, -50%) scaleY(0.4);
+}
+
+/* --k: во сколько раз знак меньше на низком экране (от 0,6 до 1), его ставит Восхождение. */
+.sigil {
+  position: absolute;
+  width: calc(240px * var(--k, 1));
+  height: calc(240px * var(--k, 1));
+  margin: calc(-120px * var(--k, 1)) 0 0 calc(-120px * var(--k, 1));
+  filter: drop-shadow(0 0 4px rgba(169, 220, 255, 0.85));
+}
+
+.rune-ring svg,
+.sigil svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.rune-ring .rr-c,
+.sigil .rr-c {
+  stroke-dasharray: 100;
+}
+
+/* Центр знаков в точке 0 0 их системы координат: viewBox у них начинается с минуса. */
+.spin-cw,
+.spin-ccw {
+  transform-box: view-box;
+  transform-origin: 0 0;
+  animation: spin 16s linear infinite;
+}
+
+.spin-ccw {
+  animation-direction: reverse;
+  animation-duration: 11s;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Восхождение: лучи и надпись в цветах Света, белое с голубым. */
+.rays {
+  position: absolute;
+  width: calc(420px * var(--k, 1));
+  height: calc(420px * var(--k, 1));
+  margin: calc(-210px * var(--k, 1)) 0 0 calc(-210px * var(--k, 1));
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(214, 236, 255, 0.3) 0deg 5deg, rgba(214, 236, 255, 0) 5deg 22deg);
+  -webkit-mask-image: radial-gradient(circle, #000 18%, rgba(0, 0, 0, 0.5) 40%, transparent 68%);
+  mask-image: radial-gradient(circle, #000 18%, rgba(0, 0, 0, 0.5) 40%, transparent 68%);
+  mix-blend-mode: screen;
+}
+
+.lvl-text {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.lvl-text b {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: max(28px, calc(40px * var(--k, 1)));
+  line-height: 1;
+  background: linear-gradient(180deg, #ffffff 0%, #e2f2ff 45%, #8fc4f0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.75));
+}
+
+.lvl-text small,
+.lvl-plate small {
+  display: block;
+  font-family: var(--font-sc);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+.lvl-text small {
+  margin-top: 4px;
+  color: #dff1ff;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+/* Спокойное Восхождение: табличка без лучей и частиц. */
+.lvl-plate {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 14px;
+  border: 1.5px solid rgba(191, 230, 255, 0.55);
+  background: rgba(24, 18, 12, 0.94);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.lvl-plate b {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 26px;
+  line-height: 1.1;
+  color: #dff1ff;
+}
+
+.lvl-plate small {
+  margin-top: 2px;
+  color: #e9d9b8;
+}
+
+/* ---------- Спокойная магия ---------- */
+
+[data-motion='calm'] .embers,
+[data-motion='calm'] .fireflies,
+[data-motion='calm'] .chip-mana.is-regen::after {
+  display: none;
+}
+
+[data-motion='calm'] .scene-fire,
+[data-motion='calm'] .num.is-pulse,
+[data-motion='calm'] .zz,
+[data-motion='calm'] .chip-mana .mana-gem {
+  animation: none;
+}
+
+/* Листы, знакомство и сообщения проступают, а не выезжают. */
+[data-motion='calm'] .modal,
+[data-motion='calm'] .intro,
+[data-motion='calm'] .toast {
+  animation: fx-fade-in 150ms ease both;
+}
+
+/* ---------- Без анимаций: сразу итог ---------- */
+
+[data-motion='off'] *,
+[data-motion='off'] *::before,
+[data-motion='off'] *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+[data-motion='off'] .embers,
+[data-motion='off'] .fireflies {
+  display: none;
+}

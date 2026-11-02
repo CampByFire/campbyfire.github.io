@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Store } from '../game/store';
 import type { Sync } from '../sync/sync';
 import type { CompleteResult } from '../game/state';
@@ -10,6 +10,10 @@ import { useStore } from './hooks';
 import { Intro } from './Intro';
 import { loadLocal, updateLocal } from './local';
 import { GIcon, LIcon } from './Icon';
+import { setMotion } from './magic/engine';
+import { MagicLayers, SheetLayer } from './magic/layers';
+import { onSystemReduced, resolveMotion, systemReduced, type Motion } from './magic/mode';
+import { pageEnter, pageLeave } from './magic/spells';
 import { Notices } from './Notices';
 import { Plan } from './Plan';
 import { Realm } from './Realm';
@@ -42,6 +46,9 @@ export interface Ui {
   cheer: Cheer | null;
   setCheer(c: Cheer | null): void;
   showIntro(): void;
+  /** Сила магии на этом устройстве. */
+  motion: Motion;
+  setMotion(m: Motion): void;
 }
 
 /** Знакомство показываем новичку. Тому, у кого уже есть задачи (обновился или взял игру из GitHub), не показываем. */
@@ -56,6 +63,11 @@ function needIntro(store: Store): boolean {
 }
 
 const CHEER_MS = 12_000;
+/** Столько лист уезжает вниз после закрытия, потом его нет. */
+const SHEET_OUT_MS = 200;
+
+/** Сила магии: выбранная в Летописи или по настройке системы «Уменьшить движение». */
+const motionOf = (now: number) => resolveMotion(loadLocal(now).magic, systemReduced());
 
 export function App({ store, sync }: { store: Store; sync: Sync }) {
   useStore(store);
@@ -63,6 +75,13 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
   const s = store.state;
   const [screen, setScreen] = useState<Screen>(() => (s.litDay !== s.day && s.closedDay !== s.day ? 'plan' : 'camp'));
   const [sheet, setSheet] = useState<SheetState | null>(null);
+  /** Лист закрыт, но ещё уезжает вниз. */
+  const [closing, setClosing] = useState(false);
+  /** Новый лист поверх уезжающего открывается заново, со своим выездом. */
+  const [sheetKey, setSheetKey] = useState(0);
+  const closeTimer = useRef(0);
+  /** Лист открыт и не закрывается: знают сразу, не дожидаясь перерисовки. */
+  const sheetShown = useRef(false);
   const [toast, setToast] = useState<{ text: string; id: number; action?: ToastAction } | null>(null);
   const [cheer, setCheerState] = useState<Cheer | null>(null);
   /** Откуда открыли лист: туда вернётся фокус, когда листов не останется. */
@@ -71,6 +90,45 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
   const lastFocus = useRef<FocusSpot | null>(null);
   const [day, setDay] = useState(s.day);
   const [intro, setIntro] = useState(() => needIntro(store));
+  const [motion, setMotionState] = useState<Motion>(() => motionOf(store.now()));
+  const main = useRef<HTMLElement>(null);
+  const shownScreen = useRef(screen);
+
+  const dropSheet = () => {
+    window.clearTimeout(closeTimer.current);
+    closeTimer.current = 0;
+    sheetShown.current = false;
+    setClosing(false);
+    setSheet(null);
+  };
+  const showSheet = (next: SheetState) => {
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = 0;
+      setSheetKey((k) => k + 1);
+    }
+    sheetShown.current = true;
+    setClosing(false);
+    setSheet(next);
+  };
+  /** Лист уезжает вниз, а экран под ним сразу снова доступен. Без анимаций лист пропадает сразу. */
+  const closeSheet = () => {
+    if (!sheetShown.current) return;
+    if (motion === 'off') return dropSheet();
+    sheetShown.current = false;
+    setClosing(true);
+    closeTimer.current = window.setTimeout(dropSheet, SHEET_OUT_MS);
+  };
+
+  useLayoutEffect(() => setMotion(motion), [motion]);
+  useEffect(() => onSystemReduced(() => setMotionState(motionOf(store.now()))), [store]);
+
+  // Перелистывание: новая страница поднимается, когда она уже на месте, но ещё не на экране.
+  useLayoutEffect(() => {
+    if (shownScreen.current === screen) return;
+    shownScreen.current = screen;
+    pageEnter(main.current);
+  }, [screen]);
 
   useEffect(() => {
     const id = window.setInterval(() => store.tick(), 1000);
@@ -91,14 +149,14 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
     if (s.day !== day) {
       setDay(s.day);
       setScreen('plan');
-      setSheet(null);
+      dropSheet();
     }
   }, [s.day, day]);
 
   // В GitHub другая игра: сразу спрашиваем, какую оставить.
   const phase = sync.status.phase;
   useEffect(() => {
-    if (phase === 'conflict') setSheet({ kind: 'syncConflict' });
+    if (phase === 'conflict') showSheet({ kind: 'syncConflict' });
   }, [phase]);
 
   // Ошибку GitHub показываем один раз, а не при каждой новой попытке; пропавшая сеть не ошибка,
@@ -113,12 +171,14 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
     }
   }, [phase, syncError]);
 
+  // Фокус возвращается, как только лист начал закрываться: экран под ним уже доступен.
+  const openSheet = closing ? null : sheet;
   useEffect(() => {
-    if (sheet || !opener.current) return;
+    if (openSheet || !opener.current) return;
     const spot = opener.current;
     opener.current = null;
     restoreFocus(spot);
-  }, [sheet]);
+  }, [openSheet]);
 
   useEffect(() => {
     const onFocus = (e: FocusEvent) => {
@@ -153,20 +213,28 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
     sync,
     now,
     go: (sc) => {
-      setSheet(null);
+      closeSheet();
+      if (sc !== screen) pageLeave(main.current);
       setScreen(sc);
     },
     open: (next) => {
-      if (!sheet) opener.current = spotOf(document.activeElement);
-      setSheet(next);
+      if (!sheetShown.current) opener.current = spotOf(document.activeElement);
+      showSheet(next);
     },
-    close: () => setSheet(null),
+    close: closeSheet,
     toast: (text, action) => setToast({ text, id: Date.now(), action }),
     cheer: liveCheer,
     setCheer: (c) => setCheerState(c ? { ...c, until: store.now() + CHEER_MS } : null),
     showIntro: () => {
-      setSheet(null);
+      dropSheet();
       setIntro(true);
+    },
+    motion,
+    setMotion: (m) => {
+      updateLocal(store.now(), (l) => {
+        l.magic = m;
+      });
+      setMotionState(m);
     },
   };
   const closeIntro = () => {
@@ -177,10 +245,10 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
   };
 
   // Пока открыт лист или знакомство, экран под ним недоступен ни пальцу, ни экранному чтецу, ни Tab.
-  const covered = !!sheet || intro;
+  const covered = !!openSheet || intro;
   return (
     <div class="app">
-      <main class="screen" inert={covered}>
+      <main class="screen" inert={covered} ref={main}>
         {screen === 'camp' && <Camp ui={ui} />}
         {screen === 'plan' && <Plan ui={ui} />}
         {screen === 'realm' && <Realm ui={ui} />}
@@ -198,8 +266,13 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
         <TabButton icon="kingdom" label={W.realm} active={screen === 'realm'} onClick={() => ui.go('realm')} />
         <TabButton icon="scroll" label={W.chronicle} active={screen === 'chronicle'} onClick={() => ui.go('chronicle')} />
       </nav>
-      {sheet && <Sheets ui={ui} sheet={sheet} />}
+      {sheet && (
+        <SheetLayer key={sheetKey} closing={closing}>
+          <Sheets ui={ui} sheet={sheet} />
+        </SheetLayer>
+      )}
       {intro && <Intro onDone={closeIntro} />}
+      <MagicLayers />
       {/* Живая область есть всегда: экранный диктор надёжнее читает текст, который появился в ней, чем новый блок.
           Вместе с сообщением он прочтёт и кнопку «Вернуть», если она есть. */}
       <div role="status">

@@ -12,7 +12,8 @@ import type { Ui } from './App';
 import { downloadGame } from './files';
 import { GIcon, LIcon } from './Icon';
 import { clearLocal } from './local';
-import { ChipText } from './parts';
+import type { Motion } from './magic/mode';
+import { ChipText, Chips } from './parts';
 import { Sheet } from './Sheets';
 import { SyncPanel, useSync } from './SyncPanel';
 
@@ -135,6 +136,14 @@ export function Chronicle({ ui }: { ui: Ui }) {
 
       <section class="group">
         <div class="group-head">
+          <h2 class="sc">Магия</h2>
+        </div>
+        <Chips label="Сколько анимаций" value={ui.motion} options={MOTION_CHIPS} onChange={ui.setMotion} />
+        <p class="note">{MOTION_NOTE[ui.motion]} Выбор помнит только это устройство.</p>
+      </section>
+
+      <section class="group">
+        <div class="group-head">
           <h2 class="sc">Сохранение в GitHub</h2>
         </div>
         <SyncPanel ui={ui} />
@@ -192,6 +201,18 @@ export function Chronicle({ ui }: { ui: Ui }) {
     </div>
   );
 }
+
+const MOTION_CHIPS: { value: Motion; label: string }[] = [
+  { value: 'full', label: 'Вся' },
+  { value: 'calm', label: 'Спокойная' },
+  { value: 'off', label: 'Без анимаций' },
+];
+
+const MOTION_NOTE: Record<Motion, string> = {
+  full: 'Искры под пальцем, полёты наград, столб света над сданной задачей и чудо нового уровня.',
+  calm: 'Без частиц, полётов и сдвигов: всё меняется мягким наплывом. Так Лагерь начинает сам, если в системе включено «Уменьшить движение».',
+  off: 'Никакого движения: экран сразу показывает итог.',
+};
 
 /** Стереть игру из браузера, а по желанию и гист с сохранением. Потом страница открывается с чистого листа. */
 export function WipeSheet({ ui }: { ui: Ui }) {

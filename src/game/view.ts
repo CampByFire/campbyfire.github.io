@@ -1,4 +1,5 @@
 // Что показывает экран дня: чистая функция «состояние → лагерь».
+import { questHex } from './color';
 import { ROAD_SPOTS, SEATS, undeadRank, type UndeadRank } from './rules';
 import { findQuest, inboxOf, isUndead, planOf, daysOverdue, undeadOf } from './state';
 import { addDays, isMainFor, lightOf, shiftAt, type Light, type Shift } from './time';
@@ -36,6 +37,8 @@ export interface CampView {
   idle: boolean;
   numbers: Map<string, number>;
   tones: Map<string, Tone>;
+  /** Цвет знамени похода у задач с номером: в него красится номер над спутником и в списках. У задачи без похода номер прежний, золотой. */
+  colors: Map<string, string>;
   /** Открытые задачи дня без текущей, в порядке плана. */
   main: Task[];
   /** Задачи на вечер, пока идёт рабочий день. */
@@ -86,9 +89,14 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
   const undead = undeadOf(s);
 
   const numbers = new Map<string, number>();
+  const colors = new Map<string, string>();
   let n = 0;
   for (const t of plan) numbers.set(t.id, ++n);
   for (const t of undead) if (!numbers.has(t.id)) numbers.set(t.id, ++n);
+  for (const t of [...plan, ...undead]) {
+    const q = findQuest(s, t.questId);
+    if (q) colors.set(t.id, questHex(q.color));
+  }
 
   const cur = s.current ? plan.find((t) => t.id === s.current!.taskId) ?? null : null;
   const open = plan.filter((t) => t.status === 'open' && t.id !== cur?.id);
@@ -148,6 +156,7 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
     idle: !!(s.current && s.current.idleSince !== null),
     numbers,
     tones,
+    colors,
     main,
     later,
     doneToday: plan.filter((t) => t.status === 'done').length,

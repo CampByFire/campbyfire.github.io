@@ -1,5 +1,8 @@
 // Листы поверх экрана: новая задача, карточка задачи, письма, поход, итоги дня.
-import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { PRESETS } from '../game/color';
+import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
+import { parsePhrase, type Parsed } from '../game/phrase';
 import { ESTIMATE_BY_LEVEL, SWITCH_COST, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
 import {
   addQuest,
@@ -18,7 +21,10 @@ import {
   release,
   removeQuest,
   setFrog,
+  setPeriod,
   spentNow,
+  tailTargets,
+  tailsOf,
   stopRoutine,
   unrelease,
   updateQuest,
@@ -35,28 +41,33 @@ import {
   IN_WEEKDAY,
   LEVEL_HINT,
   LEVEL_ROMAN,
+  PERIOD_KIND_NAME,
   QUEST_KIND_HINT,
   QUEST_KIND_NAME,
   UNDEAD_NAME,
   W,
   WEEKDAY_CHIPS,
+  periodName,
+  periodTo,
   repeatName,
 } from '../game/words';
 import type { Ui } from './App';
 import { CallLabel, callToFire, finish } from './Camp';
 import { GIcon, LIcon } from './Icon';
 import { Chips, LevelMark, QuestDot, TaskMeta, questName } from './parts';
+import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
 import { WipeSheet } from './Chronicle';
 import { SyncConflictSheet, SyncSheet } from './SyncPanel';
 
 export type SheetState =
-  | { kind: 'add'; questId?: string | null; day?: DayKey | null }
+  | { kind: 'add'; questId?: string | null; day?: DayKey | null; period?: PeriodKey | null }
   | { kind: 'edit'; taskId: string }
   | { kind: 'routine'; routineId: string }
   | { kind: 'task'; taskId: string }
   | { kind: 'summary' }
   | { kind: 'letters' }
+  | { kind: 'tails' }
   | { kind: 'quest'; questId: string }
   | { kind: 'newQuest' }
   | { kind: 'editQuest'; questId: string }
@@ -81,6 +92,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <SummarySheet ui={ui} />;
     case 'letters':
       return <LettersSheet ui={ui} />;
+    case 'tails':
+      return <TailsSheet ui={ui} />;
     case 'quest':
       return <QuestSheet ui={ui} questId={sheet.questId} />;
     case 'newQuest':
@@ -158,6 +171,11 @@ const ESTIMATES: { value: number | null; label: string }[] = [
   { value: null, label: 'дни' },
 ];
 
+/** Уровень по времени. «Дни» без оценки это IV уровень. */
+function levelOfEstimate(min: number | null): Level {
+  return min === null ? 4 : levelForEstimate(min);
+}
+
 type RepeatKind = 'none' | Repeat['every'];
 
 const REPEATS: { value: RepeatKind; label: string }[] = [
@@ -172,7 +190,7 @@ const REPEATS: { value: RepeatKind; label: string }[] = [
  * повторяющаяся, правка меняет и саму повторяющуюся. Повторяющаяся без ждущей задачи
  * правится отдельно (routineId): у неё нет дня и срока, а перестать повторять её можно кнопкой.
  */
-function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questId?: string | null; day?: DayKey | null }; taskId?: string; routineId?: string }) {
+function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questId?: string | null; day?: DayKey | null; period?: PeriodKey | null }; taskId?: string; routineId?: string }) {
   const s = ui.store.state;
   const editing = taskId ? findTask(s, taskId) : undefined;
   const routine = findRoutine(s, routineId ?? editing?.routineId);
@@ -181,31 +199,38 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const [title, setTitle] = useState(from?.title ?? '');
   const [questId, setQuestId] = useState<string | null>(from ? from.questId : preset?.questId ?? null);
   const [estimate, setEstimate] = useState<number | null>(from ? estimateOf(from) : 30);
-  const [level, setLevel] = useState<Level>(from?.level ?? 1);
-  const [levelTouched, setLevelTouched] = useState(!!from);
+  // Уровень следует за временем. У старой задачи он остаётся прежним, пока не тронули время.
+  const [lvl, setLvl] = useState<Level>(from?.level ?? levelForEstimate(30));
   const [day, setDay] = useState<DayKey | null>(editing ? editing.day : preset?.day !== undefined ? preset.day : s.day);
   const [due, setDue] = useState<DayKey | null>(editing?.due ?? null);
   const [at, setAt] = useState<string>(from?.at ?? '');
+  const [period, setPeriodKey] = useState<PeriodKey | null>(editing ? editing.period ?? null : preset?.period ?? null);
   const [repeatKind, setRepeatKind] = useState<RepeatKind>(routine?.repeat.every ?? 'none');
   const [weekday, setWeekday] = useState<number>(routine?.repeat.every === 'week' ? routine.repeat.weekday : parseDay(s.day).getDay());
+  // Что игрок выбрал руками: это сильнее слов во фразе.
+  const [touched, setTouched] = useState<Partial<Record<Field, true>>>({});
+  const touch = (f: Field) => setTouched((x) => (x[f] ? x : { ...x, [f]: true }));
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!from) input.current?.focus();
   }, []);
 
-  const autoLevel: Level = estimate === null ? 4 : levelForEstimate(estimate);
-  const lvl = levelTouched ? level : autoLevel;
+  // Фразу разбирает только новая задача: в правке название уже какое есть.
+  const parsed = useMemo(() => (from ? null : parsePhrase(title, s.day, quests)), [title]);
+  const v = effective(parsed, touched, { questId, estimate, lvl, day, due, at, period }, preset?.day !== undefined);
+
   const tomorrow = addDays(s.day, 1);
   const repeat: Repeat | null = repeatKind === 'none' ? null : repeatKind === 'week' ? { every: 'week', weekday } : { every: repeatKind };
-  const willBeLetter = !repeat && !questId && !day;
+  const willBeLetter = !repeat && !v.questId && !v.day && !v.period;
+  const name = parsed ? parsed.title : title.trim();
 
   const save = (e?: Event) => {
     e?.preventDefault();
-    if (!title.trim()) {
+    if (!name) {
       input.current?.focus();
       return;
     }
-    const fields = { title: title.trim(), questId, level: lvl, estimateMin: estimate === ESTIMATE_BY_LEVEL[lvl] ? null : estimate, at: at || null };
+    const fields = { title: name, questId: v.questId, level: v.lvl, estimateMin: v.estimate === ESTIMATE_BY_LEVEL[v.lvl] ? null : v.estimate, at: v.at || null };
     if (repeat) {
       const rid = ui.store.act((st, now) => {
         if (routine) {
@@ -219,7 +244,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       ui.close();
       return;
     }
-    const patch = { ...fields, day, due };
+    const patch = { ...fields, day: v.day, due: v.due, period: v.period };
     if (editing) {
       ui.store.act((st) => {
         if (routine) stopRoutine(st, routine.id);
@@ -231,9 +256,19 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       return;
     }
     ui.store.act((st, now) => addTask(st, now, patch));
-    ui.toast(willBeLetter ? 'Письмо у вестника: разберёшь в сборе отряда' : `${CLASS_NAME[CLASS_BY_LEVEL[lvl]]} в отряде`);
+    const where = v.period && !v.day ? ` · ${periodName(v.period, s.day).toLowerCase()}` : '';
+    ui.toast(willBeLetter ? 'Письмо у вестника: разберёшь в сборе отряда' : `${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]]} в отряде${where}`);
     ui.close();
   };
+
+  const kind = v.period ? periodKind(v.period) : null;
+  const pickKind = (k: PeriodKind | null) => {
+    touch('period');
+    setPeriodKey(k ? periodOf(k, s.day) : null);
+    // Задаче с горизонтом день у костра не нужен: новая уходит в отряд, если день не выбирали руками.
+    if (k && !from && !touched.day && preset?.day === undefined) setDay(null);
+  };
+  const estimates = ESTIMATES.some((o) => o.value === v.estimate) ? ESTIMATES : [...ESTIMATES, { value: v.estimate, label: v.estimate === null ? 'дни' : formatDuration(v.estimate) }];
 
   return (
     <Sheet
@@ -248,51 +283,78 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       <form onSubmit={save}>
         <label class="field">
           <span class="field-label">Что сделать</span>
-          <input ref={input} class="input" value={title} onInput={(e) => setTitle(e.currentTarget.value)} placeholder="Например, сдать модуль React" maxLength={140} enterKeyHint="done" />
+          <input
+            ref={input}
+            class="input"
+            value={title}
+            onInput={(e) => setTitle(e.currentTarget.value)}
+            placeholder={from ? 'Например, сдать модуль React' : 'Например, завтра в 19:00 позвонить маме'}
+            maxLength={200}
+            enterKeyHint="done"
+            aria-describedby={parsed ? 'phrase-hint' : undefined}
+          />
         </label>
+        {parsed && <PhraseHint s={s} parsed={parsed} raw={title} />}
       </form>
       <Chips
         label={W.quest}
-        value={questId}
+        value={v.questId}
         options={[...quests.map((q) => ({ value: q.id as string | null, label: q.name })), { value: null, label: 'Без похода' }]}
-        onChange={setQuestId}
+        onChange={(x) => { touch('questId'); setQuestId(x); }}
       />
-      <Chips label="Сколько займёт" value={estimate} options={ESTIMATES} onChange={(v) => { setEstimate(v); setLevelTouched(false); }} />
       <Chips
-        label={`Уровень: ${CLASS_NAME[CLASS_BY_LEVEL[lvl]].toLowerCase()}, ${LEVEL_HINT[lvl]}`}
-        value={lvl}
-        options={([1, 2, 3, 4] as Level[]).map((l) => ({ value: l, label: LEVEL_ROMAN[l], sr: `уровень ${l}, ${CLASS_NAME[CLASS_BY_LEVEL[l]].toLowerCase()}` }))}
-        onChange={(l) => { setLevel(l); setLevelTouched(true); }}
+        label={`Сколько займёт: ${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]].toLowerCase()}, ${LEVEL_ROMAN[v.lvl]} уровень`}
+        sr={`Сколько займёт: ${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]].toLowerCase()}, уровень ${v.lvl}`}
+        value={v.estimate}
+        options={estimates.map((o) => ({ ...o, mark: LEVEL_ROMAN[levelOfEstimate(o.value)] }))}
+        onChange={(x) => { touch('estimate'); setEstimate(x); setLvl(levelOfEstimate(x)); }}
       />
       <Chips label="Повторять" value={repeatKind} options={routine && !editing ? REPEATS.slice(1) : REPEATS} onChange={setRepeatKind} />
       {repeatKind === 'week' && <Chips label="В какой день недели" value={weekday} options={WEEKDAY_CHIPS} onChange={setWeekday} />}
       {!repeat && (
         <Chips
+          label="Горизонт"
+          value={kind}
+          options={[{ value: null as PeriodKind | null, label: 'Нет' }, ...PERIOD_KINDS.map((k) => ({ value: k as PeriodKind | null, label: PERIOD_KIND_NAME[k] }))]}
+          onChange={pickKind}
+        />
+      )}
+      {!repeat && kind && v.period && (
+        <Chips
+          label="Какой"
+          value={v.period}
+          options={periodChoices(kind, v.period, s.day).map((k) => ({ value: k, label: periodName(k, s.day) }))}
+          onChange={(x) => { touch('period'); setPeriodKey(x); }}
+        />
+      )}
+      {!repeat && (
+        <Chips
           label="Когда к костру"
-          value={day}
+          value={v.day}
           options={[
             { value: s.day, label: 'Сегодня' },
             { value: tomorrow, label: 'Завтра' },
             { value: null, label: 'Потом' },
-            ...(day && day !== s.day && day !== tomorrow ? [{ value: day, label: formatDue(day, s.day) }] : []),
+            ...(v.day && v.day !== s.day && v.day !== tomorrow ? [{ value: v.day, label: formatDue(v.day, s.day) }] : []),
           ]}
-          onChange={setDay}
+          onChange={(x) => { touch('day'); setDay(x); }}
         />
       )}
       <div class="field-row">
         {!repeat && (
           <label class="field">
             <span class="field-label">Срок</span>
-            <input class="input" type="date" value={due ?? ''} onInput={(e) => setDue(e.currentTarget.value || null)} />
+            <input class="input" type="date" value={v.due ?? ''} onInput={(e) => { touch('due'); setDue(e.currentTarget.value || null); }} />
           </label>
         )}
         <label class="field">
           <span class="field-label">Во сколько</span>
-          <input class="input" type="time" value={at} onInput={(e) => setAt(e.currentTarget.value)} />
+          <input class="input" type="time" value={v.at} onInput={(e) => { touch('at'); setAt(e.currentTarget.value); }} />
         </label>
       </div>
       {repeat && <p class="note">В свои дни задача сама встаёт в план дня. Пока прошлая не сделана, новая не приходит. Логово похода повторяющиеся задачи не ранят: они не кончаются.</p>}
-      {willBeLetter && <p class="note">Без похода и без дня задача уходит письмом к вестнику. Разобрать письма можно в сборе отряда.</p>}
+      {!repeat && v.period && !v.day && <p class="note">Задача ждёт в отряде и видна в сборе отряда на вкладке «{PERIOD_KIND_NAME[kind!]}». К костру её можно позвать в любой день периода.</p>}
+      {willBeLetter && <p class="note">Без похода, без дня и без горизонта задача уходит письмом к вестнику. Разобрать письма можно в сборе отряда.</p>}
       {routine && !editing && (
         <div class="actions">
           <button
@@ -309,6 +371,84 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
         </div>
       )}
     </Sheet>
+  );
+}
+
+type Field = 'questId' | 'estimate' | 'day' | 'due' | 'at' | 'period';
+
+interface FormValues {
+  questId: string | null;
+  estimate: number | null;
+  lvl: Level;
+  day: DayKey | null;
+  due: DayKey | null;
+  at: string;
+  period: PeriodKey | null;
+}
+
+/**
+ * Что в итоге стоит в форме: узнанное во фразе, если это поле не выбирали руками, иначе выбранное.
+ * Срок или горизонт из фразы без дня уводят новую задачу из сегодняшнего плана в отряд.
+ */
+function effective(p: Parsed | null, touched: Partial<Record<Field, true>>, f: FormValues, dayPreset: boolean): FormValues {
+  if (!p) return f;
+  const use = <K extends Field>(k: K, got: FormValues[K] | undefined): FormValues[K] => (!touched[k] && got !== undefined ? got : f[k]);
+  const estimate = use('estimate', p.estimate);
+  const lvl = !touched.estimate && p.estimate !== undefined ? levelOfEstimate(estimate) : f.lvl;
+  let day = use('day', p.day);
+  if (!touched.day && p.day === undefined && !dayPreset && (p.due !== undefined || p.period !== undefined)) day = null;
+  return { questId: use('questId', p.questId), estimate, lvl, day, due: use('due', p.due), at: use('at', p.at), period: use('period', p.period) };
+}
+
+/** Выбор периода: нынешний, следующий и тот, что уже выбран, если он другой. */
+function periodChoices(kind: PeriodKind, chosen: PeriodKey, today: DayKey): PeriodKey[] {
+  const now = periodOf(kind, today);
+  const list = [now, shiftPeriod(now, 1)];
+  if (kind !== 'year') list.push(shiftPeriod(now, 2));
+  if (!list.includes(chosen)) list.push(chosen);
+  return list;
+}
+
+const FOUND_NAME: Record<Parsed['found'][number]['kind'], string> = {
+  day: 'к костру',
+  due: 'срок',
+  at: 'время',
+  estimate: 'займёт',
+  period: 'горизонт',
+  quest: 'поход',
+};
+
+/** Под полем: что игра узнала во фразе и каким выйдет название. */
+function PhraseHint({ s, parsed, raw }: { s: State; parsed: Parsed; raw: string }) {
+  const changed = parsed.title !== raw.trim();
+  if (!parsed.found.length && !changed) {
+    return (
+      <p class="field-hint" id="phrase-hint">
+        Можно фразой: «завтра», «до пятницы», «на неделю», «в 19:00», «на 2 часа», «#работа». Название в кавычках берётся как есть.
+      </p>
+    );
+  }
+  const value = (k: Parsed['found'][number]['kind']): string => {
+    if (k === 'day') return formatDue(parsed.day!, s.day);
+    if (k === 'due') return formatDue(parsed.due!, s.day);
+    if (k === 'at') return parsed.at!;
+    if (k === 'estimate') return parsed.estimate === null || parsed.estimate === undefined ? 'дни' : formatDuration(parsed.estimate);
+    if (k === 'period') return periodName(parsed.period!, s.day).toLowerCase();
+    return findQuest(s, parsed.questId ?? null)?.name ?? '';
+  };
+  return (
+    <div class="phrase" id="phrase-hint" aria-live="polite">
+      {parsed.found.map((f) => (
+        <span key={f.kind} class="phrase-tag">
+          {FOUND_NAME[f.kind]}: <b>{value(f.kind)}</b>
+        </span>
+      ))}
+      {changed && (
+        <span class="phrase-title">
+          Название: {parsed.title ? `«${parsed.title}»` : <em>напиши, что сделать</em>}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -355,6 +495,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
           {spent > 0 && <span>Потрачено {formatDuration(Math.max(1, Math.round(spent / 60_000)))}</span>}
           {t.due && <span class={undead ? 'meta-undead' : ''}>Срок: {formatDue(t.due, s.day)}</span>}
           {t.at && <span>В {t.at}</span>}
+          {t.period && <span>Горизонт: {periodName(t.period, s.day).toLowerCase()}</span>}
           {routine && (
             <span class="fact-repeat">
               <LIcon name="repeat" size={14} />
@@ -453,6 +594,76 @@ function releaseWithUndo(ui: Ui, id: string, text: string): void {
   ui.store.act((st, now) => release(st, now, id));
   ui.toast(text, { label: 'Вернуть', run: () => ui.store.act((st) => unrelease(st, id, frog)) });
 }
+
+// ---------- хвосты ----------
+
+/**
+ * Хвосты: задачи недели, месяца, квартала или года, которые не успели в свой период. В нежить они
+ * не встают (нежить только для сроков), а ждут, пока игрок решит: в нынешний период, в период
+ * побольше или отпустить.
+ */
+function TailsSheet({ ui }: { ui: Ui }) {
+  const s = ui.store.state;
+  const tails = tailsOf(s);
+  const moveAll = () =>
+    ui.store.act((st) => {
+      for (const t of tailsOf(st)) setPeriod(st, t.id, tailTargets(st, t).same);
+    });
+  return (
+    <Sheet
+      title="Хвосты"
+      onClose={ui.close}
+      footer={
+        <button class={`btn btn-wide ${tails.length ? 'btn-ghost' : 'btn-gold'}`} onClick={ui.close}>
+          {tails.length ? 'Разберу потом' : 'Готово'}
+        </button>
+      }
+    >
+      {tails.length === 0 ? (
+        <p class="note">Хвостов нет. Всё разобрано.</p>
+      ) : (
+        <p class="note">Эти задачи не успели в свой период. Перенеси их в нынешний, в период побольше или отпусти.</p>
+      )}
+      {tails.map((t) => {
+        const { same, bigger } = tailTargets(s, t);
+        return (
+          <div key={t.id} class="letter">
+            <div class="letter-title">
+              <LIcon name="calendar" size={16} />
+              <span>
+                {t.title}
+                <small class="letter-sub">{periodName(t.period!, s.day)}</small>
+              </span>
+            </div>
+            <div class="letter-btns">
+              <button class="btn btn-gold btn-sm" aria-label={`${capital(periodTo(same, s.day))}: ${t.title}`} onClick={() => ui.store.act((st) => setPeriod(st, t.id, same))}>
+                {capital(periodTo(same, s.day))}
+              </button>
+              {bigger && (
+                <button class="btn btn-ghost btn-sm" aria-label={`${capital(periodTo(bigger, s.day))}: ${t.title}`} onClick={() => ui.store.act((st) => setPeriod(st, t.id, bigger))}>
+                  {capital(periodTo(bigger, s.day))}
+                </button>
+              )}
+              <button class="btn btn-ghost btn-sm" aria-label={`${W.release}: ${t.title}`} onClick={() => releaseWithUndo(ui, t.id, 'Задача отпущена')}>
+                {W.release}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {tails.length > 1 && (
+        <div class="actions">
+          <button class="act" onClick={moveAll}>
+            <LIcon name="repeat" size={16} />
+            Все в нынешние периоды
+          </button>
+        </div>
+      )}
+    </Sheet>
+  );
+}
+
+const capital = (x: string) => x[0].toUpperCase() + x.slice(1);
 
 // ---------- письма ----------
 
@@ -595,16 +806,16 @@ function Stat({ v, label }: { v: string; label: string }) {
 
 // ---------- походы ----------
 
-const COLORS: QuestColor[] = ['red', 'blue', 'green', 'yellow', 'purple', 'brown'];
-
 function QuestForm({ ui, questId }: { ui: Ui; questId?: string }) {
   const s = ui.store.state;
   const q = questId ? findQuest(s, questId) : undefined;
   const [name, setName] = useState(q?.name ?? '');
   const [kind, setKind] = useState<QuestKind>(q?.kind ?? 'work');
-  const [color, setColor] = useState<QuestColor>(q?.color ?? COLORS[s.quests.length % COLORS.length]);
+  const [first] = useState<QuestColor>(() => q?.color ?? PRESETS[s.quests.length % PRESETS.length]);
+  // null: в поле кода сейчас не цвет, под ним уже сказано, что не так.
+  const [color, setColor] = useState<QuestColor | null>(first);
   const save = () => {
-    if (!name.trim()) return;
+    if (!name.trim() || !color) return;
     if (q) ui.store.act((st) => updateQuest(st, q.id, { name: name.trim(), kind, color }));
     else ui.store.act((st, now) => addQuest(st, now, { name, kind, color }));
     ui.close();
@@ -621,14 +832,7 @@ function QuestForm({ ui, questId }: { ui: Ui; questId?: string }) {
         options={(['work', 'personal', 'any'] as QuestKind[]).map((k) => ({ value: k, label: QUEST_KIND_NAME[k] }))}
         onChange={setKind}
       />
-      <div class="field">
-        <div class="field-label">Знамя</div>
-        <div class="chips">
-          {COLORS.map((c) => (
-            <button key={c} class={`swatch qdot-${c}${c === color ? ' is-on' : ''}`} aria-label={c} aria-pressed={c === color} onClick={() => setColor(c)} />
-          ))}
-        </div>
-      </div>
+      <QuestColorPicker initial={first} onChange={setColor} />
     </Sheet>
   );
 }

@@ -1,13 +1,18 @@
 // Мелкие общие куски интерфейса.
+import { inkOn, isDark, questHex } from '../game/color';
 import { estimateOf } from '../game/rules';
 import { daysOverdue, findQuest, findRoutine, isUndead } from '../game/state';
 import { formatDue, formatDuration, plural } from '../game/time';
 import type { Level, Quest, State, Task } from '../game/types';
-import { LEVEL_ROMAN } from '../game/words';
+import type { Tone } from '../game/view';
+import { LEVEL_ROMAN, periodShort } from '../game/words';
 import { GIcon, LIcon } from './Icon';
 
-/** Подпись справа в строке задачи: нежить, время, срок или оценка. У повторяющейся перед ней значок. */
-export function TaskMeta({ s, t, estimate = false }: { s: State; t: Task; estimate?: boolean }) {
+/**
+ * Подпись справа в строке задачи: нежить, время, срок, оценка или горизонт. У повторяющейся перед ней значок.
+ * period: показывать ли горизонт (на вкладке самого периода он лишний).
+ */
+export function TaskMeta({ s, t, estimate = false, period = true }: { s: State; t: Task; estimate?: boolean; period?: boolean }) {
   const repeat = t.status !== 'done' && findRoutine(s, t.routineId) && (
     <>
       <LIcon name="repeat" size={13} class="ic-gold" />
@@ -30,6 +35,7 @@ export function TaskMeta({ s, t, estimate = false }: { s: State; t: Task; estima
     return <span class="meta">{repeat}{e ? formatDuration(e) : 'дни'}</span>;
   }
   if (t.due) return <span class="meta">{formatDue(t.due, s.day)}</span>;
+  if (period && t.period) return <span class="meta">{periodShort(t.period, s.day)}</span>;
   return (
     <span class="meta">
       {repeat}
@@ -50,8 +56,21 @@ export function LevelMark({ level, short = false }: { level: Level; short?: bool
   );
 }
 
+/**
+ * Номер спутника в цвете его похода (color из CampView.colors), цифра тёмная или светлая, смотря что на нём читается.
+ * У нежити номер остаётся красным: это знак беды, а не похода. more: ещё классы через пробел.
+ */
+export function numLook(tone: Tone, color: string | undefined, more = ''): { class: string; style?: preact.JSX.CSSProperties } {
+  const paint = color !== undefined && tone !== 'undead';
+  return {
+    class: `num num-${tone}${paint ? ' num-quest' : ''}${more ? ` ${more}` : ''}`,
+    style: paint ? { background: color, color: inkOn(color) } : undefined,
+  };
+}
+
 export function QuestDot({ q }: { q: Quest | undefined }) {
-  return <span class={`qdot qdot-${q?.color ?? 'none'}`} aria-hidden="true" />;
+  const hex = questHex(q?.color);
+  return <span class={`qdot${isDark(hex) ? ' qdot-dark' : ''}`} style={{ background: hex }} aria-hidden="true" />;
 }
 
 export function questName(s: State, t: Task): string {
@@ -61,8 +80,11 @@ export function questName(s: State, t: Task): string {
 /** Выбор одного из вариантов. Как у радиокнопок: Tab попадает на выбранный, стрелки выбирают соседний. */
 export function Chips<T extends string | number | null>(p: {
   label: string;
+  /** Что вместо подписи группы прочтёт экранный диктор. */
+  sr?: string;
   value: T;
-  options: { value: T; label: string; hint?: string; sr?: string }[];
+  /** mark: короткая пометка на фишке только для глаз, диктор её не читает. */
+  options: { value: T; label: string; hint?: string; sr?: string; mark?: string }[];
   onChange: (v: T) => void;
 }) {
   const at = p.options.findIndex((o) => o.value === p.value);
@@ -78,8 +100,8 @@ export function Chips<T extends string | number | null>(p: {
   };
   return (
     <div class="field">
-      <div class="field-label">{p.label}</div>
-      <div class="chips" role="radiogroup" aria-label={p.label}>
+      <div class="field-label" aria-hidden={p.sr ? 'true' : undefined}>{p.label}</div>
+      <div class="chips" role="radiogroup" aria-label={p.sr ?? p.label}>
         {p.options.map((o, i) => (
           <button
             key={String(o.value)}
@@ -93,6 +115,7 @@ export function Chips<T extends string | number | null>(p: {
           >
             <ChipText label={o.label} sr={o.sr} />
             {o.hint && <small>{o.hint}</small>}
+            {o.mark && <small aria-hidden="true">{o.mark}</small>}
           </button>
         ))}
       </div>

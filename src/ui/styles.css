@@ -423,6 +423,17 @@ h2.sc {
   color: var(--text);
 }
 
+/* Номер в цвете похода: фон и цифру задаёт разметка (numLook). У огня номер в золотой оправе, задача на вечер ждёт заката притушенной. */
+.num-quest.num-current {
+  border-color: var(--gold-hi);
+}
+.fig-mark .num-quest.num-current::after {
+  border-top-color: var(--gold-hi);
+}
+.num-quest.num-evening {
+  filter: saturate(0.6) brightness(0.72);
+}
+
 .num.is-pulse {
   animation: glow 1.8s ease-out infinite;
 }
@@ -1385,23 +1396,9 @@ h2.sc {
   background: #6b5a48;
   display: inline-block;
 }
-.qdot-red {
-  background: #d64b3c;
-}
-.qdot-blue {
-  background: #4f7be0;
-}
-.qdot-green {
-  background: #6aa84f;
-}
-.qdot-yellow {
-  background: #e6b739;
-}
-.qdot-purple {
-  background: #9467d6;
-}
-.qdot-brown {
-  background: #a3734a;
+/* Цвет знамени задаёт сам знак (src/game/color.ts). Тёмное знамя теряется на тёмной карточке, ему нужна обводка. */
+.qdot-dark {
+  box-shadow: 0 0 0 1px rgba(255, 236, 200, 0.45);
 }
 
 .note {
@@ -1846,6 +1843,149 @@ h2.sc {
   box-shadow: 0 0 0 2px var(--ink) inset;
 }
 
+/* Свой цвет знамени: под готовыми цветами, с кодом и ползунками. */
+.qcolor-own {
+  margin-top: 7px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 14px 0 7px;
+  border-radius: 12px;
+  border: 2px solid var(--line-2);
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  font-size: 14.5px;
+}
+
+.qcolor-own.is-on {
+  border-color: var(--text-hi);
+}
+
+.qcolor-own-dot {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: conic-gradient(#d64b3c, #e6b739, #6aa84f, #3fb4a6, #4f7be0, #9467d6, #d64b3c);
+  box-shadow: inset 0 0 0 1px rgba(255, 236, 200, 0.22);
+}
+
+/* Код цвета обычными цифрами: у старинных ноль похож на «o». */
+.qcolor-own-code {
+  font-weight: 500;
+  font-size: 13.5px;
+  color: var(--muted);
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: 0.03em;
+}
+
+.qcolor-edit {
+  margin-top: 10px;
+  padding: 4px 12px 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--card-2);
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+.qcolor-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 50px;
+}
+
+.qcolor-row > span {
+  flex: none;
+  width: 104px;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.qcolor-code {
+  flex: 1;
+  min-width: 0;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.qcolor-code[aria-invalid='true'] {
+  border-color: var(--red-text);
+}
+
+.qcolor-edit .note-error {
+  margin: 0 0 4px;
+}
+
+/* Ползунок: дорожка показывает, куда пойдёт цвет (--track), бегунок залит самим цветом (--thumb). */
+.qslider {
+  flex: 1;
+  min-width: 0;
+  height: 44px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  touch-action: pan-y;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.qslider:focus-visible {
+  outline: none;
+}
+
+.qslider::-webkit-slider-runnable-track {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--track);
+  box-shadow: inset 0 0 0 1px rgba(255, 236, 200, 0.14);
+}
+
+.qslider::-moz-range-track {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--track);
+  box-shadow: inset 0 0 0 1px rgba(255, 236, 200, 0.14);
+}
+
+.qslider::-webkit-slider-thumb {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  margin-top: -7px;
+  border-radius: 50%;
+  border: 3px solid var(--text-hi);
+  background: var(--thumb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.qslider::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--text-hi);
+  background: var(--thumb);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+
+.qslider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 4px var(--gold-hi);
+}
+
+.qslider:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 2px var(--ink),
+    0 0 0 4px var(--gold-hi);
+}
+
 .task-head {
   padding-top: 4px;
 }
@@ -2245,11 +2385,168 @@ h2.sc {
   background: var(--gold);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation: none !important;
-    transition: none !important;
+/* «Уменьшить движение» в системе включает Спокойную магию, а не выключает всё: см. magic/magic.css. */
+
+/* ---------- горизонты: вкладки сбора отряда ---------- */
+.seg {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 4px;
+  border-radius: 14px;
+  background: var(--card-2);
+  border: 1px solid var(--line-2);
+}
+.seg-btn {
+  min-height: 44px;
+  padding: 0 2px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seg-btn.is-on {
+  background: var(--gold);
+  color: var(--ink);
+}
+@media (max-width: 359px) {
+  .seg-btn {
+    font-size: 12.5px;
   }
+}
+.period-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+.period-title {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+.period-title h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 21px;
+  color: var(--text-hi);
+}
+.period-title span {
+  display: block;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.period-back {
+  display: flex;
+  margin: 4px auto 0;
+}
+.period-progress .bar > span {
+  background: var(--gold);
+}
+.period-done,
+.period-nested {
+  border-top: 1px solid var(--line);
+}
+.period-done > summary,
+.period-nested > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--muted);
+  font-size: 14px;
+  cursor: pointer;
+  list-style: none;
+}
+.period-nested > summary {
+  justify-content: space-between;
+  border-top: 0;
+}
+.period-done > summary::-webkit-details-marker,
+.period-nested > summary::-webkit-details-marker {
+  display: none;
+}
+.period-done > summary::after,
+.period-nested > summary::after {
+  content: '▾';
+  margin-left: 4px;
+  color: var(--dim);
+}
+.period-done[open] > summary::after,
+.period-nested[open] > summary::after {
+  content: '▴';
+}
+.period-nested > summary .sc {
+  font-family: var(--font-sc);
+  color: var(--gold);
+  font-size: 15px;
+  margin-right: auto;
+}
+.row-done .row-title {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--dim);
+}
+.prow-today {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--fire);
+}
+.banner-tails {
+  border-color: rgba(241, 196, 90, 0.4);
+  background: rgba(168, 129, 31, 0.22);
+  color: var(--gold-hi);
+}
+.letter-sub {
+  display: block;
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--muted);
+}
+.letter .letter-btns:has(> :nth-child(2):last-child) {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ---------- задача одной фразой ---------- */
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--dim);
+}
+.phrase {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+.phrase-tag {
+  padding: 3px 9px;
+  border-radius: 10px;
+  background: rgba(241, 196, 90, 0.14);
+  border: 1px solid rgba(241, 196, 90, 0.35);
+  color: var(--muted);
+  font-size: 13px;
+}
+.phrase-tag b {
+  color: var(--gold-hi);
+  font-weight: 700;
+}
+.phrase-title {
+  flex-basis: 100%;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.phrase-title em {
+  color: var(--red-text);
 }
