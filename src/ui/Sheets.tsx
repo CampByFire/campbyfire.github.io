@@ -59,6 +59,7 @@ import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
 import { WipeSheet } from './Chronicle';
 import { SyncConflictSheet, SyncSheet } from './SyncPanel';
+import { setSheetBack } from './back';
 
 export type SheetState =
   | { kind: 'add'; questId?: string | null; day?: DayKey | null; period?: PeriodKey | null }
@@ -131,7 +132,12 @@ export function Sheet(p: { title: string; onClose: () => void; children: preact.
       if (e.key === 'Escape') p.onClose();
     };
     document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    // «Назад» на телефоне закрывает лист так же, как Escape.
+    const dropBack = setSheetBack(p.onClose);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      dropBack();
+    };
   }, [p.onClose]);
   useEffect(() => {
     if (!ref.current?.contains(document.activeElement)) ref.current?.focus();

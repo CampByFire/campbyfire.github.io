@@ -5,6 +5,7 @@ import type { CompleteResult } from '../game/state';
 import { W } from '../game/words';
 import { Camp } from './Camp';
 import { Chronicle } from './Chronicle';
+import { sheetBack, useBackButton } from './back';
 import { isLost, restoreFocus, spotOf, type FocusSpot } from './focus';
 import { useStore } from './hooks';
 import { Intro } from './Intro';
@@ -246,6 +247,14 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
 
   // Пока открыт лист или знакомство, экран под ним недоступен ни пальцу, ни экранному чтецу, ни Tab.
   const covered = !!openSheet || intro;
+
+  // «Назад» на телефоне закрывает знакомство или лист, с других разделов ведёт в Лагерь,
+  // и только из Лагеря без открытых листов выходит из приложения.
+  useBackButton(covered || screen !== 'camp', () => {
+    if (intro) closeIntro();
+    else if (sheetShown.current) (sheetBack() ?? closeSheet)();
+    else if (screen !== 'camp') ui.go('camp');
+  });
   return (
     <div class="app">
       <main class="screen" inert={covered} ref={main}>
