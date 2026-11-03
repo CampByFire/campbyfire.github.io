@@ -566,6 +566,101 @@
   color: #e9d9b8;
 }
 
+/* ---------- второй этап: Упокоение, Разжигание, Нежить, Вестник, Лягушачья удача, Падение логова ---------- */
+
+/* Белый луч Упокоения падает с неба. */
+.pillar.holy {
+  transform-origin: 50% 0%;
+  background: linear-gradient(to bottom, rgba(220, 240, 255, 0) 0%, rgba(240, 250, 255, 0.95) 30%, rgba(255, 248, 225, 0.7) 75%, rgba(255, 248, 225, 0) 100%);
+}
+
+/* Тёплая волна от разгоревшегося костра. */
+.wave.warm-fill {
+  background: radial-gradient(circle, rgba(255, 200, 120, 0.4), rgba(255, 170, 80, 0.16) 45%, rgba(255, 170, 80, 0) 70%);
+}
+
+/* Красный туман, из которого встаёт нежить. */
+.mist {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(60, 12, 10, 0.75), rgba(40, 8, 6, 0.4) 40%, rgba(40, 8, 6, 0) 70%);
+}
+
+/* До разжигания костёр тлеет: свечение маленькое, угли редкие, номера спутников приглушены. */
+.scene.is-unlit .scene-fire {
+  transform: translate(-50%, -50%) scale(0.45);
+  opacity: 0.55;
+  animation: none;
+}
+
+/* Сам очаг тоже тёмный: пламя на картинке гаснет вместе со свечением. */
+.scene.is-unlit .fig-lit {
+  filter: brightness(0.5) saturate(0.45);
+}
+
+[data-motion='full'] .scene:not(.is-unlit) .scene-fire {
+  transition: transform 600ms var(--ease-out);
+}
+
+[data-motion='full'] .scene:not(.is-unlit) .fig-lit {
+  transition: filter 500ms ease;
+}
+
+.scene.is-unlit .embers i:nth-child(n + 3) {
+  display: none;
+}
+
+.num.is-dim {
+  filter: grayscale(0.7) brightness(0.7);
+  box-shadow: none;
+}
+
+/* Письмо вестника летит по дуге: место задаёт анимация. */
+.letter-fly {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.letter-fly {
+  width: 28px;
+  height: 28px;
+  margin: -14px 0 0 -14px;
+  color: #f3ead8;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 6px rgba(143, 176, 255, 0.7));
+}
+
+.letter-fly svg {
+  display: block;
+}
+
+/* Знамя павшего логова. */
+.pennant {
+  position: absolute;
+  left: 50%;
+  width: 180px;
+  margin-left: -90px;
+  transform-origin: 50% 0;
+}
+
+.pennant svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+/* «Логово пало!»: золотом, а не светом Восхождения. */
+.lvl-text.is-gold b {
+  background: linear-gradient(180deg, #fffbe8 0%, #ffe08a 45%, #e3a23a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+.lvl-text.is-gold small {
+  color: #ffe9b0;
+}
+
 /* ---------- Спокойная магия ---------- */
 
 [data-motion='calm'] .embers,

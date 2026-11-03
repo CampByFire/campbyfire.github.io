@@ -54,7 +54,7 @@ export function Realm({ ui }: { ui: Ui }) {
         </div>
         {won.length === 0 && <p class="note">Пока пусто. Когда логово похода падёт, его знамя появится здесь.</p>}
         {won.map((q) => (
-          <div key={q.id} class="trophy">
+          <div key={q.id} class="trophy" data-quest={q.id}>
             <GIcon name="kingdom" size={20} class="ic-gold" />
             <span class="row-title">{q.name}</span>
             <span class="meta">{new Date(q.wonAt!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}</span>

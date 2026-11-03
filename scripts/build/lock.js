@@ -14,6 +14,30 @@
   const btn = document.getElementById('lock-btn');
   const msg = document.getElementById('lock-msg');
 
+  // Сила магии та же, что выбрана в игре на этом устройстве; пока не выбрана, решает система.
+  const motion = (() => {
+    let m;
+    try {
+      m = JSON.parse(localStorage.getItem('taskcraft-lager-device') || '{}').magic;
+    } catch {
+      // Настроек нет: решит система.
+    }
+    if (m === 'full' || m === 'calm' || m === 'off') return m;
+    try {
+      return matchMedia('(prefers-reduced-motion: reduce)').matches ? 'calm' : 'full';
+    } catch {
+      return 'full';
+    }
+  })();
+  lock.dataset.motion = motion;
+
+  /** Снять и снова поставить класс, чтобы его анимация сыграла ещё раз. */
+  const replay = (el, cls) => {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  };
+
   const enc = new TextEncoder();
   let code = null;
   const load = () => {
@@ -66,7 +90,14 @@
   }
 
   function run(js) {
-    lock.remove();
+    // Печать вспыхивает, замок тает, а игра тем временем уже запускается под ним.
+    if (!lock.hidden && motion !== 'off') {
+      lock.classList.remove('is-busy');
+      lock.classList.add('is-open');
+      lock.inert = true;
+      lock.setAttribute('aria-hidden', 'true');
+      setTimeout(() => lock.remove(), motion === 'full' ? 700 : 450);
+    } else lock.remove();
     import(URL.createObjectURL(new Blob([js], { type: 'text/javascript' }))).catch((err) => {
       const p = document.createElement('p');
       p.className = 'lock-fail';
@@ -75,9 +106,12 @@
     });
   }
 
-  function show(text) {
+  function show(text, wrong) {
     lock.hidden = false;
+    lock.classList.remove('is-busy');
+    if (wrong) replay(lock, 'is-wrong');
     msg.textContent = text || '';
+    if (text) replay(msg, 'is-new');
     btn.disabled = false;
     btn.textContent = 'Войти';
     // autofocus не сработает: пока скрипт не решил, нужен ли пароль, форма скрыта.
@@ -92,13 +126,16 @@
     btn.disabled = true;
     btn.textContent = 'Открываю…';
     msg.textContent = '';
+    lock.classList.remove('is-wrong');
+    lock.classList.add('is-busy');
     let js;
     let raw;
     try {
       raw = await derive(pass.value);
       js = await unlock(raw);
     } catch (err) {
-      show(err && err.name === 'OperationError' ? 'Пароль не подошёл.' : offline);
+      const wrong = err && err.name === 'OperationError';
+      show(wrong ? 'Пароль не подошёл.' : offline, wrong);
       pass.select();
       return;
     }

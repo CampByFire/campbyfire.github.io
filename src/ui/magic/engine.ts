@@ -52,6 +52,8 @@ export function setMotion(m: Motion): void {
 
 const STOP = new Error('магия прервана');
 let SPELL = 0;
+/** Растёт, когда магию сбрасывают целиком: смена силы магии, слои ушли со страницы. */
+let HARD = 0;
 
 export interface Spell {
   /** Ещё не началось следующее заклинание. */
@@ -77,13 +79,15 @@ export function nextFrame(): Promise<void> {
 /**
  * Запустить заклинание. Хвост прежнего мягко гаснет, числа встают на итог.
  * chain: заклинание продолжает текущее (Восхождение после награды), хвост прежнего не гасится.
+ * side: заклинание идёт рядом с текущим и не прерывает его (нежить встаёт, пока разгорается костёр).
  */
-export function cast(fn: (s: Spell) => void | Promise<void>, o: { chain?: boolean } = {}): void {
+export function cast(fn: (s: Spell) => void | Promise<void>, o: { chain?: boolean; side?: boolean } = {}): void {
   if (off() || !L.app) return;
-  const id = ++SPELL;
-  if (!o.chain) softClear();
+  const hard = HARD;
+  const id = o.side ? 0 : ++SPELL;
+  if (!o.chain && !o.side) softClear();
   const s: Spell = {
-    alive: () => id === SPELL,
+    alive: o.side ? () => hard === HARD : () => id === SPELL,
     wait: (ms) => sleep(ms, s.alive),
     frame: () =>
       nextFrame().then(() => {
@@ -113,6 +117,31 @@ const LIVE = new Set<Element>();
 const ANIMS = new Set<Animation>();
 /** Анимации настоящих элементов приложения: при прерывании они обрываются, и элемент сразу встаёт как есть. */
 const BOUND = new Set<Animation>();
+/** Классы, которые магия ненадолго поставила элементам приложения (тлеющий костёр): при прерывании они снимаются. */
+const MARKED = new Map<Element, Set<string>>();
+
+/** Поставить элементу приложения класс на время заклинания. */
+export function mark(el: Element | null | undefined, cls: string): void {
+  if (!el) return;
+  el.classList.add(cls);
+  const set = MARKED.get(el) ?? new Set<string>();
+  set.add(cls);
+  MARKED.set(el, set);
+}
+
+/** Снять класс, поставленный магией. */
+export function unmark(el: Element | null | undefined, cls: string): void {
+  if (!el) return;
+  el.classList.remove(cls);
+  const set = MARKED.get(el);
+  set?.delete(cls);
+  if (set && !set.size) MARKED.delete(el);
+}
+
+function unmarkAll(): void {
+  for (const [el, set] of MARKED) for (const c of set) el.classList.remove(c);
+  MARKED.clear();
+}
 
 export function fxNode(cls: string, parent: Element | null = L.fx, style: Record<string, string> | null = null, html = ''): HTMLElement | null {
   if (!parent) return null;
@@ -261,6 +290,7 @@ function softClear(): void {
     }
   }
   for (const a of [...BOUND]) a.cancel();
+  unmarkAll();
 }
 
 /** Прервать магию, когда действие отменили: хвост гаснет, числа встают на итог. */
@@ -272,6 +302,8 @@ export function interrupt(): void {
 /** Всё временное убрать сразу: смена режима магии. */
 function hardClear(): void {
   SPELL++;
+  HARD++;
+  unmarkAll();
   clearParticles();
   settleNumbers();
   for (const el of [...LIVE]) drop(el);

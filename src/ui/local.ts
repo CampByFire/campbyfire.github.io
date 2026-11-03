@@ -15,6 +15,8 @@ export interface Local {
   quiet: Partial<Record<'ios' | 'backup' | 'token', number>>;
   /** Сила магии, выбранная в Летописи. Пока не выбрана, решает настройка системы «Уменьшить движение». */
   magic?: Motion;
+  /** Нежить, которая уже вставала на дороге у этого устройства: второй раз она из земли не поднимается. */
+  risen?: string[];
 }
 
 export function loadLocal(now: number): Local {

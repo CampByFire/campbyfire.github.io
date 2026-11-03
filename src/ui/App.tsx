@@ -46,6 +46,8 @@ export interface Ui {
   toast(text: string, action?: ToastAction): void;
   cheer: Cheer | null;
   setCheer(c: Cheer | null): void;
+  /** Поверх экрана лист или знакомство: экран под ними недоступен. */
+  covered: boolean;
   showIntro(): void;
   /** Сила магии на этом устройстве. */
   motion: Motion;
@@ -208,6 +210,8 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
 
   const now = store.now();
   const liveCheer = cheer && cheer.until > now ? cheer : null;
+  // Пока открыт лист или знакомство, экран под ним недоступен ни пальцу, ни экранному чтецу, ни Tab.
+  const covered = !!openSheet || intro;
 
   const ui: Ui = {
     store,
@@ -226,6 +230,7 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
     toast: (text, action) => setToast({ text, id: Date.now(), action }),
     cheer: liveCheer,
     setCheer: (c) => setCheerState(c ? { ...c, until: store.now() + CHEER_MS } : null),
+    covered,
     showIntro: () => {
       dropSheet();
       setIntro(true);
@@ -244,9 +249,6 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
       l.introDone = true;
     });
   };
-
-  // Пока открыт лист или знакомство, экран под ним недоступен ни пальцу, ни экранному чтецу, ни Tab.
-  const covered = !!openSheet || intro;
 
   // «Назад» на телефоне закрывает знакомство или лист, с других разделов ведёт в Лагерь,
   // и только из Лагеря без открытых листов выходит из приложения.

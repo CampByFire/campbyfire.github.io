@@ -141,9 +141,12 @@ export function Scene(p: {
           style={{ left: pct(msg[0], SCENE_W), top: pct(msg[1], SCENE_H) }}
           onClick={p.onLetters}
           aria-label={`Письма у вестника: ${v.inbox}`}
+          data-magic="letters"
         >
           <LIcon name="envelope" size={16} stroke={2.2} />
-          {v.inbox}
+          <span data-magic="letters-n" data-v={v.inbox}>
+            {v.inbox}
+          </span>
         </button>
       )}
     </div>

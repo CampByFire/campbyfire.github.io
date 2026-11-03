@@ -53,6 +53,8 @@ import {
 import type { Ui } from './App';
 import { CallLabel, callToFire, finish } from './Camp';
 import { GIcon, LIcon } from './Icon';
+import { comeBack, letGo } from './magic/spells';
+import { bedtime, expectJoin, expectLetter, lairFall } from './magic/world';
 import { Chips, LevelMark, QuestDot, TaskMeta, questName } from './parts';
 import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
@@ -257,9 +259,11 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       ui.close();
       return;
     }
+    const letters = inboxOf(ui.store.state).length;
     ui.store.act((st, now) => addTask(st, now, patch));
     const where = v.period && !v.day ? ` · ${periodName(v.period, s.day).toLowerCase()}` : '';
     ui.toast(willBeLetter ? 'Письмо у вестника: разберёшь в сборе отряда' : `${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]]} в отряде${where}`);
+    if (willBeLetter) expectLetter(letters);
     ui.close();
   };
 
@@ -587,7 +591,14 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
 /** Отпустить задачу; несколько секунд её можно вернуть одной кнопкой, потом из Королевства. */
 function releaseWithUndo(ui: Ui, id: string, text: string): void {
   ui.store.act((st, now) => release(st, now, id));
-  ui.toast(text, { label: 'Вернуть', run: () => ui.store.act((st) => unrelease(st, id)) });
+  letGo(id);
+  ui.toast(text, {
+    label: 'Вернуть',
+    run: () => {
+      ui.store.act((st) => unrelease(st, id));
+      comeBack(id);
+    },
+  });
 }
 
 // ---------- хвосты ----------
@@ -692,7 +703,17 @@ function Letter({ ui, t, quests }: { ui: Ui; t: Task; quests: State['quests'] })
         ))}
       </div>
       <div class="letter-btns">
-        <button class="btn btn-gold btn-sm" disabled={!questId} onClick={() => ui.store.act((st) => { updateTask(st, t.id, { questId }); planTask(st, t.id, st.day); })}>
+        <button
+          class="btn btn-gold btn-sm"
+          disabled={!questId}
+          onClick={() => {
+            ui.store.act((st) => {
+              updateTask(st, t.id, { questId });
+              planTask(st, t.id, st.day);
+            });
+            expectJoin(t.id);
+          }}
+        >
           На сегодня
         </button>
         <button class="btn btn-ghost btn-sm" disabled={!questId} onClick={() => ui.store.act((st) => updateTask(st, t.id, { questId }))}>
@@ -726,7 +747,16 @@ function SummarySheet({ ui }: { ui: Ui }) {
       onClose={ui.close}
       footer={
         <div class="btns">
-          <button class="btn btn-gold" onClick={() => { ui.store.act((st, now) => endDay(st, now, [...keep])); ui.close(); ui.go('camp'); }}>
+          <button
+            class="btn btn-gold"
+            onClick={() => {
+              const ids = [...keep];
+              ui.store.act((st, now) => endDay(st, now, ids));
+              ui.close();
+              ui.go('camp');
+              bedtime(ids);
+            }}
+          >
             <GIcon name="zzz" size={17} />
             {W.lightsOut}
           </button>
@@ -827,7 +857,15 @@ function QuestSheet({ ui, questId }: { ui: Ui; questId: string }) {
         </div>
       )}
       {lair.max > 0 && lair.hp === 0 && !q.wonAt && (
-        <button class="btn btn-gold btn-wide" onClick={() => { ui.store.act((st, now) => winQuest(st, now, q.id)); ui.toast('Логово пало! Поход в зале трофеев'); ui.close(); }}>
+        <button
+          class="btn btn-gold btn-wide"
+          onClick={() => {
+            ui.store.act((st, now) => winQuest(st, now, q.id));
+            ui.toast('Логово пало! Поход в зале трофеев');
+            ui.close();
+            lairFall(q.id, q.name, q.color);
+          }}
+        >
           Логово пало: завершить поход
         </button>
       )}

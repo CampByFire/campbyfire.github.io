@@ -211,6 +211,10 @@ h2.sc {
   position: relative;
   overflow: hidden;
   background: #2f4a22;
+  /* Долгое нажатие на поляну не открывает меню «Сохранить / Скопировать картинку». */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .scene-box {
@@ -230,6 +234,7 @@ h2.sc {
   width: 100%;
   height: 100%;
   display: block;
+  pointer-events: none;
 }
 
 .scene-bg-fallback {

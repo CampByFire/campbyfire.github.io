@@ -1,339 +1,65 @@
-// Заклинания первого этапа: шёпоты, Победная искра, Призыв к огню, Привал и Восхождение.
+// Заклинания действий игрока: Искра под пальцем, листы и страницы, Победная искра с Лягушачьей удачей
+// и Упокоением, Призыв к огню, Привал, Второе дыхание, Отпустить, Разжигание и Восхождение.
 // Каждое зовётся сразу после действия. Синхронная часть видит прежний экран (Preact перерисует
 // его чуть позже), после nextFrame на странице уже новое состояние, а на экран оно ещё не попало.
 import type { CompleteResult } from '../../game/state';
-import { SCENE, SCENE_H, SCENE_W, pct } from '../../scene/scene';
+import { SCENE } from '../../scene/scene';
+import { EASE, L, anim, aside, calm, cast, countUp, fxNode, hold, mark, off, pt, rectIn, release, safe, size, unmark, type Spell } from './engine';
 import {
-  EASE,
-  L,
-  anim,
-  aside,
-  calm,
-  cast,
-  countUp,
-  drop,
-  fxNode,
-  hold,
-  off,
-  own,
-  pt,
-  rectIn,
-  release,
-  safe,
-  size,
-  type Spell,
-} from './engine';
+  $,
+  $$,
+  bump,
+  cardIn,
+  dissolve,
+  drawRunes,
+  fadeIn,
+  fadeOut,
+  figCenter,
+  figFeet,
+  figImg,
+  figPoints,
+  fireAt,
+  flare,
+  flipNumber,
+  floatText,
+  ghostFig,
+  ghostMark,
+  glint,
+  markOf,
+  materialize,
+  pillar,
+  popIn,
+  px,
+  ringImg,
+  runeRing,
+  scene,
+  sigilSVG,
+  spt,
+  sweep,
+  wave,
+  baseFilter,
+} from './kit';
 import { burst, flight, spiral } from './particles';
-
-const $ = <T extends Element = HTMLElement>(sel: string, root: ParentNode | null | undefined = L.app): T | null => root?.querySelector<T>(sel) ?? null;
-const $$ = <T extends Element = HTMLElement>(sel: string, root: ParentNode | null | undefined = L.app): T[] => (root ? [...root.querySelectorAll<T>(sel)] : []);
-const esc = (s: string) => (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(s) : s.replace(/["\\]/g, '\\$&'));
-
-// ---------- сцена ----------
-
-const scene = () => $('.scene');
-
-/** Точка картинки сцены (780 × 840) в пикселях приложения. */
-function spt(sc: Element, x: number, y: number): [number, number] {
-  const r = rectIn(sc);
-  return [r.x + (x / SCENE_W) * r.w, r.y + (y / SCENE_H) * r.h];
-}
-
-const fireAt = (sc: Element) => spt(sc, SCENE.fire[0], SCENE.fire[1] - 34);
-
-const figImg = (sc: Element | null, id: string | null | undefined) => (sc && id ? $<HTMLImageElement>(`img.fig[data-task="${esc(id)}"]`, sc) : null);
-const ringImg = (sc: Element | null) => (sc ? $<HTMLImageElement>('img.fig[data-art^="ring/"]', sc) : null);
-const markOf = (sc: Element | null, id: string | null | undefined) => (sc && id ? $(`.fig-mark[data-task="${esc(id)}"]`, sc) : null);
-
-/** Ноги и макушка фигуры в единицах сцены, по её картинке. */
-function figPoints(img: HTMLElement): { feet: [number, number]; head: [number, number] } | null {
-  const art = img.dataset.art;
-  const sp = art ? SCENE.sprites[art] : undefined;
-  const feet = art ? SCENE.spots[art.split('/')[0]] : undefined;
-  if (!sp || !feet) return null;
-  return { feet, head: sp.head ?? [sp.x + sp.w / 2, sp.y + 6] };
-}
-
-/** Середина фигуры между макушкой и ногами. */
-function figCenter(sc: Element, img: HTMLElement): [number, number] {
-  const p = figPoints(img);
-  if (!p) return pt(img, 0.5, 0.45);
-  return spt(sc, (p.head[0] + p.feet[0]) / 2, (p.head[1] + p.feet[1]) / 2);
-}
-
-/** Копия фигуры поверх сцены: настоящая уйдёт с новым состоянием, а копия растает на её месте. */
-function ghostFig(sc: Element | null, img: HTMLElement | null): HTMLElement | null {
-  const air = sc && $('.scene-fx', sc);
-  if (!img || !air) return null;
-  const g = img.cloneNode(false) as HTMLElement;
-  delete g.dataset.task;
-  delete g.dataset.art;
-  g.classList.add('fig-ghost');
-  air.append(g);
-  return own(g);
-}
-
-/** Копия номера над фигурой: гаснет, пока номер встаёт на новое место. */
-function ghostMark(sc: Element | null, id: string | null | undefined): HTMLElement | null {
-  const m = markOf(sc, id);
-  const air = sc && $('.scene-fx', sc);
-  if (!m || !air) return null;
-  const g = m.cloneNode(true) as HTMLElement;
-  delete g.dataset.task;
-  g.inert = true;
-  g.classList.add('ghost-mark');
-  air.append(g);
-  return own(g);
-}
-
-const baseFilter = (el: Element) => {
-  const f = getComputedStyle(el).filter;
-  return f && f !== 'none' ? f : '';
-};
-
-function dissolve(g: HTMLElement | null, dur = 320): void {
-  if (!g) return;
-  const b = baseFilter(g);
-  anim(
-    g,
-    [
-      { opacity: 1, filter: `${b} brightness(1) blur(0px)`, transform: 'translateY(0)' },
-      { opacity: 0, filter: `${b} brightness(2.2) blur(2px)`, transform: 'translateY(-2.5%)' },
-    ],
-    { dur, ease: EASE.in, remove: true },
-  );
-}
-
-function materialize(img: HTMLElement | null, delay: number, dur = 340): void {
-  if (!img) return;
-  const b = baseFilter(img);
-  anim(
-    img,
-    [
-      { opacity: 0, filter: `${b} brightness(2.4) saturate(.6)`, transform: 'scale(.94)' },
-      { opacity: 1, filter: `${b} brightness(1) saturate(1)`, transform: 'scale(1)' },
-    ],
-    { dur, delay },
-  );
-}
-
-const fadeOut = (el: HTMLElement | null, dur = 150) => anim(el, [{ opacity: 1 }, { opacity: 0 }], { dur, remove: true });
-const fadeIn = (el: Element | null, dur = 150, delay = 0) => anim(el, [{ opacity: 0 }, { opacity: 1 }], { dur, delay, ease: 'ease' });
-const fadeUp = (el: Element | null) => anim(el, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'none' }], { dur: 260 });
-
-/** Карточка под сценой меняется: новая проступает. */
-function cardIn(): void {
-  const card = $('.camp > .sheet .card');
-  if (calm()) fadeIn(card, 200);
-  else fadeUp(card);
-}
-
-// ---------- маленькие эффекты на слое поверх экрана ----------
-
-const STAR_PATH = 'M0-11L2.2-2.2L11 0L2.2 2.2L0 11L-2.2 2.2L-11 0L-2.2-2.2Z';
-const px = (v: number) => `${v.toFixed(1)}px`;
-
-function glint(x: number, y: number, o: { s?: number; col?: string; dur?: number; delay?: number } = {}): void {
-  if (calm()) return;
-  const el = fxNode('glint', L.fx, { left: px(x), top: px(y) }, `<svg viewBox="-12 -12 24 24" width="22" height="22"><path d="${STAR_PATH}" fill="${o.col ?? '#fffbe6'}"/></svg>`);
-  anim(el, [{ transform: 'scale(0) rotate(0deg)', opacity: 0 }, { transform: `scale(${o.s ?? 1}) rotate(45deg)`, opacity: 1, offset: 0.4 }, { transform: 'scale(0) rotate(90deg)', opacity: 0 }], { dur: o.dur ?? 520, delay: o.delay ?? 0, remove: true });
-}
-
-function floatText(x: number, y: number, text: string, o: { c?: string; g?: string; dy?: number; dur?: number; delay?: number } = {}): void {
-  if (calm()) return;
-  const el = fxNode('float', L.fx, { left: px(x), top: px(y), '--c': o.c ?? '#ffe08a', '--g': o.g ?? 'rgba(255,215,106,.6)' });
-  if (!el) return;
-  el.textContent = text;
-  const dy = o.dy ?? -24;
-  anim(
-    el,
-    [
-      { opacity: 0, transform: 'translate(-50%,-50%) translateY(6px) scale(.8)' },
-      { opacity: 1, transform: 'translate(-50%,-50%) translateY(0) scale(1.06)', offset: 0.2 },
-      { opacity: 1, transform: `translate(-50%,-50%) translateY(${dy * 0.6}px) scale(1)`, offset: 0.7 },
-      { opacity: 0, transform: `translate(-50%,-50%) translateY(${dy}px) scale(1)` },
-    ],
-    { dur: o.dur ?? 760, delay: o.delay ?? 0, remove: true },
-  );
-}
-
-function flare(x: number, y: number, d: number, o: { c1?: string; c2?: string; peak?: number; dur?: number; delay?: number } = {}): void {
-  if (calm()) return;
-  const el = fxNode('flare', L.fx, {
-    left: px(x - d / 2),
-    top: px(y - d / 2),
-    width: px(d),
-    height: px(d),
-    background: `radial-gradient(circle, ${o.c1 ?? 'rgba(255,240,190,.95)'}, ${o.c2 ?? 'rgba(255,170,60,.38)'} 38%, rgba(255,140,40,0) 70%)`,
-  });
-  anim(el, [{ opacity: 0, transform: 'scale(.4)' }, { opacity: o.peak ?? 1, transform: 'scale(1)', offset: 0.35 }, { opacity: 0, transform: 'scale(1.25)' }], { dur: o.dur ?? 420, delay: o.delay ?? 0, remove: true });
-}
-
-function wave(x: number, y: number, r: number, cls = '', o: { dur?: number; from?: number; a?: number } = {}): void {
-  if (calm()) return;
-  const el = fxNode(`wave ${cls}`, L.fx, { left: px(x - r), top: px(y - r), width: px(r * 2), height: px(r * 2) });
-  const f = o.from ?? 0.15;
-  anim(el, [{ opacity: o.a ?? 1, transform: `scale(${f})` }, { opacity: 0, transform: 'scale(1)' }], { dur: o.dur ?? 700, remove: true });
-}
-
-function pillar(x: number, yBottom: number, w: number, h: number, dur = 900): void {
-  if (calm()) return;
-  const el = fxNode('pillar', L.fx, { left: px(x - w / 2), top: px(yBottom - h), width: px(w), height: px(h) });
-  anim(
-    el,
-    [
-      { transform: 'scaleY(0)', opacity: 0 },
-      { transform: 'scaleY(1)', opacity: 1, offset: 0.28 },
-      { transform: 'scaleY(1)', opacity: 0.85, offset: 0.62 },
-      { transform: 'scale(.55, 1.04)', opacity: 0 },
-    ],
-    { dur, remove: true },
-  );
-}
-
-/**
- * Блик пробегает по элементу. Рисуется в слое эффектов в рамке элемента, а не внутри него,
- * чтобы не трогать то, что рисует Preact. Над листом (сам лист выше слоя) блик кладётся в элемент.
- */
-function sweep(el: Element | null, o: { soft?: boolean; red?: boolean; dur?: number; delay?: number; inside?: boolean } = {}): void {
-  if (!el || calm()) return;
-  let host: Element | null = el;
-  if (!o.inside) {
-    const r = rectIn(el);
-    host = fxNode('sweep-clip', L.fx, { left: px(r.x), top: px(r.y), width: px(r.w), height: px(r.h), borderRadius: getComputedStyle(el).borderRadius });
-  }
-  if (!host) return;
-  const s = document.createElement('span');
-  s.className = `sweep${o.soft ? ' soft' : ''}${o.red ? ' red' : ''}`;
-  host.append(s);
-  own(s);
-  anim(s, [{ transform: 'translateX(-120%)' }, { transform: 'translateX(320%)' }], {
-    dur: o.dur ?? 600,
-    delay: o.delay ?? 0,
-    ease: EASE.float,
-    then: () => {
-      drop(s);
-      if (host !== el && host) drop(host);
-    },
-  });
-}
-
-function bump(el: Element | null, s = 1.1, o: { base?: string; dur?: number; delay?: number } = {}): void {
-  if (!el || calm()) return;
-  const b = o.base ?? '';
-  anim(el, [{ transform: `${b} scale(1)` }, { transform: `${b} scale(${s})`, offset: 0.35 }, { transform: `${b} scale(1)` }], { dur: o.dur ?? 320, delay: o.delay ?? 0, fill: 'none' });
-}
-
-function popIn(el: Element | null, delay = 0, dur = 300): void {
-  if (!el) return;
-  if (calm()) fadeIn(el, 150);
-  else anim(el, [{ opacity: 0, transform: 'scale(.3)' }, { opacity: 1, transform: 'scale(1)' }], { dur, delay, ease: EASE.pop });
-}
-
-/** Число в «барабане»: старое уходит вверх, новое приходит снизу. Значение берётся из data-v. */
-function flipNumber(el: HTMLElement | null, dur = 300): void {
-  if (!el) return;
-  if (calm()) return release(el);
-  anim(
-    el,
-    [
-      { opacity: 1, transform: 'translateY(0)' },
-      { opacity: 0, transform: 'translateY(-55%)', offset: 0.5 },
-      { opacity: 0, transform: 'translateY(55%)', offset: 0.501 },
-      { opacity: 1, transform: 'translateY(0)' },
-    ],
-    { dur },
-  );
-  window.setTimeout(() => release(el), dur / 2);
-}
-
-// ---------- руны ----------
-
-const RUNES = [
-  'M5 0V14M5 0L0 5M5 0L10 5',
-  'M5 0V14M5 6L0 0M5 6L10 0',
-  'M2 0V14M2 3L9 0M2 7L9 4',
-  'M2 0V14M2 0L8 3L2 7L8 14',
-  'M5 0L10 5L5 10L0 5ZM2.5 7.5L0 14M7.5 7.5L10 14',
-  'M0 0V14M10 0V14M0 0L10 14M10 0L0 14',
-  'M2 0V14M2 0L9 4M2 5L9 9',
-  'M1 0V14M9 0V14M1 0L9 7M9 0L1 7',
-  'M8 0L2 5L8 9L2 14',
-  'M5 0V14',
-  'M8 0L2 7L8 14',
-  'M2 0V14M2 0L8 3.5L2 7L8 10.5L2 14',
-];
-
-const runeGlyphs = (r: number) => RUNES.map((d, i) => `<path class="rr-rune" d="${d}" transform="rotate(${i * 30}) translate(-5 ${-r - 7})"/>`).join('');
-
-function ringSVG(col: string): string {
-  return `<svg viewBox="-100 -100 200 200" aria-hidden="true">
-    <g fill="none" stroke="${col}" stroke-width="8" opacity=".25"><circle r="92" pathLength="100" class="rr-c"/><circle r="70" pathLength="100" class="rr-c"/></g>
-    <g class="spin-cw" fill="none" stroke="${col}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-      <circle r="92" pathLength="100" class="rr-c"/><circle r="70" pathLength="100" class="rr-c"/>${runeGlyphs(81)}
-    </g>
-  </svg>`;
-}
-
-function sigilSVG(col: string): string {
-  let star = '';
-  for (let i = 0; i < 16; i++) {
-    const a = (i / 16) * Math.PI * 2 - Math.PI / 2;
-    const r = i % 2 ? 26 : 62;
-    star += `${i ? 'L' : 'M'}${(Math.cos(a) * r).toFixed(1)} ${(Math.sin(a) * r).toFixed(1)}`;
-  }
-  return `<svg viewBox="-110 -110 220 220" aria-hidden="true">
-    <g fill="none" stroke="${col}" stroke-linecap="round" stroke-linejoin="round">
-      <g class="spin-cw"><circle r="98" pathLength="100" class="rr-c" stroke-width="2.4"/><circle r="74" pathLength="100" class="rr-c" stroke-width="1.6"/>${runeGlyphs(86)}</g>
-      <g class="spin-ccw"><path d="${star}Z" pathLength="100" class="rr-c" stroke-width="1.8"/><circle r="30" pathLength="100" class="rr-c" stroke-width="1.6"/></g>
-    </g>
-  </svg>`;
-}
-
-/** Линии знака рисуются, руны проступают по очереди. */
-function drawRunes(el: Element | null, delay = 0, dur = 420): void {
-  for (const c of $$('.rr-c', el)) anim(c, [{ strokeDashoffset: 100 }, { strokeDashoffset: 0 }], { dur, delay });
-  $$('.rr-rune', el).forEach((r, i) => anim(r, [{ opacity: 0 }, { opacity: 1 }], { dur: 180, delay: delay + dur * 0.3 + i * 22 }));
-}
-
-/** Круг рун на земле сцены (в единицах картинки), сплющен под перспективу поляны. */
-function runeRing(sc: Element, sx: number, sy: number, o: { size?: number; col?: string; delay?: number; dur?: number } = {}): void {
-  const ground = $('.scene-ground', sc);
-  if (calm() || !ground) return;
-  const col = o.col ?? '#ffd76a';
-  const el = fxNode('rune-ring', ground, { left: pct(sx, SCENE_W), top: pct(sy, SCENE_H), width: pct(o.size ?? 240, SCENE_W), filter: `drop-shadow(0 0 3px ${col})` }, ringSVG(col));
-  drawRunes(el, o.delay ?? 0, 420);
-  const base = 'translate(-50%,-50%) scaleY(.4)';
-  anim(
-    el,
-    [
-      { opacity: 0, transform: `${base} scale(.8)` },
-      { opacity: 1, transform: `${base} scale(1)`, offset: 0.2 },
-      { opacity: 1, transform: `${base} scale(1.02)`, offset: 0.75 },
-      { opacity: 0, transform: `${base} scale(1.12)` },
-    ],
-    { dur: o.dur ?? 850, delay: o.delay ?? 0, remove: true },
-  );
-}
 
 // ---------- Искра под пальцем ----------
 
 /** Кнопки, по которым от пальца расходится рябь. Остальным достаётся круглый отсвет. */
 const RIPPLE_HOST = '.btn, .row, .act, .banner, .chipbtn, .wind, .check-row, .card-title-btn, .quest-card, .notice-btn, .toast-btn';
 
+/** Искры под пальцем на любом месте экрана, и на пустом тоже. Рябь или отсвет только у того, что нажимается. */
 export function tap(e: PointerEvent): void {
   if (off() || !e.isTrusted || !L.app || !L.touch) return;
   if (e.pointerType === 'mouse' && e.button !== 0) return;
-  const target = e.target instanceof Element ? e.target : null;
-  const el = target?.closest('button, summary, label.check-row, a[href]');
-  if (!el || (el as HTMLButtonElement).disabled || el.closest('[inert]')) return;
   const a = L.app.getBoundingClientRect();
   const x = e.clientX - a.left;
   const y = e.clientY - a.top;
+  if (!calm()) burst(x, y, { n: 4, kind: 'star', pal: 'gold', speed: [50, 100], spread: Math.PI, life: [380, 460], size: [1.3, 2.1], drag: 2.4, gravity: -30, fout: 0.6, keep: true });
+  const target = e.target instanceof Element ? e.target : null;
+  const el = target?.closest('button, summary, label.check-row, a[href]');
+  if (!el || (el as HTMLButtonElement).disabled || el.closest('[inert]')) return;
   const host = el.matches('.tab-add') ? el.firstElementChild : el.closest(RIPPLE_HOST);
   if (host) ripple(host, x, y);
   else bloom(x, y);
-  if (!calm()) burst(x, y, { n: 4, kind: 'star', pal: 'gold', speed: [50, 100], spread: Math.PI, life: [380, 460], size: [1.3, 2.1], drag: 2.4, gravity: -30, fout: 0.6, keep: true });
 }
 
 /** Рябь рисуется в слое касаний по форме кнопки: кнопка может тут же смениться, а отклик доиграет. */
@@ -419,14 +145,24 @@ export interface Before {
   level: number;
 }
 
-/** Задача сдана: столб света над спутником у огня, монеты к золоту, звёзды опыта к уровню, трещина в логове. */
+/**
+ * Задача сдана: столб света над спутником у огня, монеты к золоту, звёзды опыта к уровню, трещина в логове.
+ * Нежить с дороги упокаивается: белый луч с неба, скелет светлеет и тает, дух уходит к огню.
+ */
 export function done(id: string, r: CompleteResult, before: Before, level: number): void {
   cast(async (s) => {
+    // Прежний экран: нежить ещё стоит на дороге, её копия упокоится на этом месте.
+    const sc0 = scene();
+    const road = figImg(sc0, id);
+    const undead = sc0 && road?.dataset.art?.startsWith('road') ? { g: ghostFig(sc0, road), gm: ghostMark(sc0, id), c: figCenter(sc0, road), feet: figFeet(sc0, road) } : null;
+    const ring0 = ringImg(sc0);
+    const gRing = undead && ring0 && ring0.dataset.task !== id ? ghostFig(sc0, ring0) : null;
     await s.frame();
     const sc = scene();
     const levelUp = level > before.level;
     const rws = $$('[data-magic^="rw-"]');
     if (calm() || !sc) {
+      for (const g of [undead?.g ?? null, undead?.gm ?? null, gRing]) fadeOut(g);
       cardIn();
       if (levelUp) ascend(before.level, level, true);
       return;
@@ -437,7 +173,10 @@ export function done(id: string, r: CompleteResult, before: Before, level: numbe
     if (levelUp) hold($('[data-magic="level-n"]'), before.level);
     const img = figImg(sc, id);
     const p = img && img.dataset.art?.startsWith('ring/') ? figPoints(img) : null;
-    if (img && p) {
+    if (undead) {
+      fadeOut(gRing, 260);
+      purify(sc, undead, img);
+    } else if (img && p) {
       const [fx, fy] = spt(sc, p.feet[0], p.feet[1]);
       const [hx, hy] = spt(sc, p.head[0], p.head[1]);
       const cx = (hx + fx) / 2;
@@ -452,6 +191,33 @@ export function done(id: string, r: CompleteResult, before: Before, level: numbe
     if (lair && r.lair) aside(crackLair(s, lair));
     await s.wait(1400);
   });
+}
+
+/** Упокоение: номер нежити рассыпается, белый луч падает с неба, скелет светлеет и тает огоньками. */
+function purify(sc: Element, u: { g: HTMLElement | null; gm: HTMLElement | null; c: [number, number]; feet: [number, number] }, ring: HTMLElement | null): void {
+  const num = u.gm && $('.num', u.gm);
+  if (num) {
+    const [bx, by] = pt(num);
+    anim(num, [{ transform: 'scale(1)', filter: 'brightness(1)' }, { transform: 'scale(1.18)', filter: 'brightness(2.4)', offset: 0.35 }, { transform: 'scale(.5)', filter: 'brightness(1)', opacity: 0 }], { dur: 350, fill: 'forwards' });
+    burst(bx, by, { n: 6, kind: 'shard', pal: 'necro', speed: [40, 90], angle: Math.PI / 2, spread: 1.4, gravity: 300, life: [400, 520], size: [2.4, 3.4], delay: 120, vr: 9 });
+  }
+  fadeOut(u.gm, 120, 300);
+  // Луч падает из-под верхней полосы, с неба над поляной.
+  const bar = $('.topbar');
+  const top = bar ? rectIn(bar).y + rectIn(bar).h : 0;
+  pillar(u.c[0], u.feet[1] + 6, 46, u.feet[1] + 6 - top, { holy: true, dur: 700 });
+  if (u.g) {
+    const b = baseFilter(u.g);
+    anim(u.g, [{ filter: `${b} brightness(1) saturate(1)` }, { filter: `${b} brightness(2.7) saturate(.3)` }], { dur: 300, delay: 150 });
+    anim(u.g, [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(-4%)' }], { dur: 520, delay: 420, ease: EASE.in, remove: true });
+  }
+  burst(u.c[0], u.c[1], { n: 18, kind: 'glow', pal: 'holy', speed: [20, 60], spread: 0.8, gravity: -90, drag: 0.6, life: [800, 1100], size: [1.6, 3], jx: 14, jy: 28, delay: 400, stagger: 12, sway: 18, tw: 2 });
+  // Дух уходит к огню: там упокоенный уже радуется в своём настоящем облике.
+  if (!ring) return;
+  const rc = figCenter(sc, ring);
+  flight(u.c, rc, { n: 8, kind: 'spark', pal: 'holy', delay: 620, stagger: 26, life: 520, arc: 0.25, lift: 0.18, size: [1.8, 2.6], trail: 6 });
+  materialize(ring, 1000, 380);
+  flare(rc[0], rc[1], 120, { c1: 'rgba(255,255,255,.95)', c2: 'rgba(190,225,255,.4)', delay: 1000, dur: 480, peak: 0.8 });
 }
 
 function rewardFlights(sc: Element, before: Before, newLevel: number | null): void {
@@ -606,6 +372,170 @@ export function rest(resting: boolean): void {
       glint(gx, gy, { col: '#eaf1ff', s: 0.8 });
       await s.wait(600);
     }
+  });
+}
+
+// ---------- Второе дыхание ----------
+
+/** Вечером +30 маны: искры от кнопки спиралью уходят в камень маны, он вспыхивает, рядом всплывает «+30». */
+export function wind(manaBefore: number, max: number): void {
+  cast(async (s) => {
+    const btn = $('.wind');
+    const bp = btn ? pt(btn, 0.1, 0.5) : null;
+    await s.frame();
+    const chip = $('[data-magic="mana"]');
+    const gem = $('.mana-gem', chip);
+    const n = $('[data-magic="mana-n"]', chip);
+    cardIn();
+    if (calm() || !chip || !gem) return;
+    hold(n, manaBefore);
+    const [gx, gy] = pt(gem);
+    flight(bp ?? [gx, gy + 140], [gx, gy + 26], { n: 10, kind: 'spark', pal: 'warm', stagger: 28, life: 430, arc: 0.3, lift: 0.15, size: [1.8, 2.6], trail: 6 });
+    spiral(gx, gy, { n: 14, r0: 30, r1: 2, turns: 1.3, life: 520, delay: 300, stagger: 14, pal: 'arcane', size: [1.8, 2.6], trail: 5, kind: 'spark' });
+    const bar = $('.bar > span', chip);
+    if (bar) anim(bar, [{ width: `${(manaBefore / max) * 100}%` }, { width: bar.style.width }], { dur: 520, delay: 520 });
+    await s.wait(500);
+    flare(gx, gy, 64, { c1: 'rgba(234,241,255,.95)', c2: 'rgba(120,160,255,.45)', dur: 420 });
+    anim(gem, [{ transform: 'rotate(45deg) scale(1)', filter: 'brightness(1)' }, { transform: 'rotate(45deg) scale(1.5)', filter: 'brightness(2.2)', offset: 0.3 }, { transform: 'rotate(45deg) scale(1)', filter: 'brightness(1)' }], { dur: 400, fill: 'none' });
+    await s.wait(20);
+    countUp(n, manaBefore, 500);
+    // Над камнем столько, сколько маны прибавилось на деле: у полной полоски меньше тридцати.
+    const gain = Math.round(Number(n?.dataset.v ?? manaBefore) - manaBefore);
+    if (gain > 0) floatText(gx + 30, gy + 24, `+${gain}`, { c: '#d6e4ff', g: 'rgba(91,140,255,.85)', dur: 680, dy: -18 });
+    await s.wait(700);
+  });
+}
+
+// ---------- Отпустить и Вернуть ----------
+
+/** Отпустить: спутник тает дымком, номер над ним гаснет. */
+export function letGo(id: string): void {
+  cast(async (s) => {
+    const sc = scene();
+    const img = figImg(sc, id);
+    const p = sc && img ? figCenter(sc, img) : null;
+    const atFire = !!img?.dataset.art?.startsWith('ring/');
+    const g = ghostFig(sc, img);
+    const gm = ghostMark(sc, id);
+    await s.frame();
+    if (atFire) cardIn();
+    if (calm() || !sc?.isConnected) {
+      fadeOut(g);
+      fadeOut(gm);
+      return;
+    }
+    fadeOut(gm, 250);
+    anim($('.num', gm), [{ transform: 'scale(1)' }, { transform: 'scale(.7)' }], { dur: 250, fill: 'forwards' });
+    if (g) {
+      const b = baseFilter(g);
+      anim(g, [{ opacity: 1, filter: `${b} grayscale(0) blur(0px)`, transform: 'translateY(0)' }, { opacity: 0, filter: `${b} grayscale(1) blur(2px)`, transform: 'translateY(-3%)' }], { dur: 600, ease: EASE.in, remove: true });
+    }
+    if (p) burst(p[0], p[1], { n: 9, kind: 'smoke', pal: 'smoke', speed: [10, 30], spread: 0.9, gravity: -30, drag: 0.5, life: [700, 900], size: [8, 13], grow: 2.2, jx: 14, jy: 22, stagger: 40, a: 0.85, fout: 0.6 });
+    await s.wait(900);
+  });
+}
+
+/** Вернуть: дымок стягивается обратно, и спутник проступает на своём месте. */
+export function comeBack(id: string): void {
+  cast(async (s) => {
+    await s.frame();
+    const sc = scene();
+    const img = figImg(sc, id);
+    if (!sc || !img) return;
+    if (img.dataset.art?.startsWith('ring/')) cardIn();
+    if (calm()) return void fadeIn(img, 150);
+    const [x, y] = figCenter(sc, img);
+    spiral(x, y, { n: 10, kind: 'smoke', pal: 'smoke', r0: 44, r1: 6, turns: 0.4, life: 520, size: [7, 11], trail: 0, fout: 0.5 });
+    const b = baseFilter(img);
+    anim(img, [{ opacity: 0, filter: `${b} grayscale(1) blur(2px)` }, { opacity: 1, filter: `${b} grayscale(0) blur(0px)` }], { dur: 500, delay: 200 });
+    popIn($('.num', markOf(sc, id)), 520);
+    await s.wait(800);
+  });
+}
+
+// ---------- Разжигание ----------
+
+/**
+ * Разжечь костёр: лагерь открывается ещё тлеющим, огонь вспыхивает, искры от него зажигают номера спутников
+ * по очереди, от ближних к дальним. Опыт за план летит звёздами от сообщения к уровню.
+ */
+export function ignite(xp: number, from: number, to: number): void {
+  cast(async (s) => {
+    // Прежний экран: кнопка в Плане.
+    const btn = $('.page-foot .btn-gold');
+    if (btn && !calm()) {
+      const [bx, by] = pt(btn);
+      burst(bx, by - 4, { n: 14, kind: 'star', pal: 'gold', speed: [90, 190], spread: 0.9, gravity: 260, drag: 0.8, life: [500, 800], size: [1.6, 3] });
+    }
+    await s.frame();
+    const sc = scene();
+    const levelUp = to > from;
+    if (calm() || !sc) {
+      if (levelUp) ascend(from, to, true);
+      return;
+    }
+    const lvlN = $('[data-magic="level-n"]');
+    if (levelUp) hold(lvlN, from);
+    mark(sc, 'is-unlit');
+    for (const n of [...$$('.fig-mark .num:not(.num-undead)', sc), ...$$('.camp > .sheet .card .num')]) mark(n, 'is-dim');
+    // Пока страница перелистывается, костёр тлеет.
+    await s.wait(380);
+    unmark(sc, 'is-unlit');
+    const [fx, fy] = fireAt(sc);
+    flare(fx, fy + 12, 210, { dur: 700, peak: 0.95 });
+    burst(fx, fy, { n: 26, kind: 'glow', pal: 'ember', speed: [90, 210], spread: 0.75, gravity: -30, drag: 1, life: [600, 1000], size: [1.6, 3] });
+    await s.wait(50);
+    wave(fx, fy + 18, 230, 'warm-fill', { dur: 900, from: 0.1, squash: 0.62, a: 0.9 });
+    wave(fx, fy + 18, 210, '', { dur: 900, from: 0.1, squash: 0.62, delay: 60 });
+    await s.wait(50);
+    const nums = $$('.num.is-dim', sc)
+      .map((n) => ({ n, p: pt(n) }))
+      .sort((a, b) => Math.hypot(a.p[0] - fx, a.p[1] - fy) - Math.hypot(b.p[0] - fx, b.p[1] - fy));
+    nums.forEach(({ n, p }, i) =>
+      flight([fx, fy - 6], p, {
+        n: 3,
+        kind: 'spark',
+        pal: 'gold',
+        delay: i * 95,
+        stagger: 30,
+        life: 420,
+        arc: 0.25,
+        lift: 0.2,
+        size: [1.8, 2.6],
+        trail: 6,
+        onFirst: () => {
+          unmark(n, 'is-dim');
+          bump(n, 1.3, { dur: 360 });
+          glint(p[0], p[1] - 2, { s: 0.8 });
+        },
+      }),
+    );
+    await s.wait(500 + nums.length * 95);
+    for (const n of $$('.num.is-dim')) unmark(n, 'is-dim');
+    const t = $('.toast');
+    const lv = $('[data-magic="level"]');
+    if (!xp || !t || !lv) {
+      if (levelUp) ascend(from, to, true);
+      return;
+    }
+    const lp = pt(lv);
+    flight(pt(t, 0.5, 0.5), lp, {
+      n: 5,
+      kind: 'star',
+      pal: 'holy',
+      stagger: 50,
+      life: 520,
+      size: [2, 2.8],
+      trail: 6,
+      arc: 0.25,
+      lift: 0.2,
+      onLast: () => {
+        bump(lv, 1.12);
+        glint(lp[0], lp[1] - 3, { col: '#eaf6ff' });
+        if (levelUp) ascend(from, to, true);
+      },
+    });
+    await s.wait(800);
   });
 }
 

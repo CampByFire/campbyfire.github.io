@@ -2,7 +2,7 @@
 // Координаты в пикселях CSS от левого верхнего угла приложения.
 
 export type Palette = keyof typeof PAL;
-type Kind = 'glow' | 'star' | 'spark' | 'coin' | 'shard';
+type Kind = 'glow' | 'star' | 'spark' | 'coin' | 'shard' | 'smoke';
 type Range = number | [number, number];
 type Ease = 'in' | 'out' | 'lin' | 'inout';
 
@@ -12,11 +12,15 @@ const PAL = {
   holy: ['#ffffff', '#fff3d0', '#d8efff', '#a9dcff'],
   necro: ['#ffd0c8', '#ffa194', '#ff6a55', '#d64b3c'],
   ember: ['#fff6d6', '#ffc45e', '#ff9a4a'],
+  nature: ['#f3ffdf', '#cfe6a0', '#9fd07a', '#6aa84f'],
+  warm: ['#ffe8de', '#ffc2b8', '#ff9f8a'],
+  smoke: ['#c9ced8', '#aab1bf', '#8b93a3'],
+  dust: ['#e9eeff', '#c7d4ff', '#aebfff'],
 };
 
 /** Больше частиц одновременно не живёт: самые старые уступают место. */
 const MAX = 320;
-const SOLID: Partial<Record<Kind, true>> = { coin: true, shard: true };
+const SOLID: Partial<Record<Kind, true>> = { coin: true, shard: true, smoke: true };
 const TAU = Math.PI * 2;
 
 interface Particle {
@@ -43,6 +47,9 @@ interface Particle {
   tw: number;
   trail: number;
   hist?: number[];
+  /** Покачивание вбок, пиксели в секунду, и сколько раз в секунду. */
+  sway: number;
+  swf: number;
   spin: number;
   ph: number;
   /** Искры касания догорают сами: новое заклинание их не гасит. */
@@ -84,8 +91,8 @@ function ease(name: Ease, t: number): number {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
-/** Готовые картинки свечения и звезды: рисуются один раз на цвет. */
-function sprite(kind: 'glow' | 'star', col: string): HTMLCanvasElement {
+/** Готовые картинки свечения, звезды и дыма: рисуются один раз на цвет. */
+function sprite(kind: 'glow' | 'star' | 'smoke', col: string): HTMLCanvasElement {
   const key = kind + col;
   const hit = cache.get(key);
   if (hit) return hit;
@@ -97,6 +104,13 @@ function sprite(kind: 'glow' | 'star', col: string): HTMLCanvasElement {
     gr.addColorStop(0, 'rgba(255,255,255,1)');
     gr.addColorStop(0.16, rgba(col, 0.95));
     gr.addColorStop(0.42, rgba(col, 0.32));
+    gr.addColorStop(1, rgba(col, 0));
+    x.fillStyle = gr;
+    x.fillRect(0, 0, 64, 64);
+  } else if (x && kind === 'smoke') {
+    const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, rgba(col, 0.5));
+    gr.addColorStop(0.5, rgba(col, 0.24));
     gr.addColorStop(1, rgba(col, 0));
     x.fillStyle = gr;
     x.fillRect(0, 0, 64, 64);
@@ -169,6 +183,8 @@ function add(p: Partial<Particle>): void {
     vr: 0,
     tw: 0,
     trail: 0,
+    sway: 0,
+    swf: 1,
     spin: 0,
     ph: Math.random() * TAU,
     keep: false,
@@ -219,6 +235,7 @@ function move(p: Particle, dt: number): void {
     }
     p.x += p.vx * s;
     p.y += p.vy * s;
+    if (p.sway) p.x += Math.cos(p.ph + (p.age / 1000) * p.swf * TAU) * p.sway * s;
   }
   p.rot += p.vr * s;
   if (p.hist) {
@@ -229,6 +246,11 @@ function move(p: Particle, dt: number): void {
 
 function drawSolid(c: CanvasRenderingContext2D, p: Particle, a: number, r: number): void {
   c.globalAlpha = a;
+  if (p.kind === 'smoke') {
+    // Дым не светится: мягкое серое облачко, которое растёт и тает.
+    c.drawImage(sprite('smoke', p.col), p.x - r, p.y - r, r * 2, r * 2);
+    return;
+  }
   c.save();
   c.translate(p.x, p.y);
   c.rotate(p.rot);
@@ -263,6 +285,7 @@ function drawSolid(c: CanvasRenderingContext2D, p: Particle, a: number, r: numbe
 }
 
 function drawGlow(c: CanvasRenderingContext2D, p: Particle, a: number, r: number): void {
+  if (p.kind === 'smoke') return;
   if (p.kind === 'coin' || p.kind === 'shard') {
     const k = p.kind === 'coin' ? 2.2 : 1.8;
     c.globalAlpha = a * (p.kind === 'coin' ? 0.4 : 0.5);
@@ -370,6 +393,8 @@ export interface BurstOptions {
   tw?: number;
   trail?: number;
   spin?: number;
+  /** Покачивание вбок, пиксели в секунду. */
+  sway?: number;
   a?: number;
   fin?: number;
   fout?: number;
@@ -401,6 +426,8 @@ export function burst(x: number, y: number, o: BurstOptions = {}): void {
       vr: jit(o.vr ?? 3),
       tw: o.tw ?? 0,
       trail: o.trail ?? 0,
+      sway: o.sway ?? 0,
+      swf: rnd(0.5, 1.2),
       spin: o.spin ?? 8,
       a: o.a ?? 1,
       fin: o.fin ?? 0.08,
@@ -518,6 +545,96 @@ export function spiral(cx: number, cy: number, o: SpiralOptions = {}): void {
       trail: o.trail ?? 4,
       fin: 0.15,
       fout: o.fout ?? 0.2,
+    });
+  }
+}
+
+export interface RainOptions {
+  n?: number;
+  kind?: Kind;
+  /** Виды по очереди: монеты вперемешку со звёздами. */
+  kinds?: Kind[];
+  pal?: Palette;
+  /** Откуда падает: высота и разброс по ней. */
+  y?: number;
+  jy?: number;
+  vx?: number;
+  speed?: Range;
+  gravity?: number;
+  drag?: number;
+  sway?: number;
+  /** За сколько мс выпадает всё. */
+  over?: number;
+  delay?: number;
+  life?: Range;
+  size?: Range;
+  grow?: number;
+  tw?: number;
+  fout?: number;
+}
+
+/** Дождь сверху между x0 и x1: монеты, искры, сонная пыль. */
+export function rain(x0: number, x1: number, o: RainOptions = {}): void {
+  if (still || !cv) return;
+  const n = o.n ?? 40;
+  for (let i = 0; i < n; i++) {
+    const r0 = range(o.size, 3);
+    add({
+      kind: o.kinds ? o.kinds[i % o.kinds.length] : o.kind ?? 'glow',
+      x: rnd(x0, x1),
+      y: (o.y ?? -10) + jit(o.jy ?? 16),
+      vx: jit(o.vx ?? 10),
+      vy: range(o.speed, 90),
+      ay: o.gravity ?? 50,
+      drag: o.drag ?? 0.3,
+      sway: o.sway ?? 0,
+      swf: rnd(0.3, 0.9),
+      age: -rnd(0, o.over ?? 1000) - (o.delay ?? 0),
+      life: range(o.life, 1200),
+      r0,
+      r1: r0 * (o.grow ?? 0.7),
+      col: pick(o.pal ?? 'gold'),
+      rot: rnd(0, TAU),
+      vr: jit(2),
+      spin: rnd(4, 9),
+      tw: o.tw ?? 0,
+      fin: 0.08,
+      fout: o.fout ?? 0.3,
+    });
+  }
+}
+
+/** Путь по дуге: из x0, y0 в x1, y1 через точку cx, cy, как у полёта. */
+export interface Path {
+  x0: number;
+  y0: number;
+  cx: number;
+  cy: number;
+  x1: number;
+  y1: number;
+}
+
+/** Искры бегут по тому же пути, что и летящая картинка: хвост письма. */
+export function along(path: Path, o: { n?: number; cols?: string[]; life?: number; delay?: number; stagger?: number; size?: number; trail?: number } = {}): void {
+  if (still || !cv) return;
+  const n = o.n ?? 8;
+  const cols = o.cols ?? PAL.arcane;
+  for (let i = 0; i < n; i++) {
+    const r0 = o.size ?? 2.2;
+    add({
+      kind: 'spark',
+      path,
+      ease: 'lin',
+      x: path.x0,
+      y: path.y0,
+      age: -((o.delay ?? 0) + i * (o.stagger ?? 18)),
+      life: o.life ?? 550,
+      r0,
+      r1: r0 / 2,
+      col: cols[i % cols.length],
+      trail: o.trail ?? 4,
+      fin: 0.05,
+      fout: 0.55,
     });
   }
 }

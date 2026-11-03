@@ -14,6 +14,9 @@ test('неверный пароль не пускает, верный откры
   await pass.fill('не тот пароль');
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page.getByRole('alert')).toHaveText('Пароль не подошёл.');
+  // Печать вокруг значка краснеет, но диктору она не мешает.
+  await expect(page.locator('#lock')).toHaveClass(/is-wrong/);
+  await expect(page.locator('.lock-seal')).toHaveAttribute('aria-hidden', 'true');
   await expect(page.locator('.app')).toHaveCount(0);
   expect(await axe(page), 'страница входа').toEqual([]);
 
@@ -21,6 +24,8 @@ test('неверный пароль не пускает, верный откры
   await expect(page.getByLabel('Запомнить на этом устройстве')).toBeChecked();
   await page.getByRole('button', { name: 'Войти' }).click();
   await expect(page.locator('.app')).toBeVisible();
+  // Замок тает поверх запущенной игры и потом исчезает совсем.
+  await expect(page.locator('#lock')).toHaveCount(0);
 
   await page.reload();
   await expect(page.locator('.app')).toBeVisible();

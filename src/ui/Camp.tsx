@@ -1,5 +1,5 @@
 // Экран дня: сцена лагеря сверху, лист с текущей задачей и планом снизу. Всё на одном экране.
-import { useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { HOUR, MANA_LOW, MANA_MAX, MANA_REST_PER_HOUR, estimateOf, heroLevel } from '../game/rules';
 import {
   canSecondWind,
@@ -24,7 +24,8 @@ import type { Ui } from './App';
 import { useSize } from './hooks';
 import { GIcon, LIcon } from './Icon';
 import { interrupt } from './magic/engine';
-import { done, rest, summon } from './magic/spells';
+import { done, rest, summon, wind } from './magic/spells';
+import { campShown, dusk, lightNow } from './magic/world';
 import { LevelMark, TaskMeta, numLook } from './parts';
 import { Scene } from './Scene';
 import { syncTrouble } from './SyncPanel';
@@ -50,6 +51,20 @@ export function Camp({ ui }: { ui: Ui }) {
     if (Math.abs(f - fixedH) > 1) setFixedH(f);
   });
 
+  // Магия жизни лагеря: новая нежить, письмо и спутники показываются, когда лагерь видно без листа.
+  useLayoutEffect(() => campShown(v, ui.covered));
+
+  // Сумерки: свет меняется со временем. Заклинание зовётся до перерисовки, пока на сцене прежний свет.
+  useEffect(() => {
+    let light = lightNow(store.state, store.now());
+    return store.subscribe(() => {
+      const next = lightNow(store.state, store.now());
+      if (next === light) return;
+      light = next;
+      dusk(next);
+    });
+  }, [store]);
+
   const compact = root.h > 0 && root.h < 700;
   const rowH = compact ? 40 : 44;
   // Сцене оставляем столько, чтобы все фигуры с номерами были видны почти во всю ширину экрана.
@@ -69,7 +84,8 @@ export function Camp({ ui }: { ui: Ui }) {
   return (
     <div class={`camp${compact ? ' is-compact' : ''}`} ref={rootRef}>
       <h1 class="sr-only">{W.camp}</h1>
-      <div class="scene-wrap" ref={wrapRef}>
+      {/* Картинки поляны не ловят пальца, а меню по долгому нажатию в сцене не открывается совсем. */}
+      <div class="scene-wrap" ref={wrapRef} onContextMenu={(e) => e.preventDefault()}>
         {box.gaps && bg && <img class="scene-blur" src={assetUrl(bg)} alt="" aria-hidden="true" draggable={false} />}
         <div class="scene-box" style={box.style}>
           <Scene
@@ -288,7 +304,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
         </div>
         <div class="card-title">Доброй ночи</div>
         <div class="card-sub">
-          Сегодня сделано {l?.done ?? 0}, золота +{l?.gold ?? 0}, опыта +{l?.xp ?? 0}. Завтра силы снова будут полны.
+          Сегодня сделано <Num k="night-done" v={l?.done ?? 0} />, золота +<Num k="night-gold" v={l?.gold ?? 0} />, опыта +<Num k="night-xp" v={l?.xp ?? 0} />. Завтра силы снова будут полны.
         </div>
         <div class="btns">
           <button class="btn btn-ghost" onClick={() => store.act((st) => reopenDay(st))}>
@@ -531,6 +547,15 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
   );
 }
 
+/** Число итогов дня: магия досчитывает его с нуля после отбоя. */
+function Num({ k, v }: { k: string; v: number }) {
+  return (
+    <span data-magic={k} data-v={v}>
+      {v.toLocaleString('ru-RU')}
+    </span>
+  );
+}
+
 function SecondWind({ ui }: { ui: Ui }) {
   const s = ui.store.state;
   if (!canSecondWind(s, ui.now) || s.hero.mana >= MANA_MAX) return null;
@@ -538,7 +563,10 @@ function SecondWind({ ui }: { ui: Ui }) {
     <button
       class="wind"
       onClick={() => {
-        if (ui.store.act((st, n) => secondWind(st, n))) ui.toast('Второе дыхание: +30 маны');
+        const before = Math.round(ui.store.state.hero.mana);
+        if (!ui.store.act((st, n) => secondWind(st, n))) return;
+        ui.toast('Второе дыхание: +30 маны');
+        wind(before, MANA_MAX);
       }}
     >
       <GIcon name="heart" size={15} />

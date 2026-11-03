@@ -8,7 +8,7 @@ import type { State, Task } from '../game/types';
 import { PERIOD_KIND_NAME, W, periodName, periodShort, repeatName, weekRange } from '../game/words';
 import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
-import { ascend } from './magic/spells';
+import { ignite } from './magic/spells';
 import { QuestDot, TaskMeta } from './parts';
 
 type View = 'day' | PeriodKind;
@@ -246,8 +246,7 @@ function DayPlan({ ui }: { ui: Ui }) {
               const xp = store.act((st, n) => lightFire(st, n));
               ui.toast(xp > 0 ? `Костёр горит: +${xp} опыта за план` : 'Костёр горит');
               ui.go('camp');
-              const after = heroLevel(store.state.hero.xp).level;
-              if (after > before) ascend(before, after);
+              ignite(xp, before, heroLevel(store.state.hero.xp).level);
             }}
           >
             <GIcon name="campfire" size={19} />

@@ -27,7 +27,7 @@ if (!password && process.env.GITHUB_ACTIONS === 'true' && process.env.LAGER_PUBL
 
 /** Стили замка: страница с паролем показывается до того, как загрузится игра. */
 const LOCK_STYLE = `    <style>
-      .lock { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px;
+      .lock { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 24px;
         background: radial-gradient(120% 60% at 50% 0%, rgba(255, 154, 74, 0.16), transparent 70%), #211912;
         color: #f3ead8; font-family: 'Alegreya Sans', 'Segoe UI', system-ui, sans-serif; }
       .lock[hidden] { display: none; }
@@ -45,15 +45,70 @@ const LOCK_STYLE = `    <style>
         font: inherit; font-size: 17px; font-weight: 800; box-shadow: 0 3px 0 #a8811f; cursor: pointer; }
       .lock button:disabled { opacity: 0.6; }
       .lock .lock-msg { min-height: 22px; margin: 12px 0 0; color: #ffa194; font-weight: 700; }
+      .lock-icon { position: relative; display: grid; place-items: center; width: 132px; height: 132px; margin: 0 auto; }
+      .lock-icon img { position: relative; }
+      .lock-seal { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; color: #f1c45a;
+        transition: color 300ms ease, opacity 300ms ease; }
+      .lock-seal * { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+      .lock-seal .seal-glow { stroke-width: 8; opacity: 0.22; }
+      .lock.is-wrong .lock-seal { color: #ff7b6b; opacity: 0.75; }
+      .lock[data-motion='full'] .seal-c { stroke-dasharray: 100; stroke-dashoffset: 100; animation: seal-draw 900ms cubic-bezier(.2, .7, .2, 1) 100ms forwards; }
+      .lock[data-motion='full'] .seal-rune { opacity: 0; animation: seal-rune 320ms ease-out forwards; animation-delay: calc(450ms + var(--i) * 55ms); }
+      .lock[data-motion='full'] .seal-spin { animation: seal-spin 60s linear infinite; }
+      .lock[data-motion='full'].is-busy .seal-spin { animation-duration: 3s; }
+      .lock[data-motion='full'].is-busy .lock-seal { animation: seal-pulse 900ms ease-in-out infinite alternate; }
+      .lock[data-motion='full'].is-wrong .lock-icon { animation: seal-shake 380ms ease-out; }
+      .lock[data-motion='full'] .lock-msg.is-new { animation: msg-in 260ms ease-out; }
+      .lock[data-motion='full'].is-open .lock-seal { animation: seal-open 520ms ease-out forwards; }
+      .lock[data-motion='full'].is-open { animation: lock-out 420ms ease-in 220ms forwards; }
+      .lock[data-motion='calm'] .lock-seal { animation: lock-in 500ms ease-out; }
+      .lock[data-motion='calm'] .lock-msg.is-new { animation: lock-in 260ms ease-out; }
+      .lock[data-motion='calm'].is-open { animation: lock-out 380ms ease-in forwards; }
+      .lock[data-motion='off'] .lock-seal { transition: none; }
+      .lock.is-open { pointer-events: none; }
+      @keyframes seal-draw { to { stroke-dashoffset: 0; } }
+      @keyframes seal-rune { from { opacity: 0; } 60% { opacity: 1; filter: drop-shadow(0 0 4px #ffe7a0); } to { opacity: 1; } }
+      @keyframes seal-spin { to { transform: rotate(360deg); } }
+      @keyframes seal-pulse { from { filter: drop-shadow(0 0 0 rgba(241, 196, 90, 0)); } to { filter: drop-shadow(0 0 8px rgba(241, 196, 90, 0.9)); } }
+      @keyframes seal-shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-7px); } 45% { transform: translateX(6px); } 70% { transform: translateX(-3px); } }
+      @keyframes msg-in { from { opacity: 0; transform: translateY(-6px); } }
+      @keyframes seal-open { 0% { transform: scale(1); filter: brightness(1); } 35% { transform: scale(1.12); filter: brightness(2) drop-shadow(0 0 14px #ffe7a0); opacity: 1; } 100% { transform: scale(1.7); filter: brightness(2.4); opacity: 0; } }
+      @keyframes lock-in { from { opacity: 0; } }
+      @keyframes lock-out { to { opacity: 0; } }
       .lock-fail { margin: 40px 24px; color: #ffa194; font-family: system-ui, sans-serif; text-align: center; }
     </style>
 `;
+
+// Руны печати те же, что в кругах призыва в игре.
+const RUNES = [
+  'M5 0V14M5 0L0 5M5 0L10 5',
+  'M5 0V14M5 6L0 0M5 6L10 0',
+  'M2 0V14M2 3L9 0M2 7L9 4',
+  'M2 0V14M2 0L8 3L2 7L8 14',
+  'M5 0L10 5L5 10L0 5ZM2.5 7.5L0 14M7.5 7.5L10 14',
+  'M0 0V14M10 0V14M0 0L10 14M10 0L0 14',
+  'M2 0V14M2 0L9 4M2 5L9 9',
+  'M1 0V14M9 0V14M1 0L9 7M9 0L1 7',
+  'M8 0L2 5L8 9L2 14',
+  'M5 0V14',
+  'M8 0L2 7L8 14',
+  'M2 0V14M2 0L8 3.5L2 7L8 10.5L2 14',
+];
+
+/** Печать вокруг значка: два круга и кольцо рун. Только украшение, диктор её не слышит. */
+function sealSVG() {
+  const runes = RUNES.map((d, i) => `<path class="seal-rune" style="--i:${i}" d="${d}" transform="rotate(${i * 30}) translate(-5 -88)"/>`).join('');
+  return `<svg class="lock-seal" viewBox="-100 -100 200 200" aria-hidden="true" focusable="false"><g class="seal-glow"><circle r="96" pathLength="100" class="seal-c"/><circle r="72" pathLength="100" class="seal-c"/></g><g class="seal-spin"><circle r="96" pathLength="100" class="seal-c"/><circle r="72" pathLength="100" class="seal-c"/>${runes}</g></svg>`;
+}
 
 /** Форма пароля. Пока замок проверяет запомненный ключ, она скрыта. */
 const LOCK_FORM = `    <main id="lock" class="lock" hidden>
       <form id="lock-form">
         <fieldset>
-          <img src="./icons/icon-192.png" alt="" width="76" height="76" />
+          <div class="lock-icon">
+            ${sealSVG()}
+            <img src="./icons/icon-192.png" alt="" width="76" height="76" />
+          </div>
           <h1>Лагерь у костра</h1>
           <p>Сайт закрыт паролем. Его знает тот, кто дал тебе ссылку.</p>
           <input id="lock-pass" type="password" autocomplete="current-password" placeholder="Пароль" aria-label="Пароль" />
