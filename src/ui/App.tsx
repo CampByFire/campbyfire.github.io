@@ -252,7 +252,7 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
 
   // «Назад» на телефоне закрывает знакомство или лист, с других разделов ведёт в Лагерь,
   // и только из Лагеря без открытых листов выходит из приложения.
-  useBackButton(covered || screen !== 'camp', () => {
+  useBackButton((covered ? 1 : 0) + (screen !== 'camp' ? 1 : 0), () => {
     if (intro) closeIntro();
     else if (sheetShown.current) (sheetBack() ?? closeSheet)();
     else if (screen !== 'camp') ui.go('camp');
