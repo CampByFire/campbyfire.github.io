@@ -91,7 +91,6 @@ export function Chronicle({ ui }: { ui: Ui }) {
                 <span class="meta">
                   {l.done} сделано · +{l.gold} · {formatDuration(Math.round(l.workedMs / 60_000))}
                 </span>
-                {l.frog && <GIcon name="frog" size={15} class="ic-green" />}
               </summary>
               {done.map((t) => (
                 <div key={t.id} class="day-task">

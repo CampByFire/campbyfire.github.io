@@ -183,7 +183,7 @@ export function AboutSheet({ ui }: { ui: Ui }) {
           Модели лагеря: {link('https://kaylousberg.com/game-assets', 'KayKit')} (Kay Lousberg), лицензия CC0.
         </li>
         <li>
-          Иконки с {link('https://game-icons.net', 'game-icons.net')}: Lorc (солнце, лягушка, песочные часы, костёр, замок, свиток, рассвет), Delapouite
+          Иконки с {link('https://game-icons.net', 'game-icons.net')}: Lorc (солнце, песочные часы, костёр, замок, свиток, рассвет), Delapouite
           (монеты, галочка, сон, бревно, закат), Sbed (череп), Zeromancer (сердце). Лицензия{' '}
           {link('https://creativecommons.org/licenses/by/3.0/', 'CC BY 3.0')}, {link('./licenses/game-icons.txt', 'список со ссылками')}.
         </li>

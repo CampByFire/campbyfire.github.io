@@ -3,7 +3,6 @@
 import {
   DAY_STARTS_AT_HOUR,
   FORGOTTEN_AFTER,
-  FROG_XP_MULT,
   GOLD_PER_LEVEL,
   HOUR,
   MANA_DRAIN_PER_HOUR,
@@ -50,7 +49,6 @@ export function newState(now: number): State {
     current: null,
     breakSince: null,
     lastQuestId: null,
-    frogId: null,
     litDay: null,
     closedDay: null,
     secondWindDay: null,
@@ -73,7 +71,7 @@ function nextId(s: State, prefix: string): string {
 export function logOf(s: State, day: DayKey): DayLog {
   let l = s.log[day];
   if (!l) {
-    l = { gold: 0, xp: 0, done: 0, workedMs: 0, restMs: 0, frog: false, undeadSlain: 0 };
+    l = { gold: 0, xp: 0, done: 0, workedMs: 0, restMs: 0, undeadSlain: 0 };
     s.log[day] = l;
   }
   return l;
@@ -136,7 +134,6 @@ function rollover(s: State, today: DayKey): void {
   }
   s.day = today;
   s.hero.mana = MANA_MAX;
-  s.frogId = null;
   s.litDay = null;
   s.closedDay = null;
   s.breakSince = null;
@@ -290,7 +287,6 @@ export function planTask(s: State, id: string, day: DayKey | null): void {
   if (day === null) {
     t.day = null;
     if (s.current?.taskId === id) s.current = null;
-    if (s.frogId === id) s.frogId = null;
     return;
   }
   if (t.day !== day) {
@@ -419,7 +415,6 @@ export function tidyRoutines(s: State): void {
   }
   if (drop.size === 0) return;
   s.tasks = s.tasks.filter((t) => !drop.has(t));
-  if (s.frogId && !findTask(s, s.frogId)) s.frogId = null;
   if (s.current && !findTask(s, s.current.taskId)) s.current = null;
 }
 
@@ -499,10 +494,8 @@ export function dismissIdle(s: State): void {
   if (s.current) s.current.idleSince = null;
 }
 
-export function rewardFor(s: State, t: Task, level: Level): Reward {
-  const frog = s.frogId === t.id;
-  const xp = XP_BY_LEVEL[level] * (frog ? FROG_XP_MULT : 1);
-  return { gold: GOLD_PER_LEVEL * level, xp, frog, damage: t.routineId ? 0 : level };
+export function rewardFor(t: Task, level: Level): Reward {
+  return { gold: GOLD_PER_LEVEL * level, xp: XP_BY_LEVEL[level], damage: t.routineId ? 0 : level };
 }
 
 export interface CompleteResult {
@@ -520,7 +513,7 @@ export function complete(s: State, now: number, id: string, level?: Level): Comp
   if (t.status === 'inbox') t.status = 'open';
   const lairBefore = t.questId && !t.routineId ? lairOf(s, t.questId) : null;
   const undead = isUndead(t, s.day);
-  const reward = rewardFor(s, t, t.level);
+  const reward = rewardFor(t, t.level);
   if (undead) reward.undead = true;
   t.status = 'done';
   t.doneAt = now;
@@ -533,7 +526,6 @@ export function complete(s: State, now: number, id: string, level?: Level): Comp
   l.gold += reward.gold;
   l.xp += reward.xp;
   l.done += 1;
-  if (reward.frog) l.frog = true;
   if (undead) l.undeadSlain += 1;
   if (s.current?.taskId === id) s.current = null;
   const lairAfter = lairBefore && t.questId ? lairOf(s, t.questId) : null;
@@ -553,14 +545,13 @@ export function release(s: State, now: number, id: string): void {
   t.releasedAt = now;
   t.status = 'released';
   if (s.current?.taskId === id) s.current = null;
-  if (s.frogId === id) s.frogId = null;
 }
 
 /**
  * Вернуть отпущенную задачу туда, откуда её отпустили. Если её звали на уже прошедший день,
- * она ждёт в отряде. frog: вернуть ей и звание лягушки дня, если его никто не занял.
+ * она ждёт в отряде.
  */
-export function unrelease(s: State, id: string, frog = false): void {
+export function unrelease(s: State, id: string): void {
   const t = findTask(s, id);
   if (!t || t.status !== 'released') return;
   t.status = t.releasedFrom ?? 'open';
@@ -568,7 +559,6 @@ export function unrelease(s: State, id: string, frog = false): void {
   delete t.releasedAt;
   if (t.day && t.day < s.day) t.day = null;
   if (!t.questId && !t.day && !t.period) t.status = 'inbox';
-  if (frog && !s.frogId && t.day === s.day) s.frogId = id;
 }
 
 /** Отпущенные задачи, недавние сверху. */
@@ -587,16 +577,10 @@ export function undoComplete(s: State, id: string): void {
   l.xp -= t.reward.xp;
   l.done -= 1;
   if (t.reward.undead) l.undeadSlain = Math.max(0, l.undeadSlain - 1);
-  // Лягушка дня съедена, только если в тот день осталась другая сделанная лягушка.
-  if (t.reward.frog) l.frog = s.tasks.some((x) => x !== t && x.status === 'done' && x.doneDay === t.doneDay && x.reward?.frog);
   t.status = 'open';
   delete t.doneAt;
   delete t.doneDay;
   delete t.reward;
-}
-
-export function setFrog(s: State, id: string | null): void {
-  s.frogId = id;
 }
 
 /** Разжечь костёр: план дня утверждён, за него даётся немного опыта. */

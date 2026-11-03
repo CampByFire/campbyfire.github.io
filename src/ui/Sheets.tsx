@@ -20,7 +20,6 @@ import {
   planTask,
   release,
   removeQuest,
-  setFrog,
   setPeriod,
   spentNow,
   tailTargets,
@@ -72,7 +71,6 @@ export type SheetState =
   | { kind: 'quest'; questId: string }
   | { kind: 'newQuest' }
   | { kind: 'editQuest'; questId: string }
-  | { kind: 'frog' }
   | { kind: 'sync' }
   | { kind: 'syncConflict' }
   | { kind: 'rules' }
@@ -101,8 +99,6 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <QuestForm ui={ui} />;
     case 'editQuest':
       return <QuestForm ui={ui} questId={sheet.questId} />;
-    case 'frog':
-      return <FrogSheet ui={ui} />;
     case 'sync':
       return <SyncSheet ui={ui} />;
     case 'syncConflict':
@@ -549,12 +545,6 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
               <LIcon name="calendar" size={16} />
               На завтра
             </button>
-            {inToday && (
-              <button class="act" onClick={() => ui.store.act((st) => setFrog(st, st.frogId === t.id ? null : t.id))}>
-                <GIcon name="frog" size={16} />
-                {s.frogId === t.id ? 'Больше не лягушка' : 'Сделать лягушкой дня'}
-              </button>
-            )}
             {undead && (
               <button class="act" onClick={() => ui.store.act((st) => updateTask(st, t.id, { due: addDays(st.day, 1) }))}>
                 <LIcon name="calendar" size={16} />
@@ -596,9 +586,8 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
 
 /** Отпустить задачу; несколько секунд её можно вернуть одной кнопкой, потом из Королевства. */
 function releaseWithUndo(ui: Ui, id: string, text: string): void {
-  const frog = ui.store.state.frogId === id;
   ui.store.act((st, now) => release(st, now, id));
-  ui.toast(text, { label: 'Вернуть', run: () => ui.store.act((st) => unrelease(st, id, frog)) });
+  ui.toast(text, { label: 'Вернуть', run: () => ui.store.act((st) => unrelease(st, id)) });
 }
 
 // ---------- хвосты ----------
@@ -714,35 +703,6 @@ function Letter({ ui, t, quests }: { ui: Ui; t: Task; quests: State['quests'] })
         </button>
       </div>
     </div>
-  );
-}
-
-// ---------- лягушка ----------
-
-function FrogSheet({ ui }: { ui: Ui }) {
-  const s = ui.store.state;
-  const plan = planOf(s).filter((t) => t.status === 'open');
-  return (
-    <Sheet title={W.frogTitle} onClose={ui.close}>
-      <p class="note">Самая тяжёлая задача дня: опыт за неё удвоится. Браться за неё лучше первой, пока силы полны.</p>
-      {plan.length === 0 && <p class="note">Сначала позови задачи к костру.</p>}
-      {plan.map((t) => (
-        <button
-          key={t.id}
-          class={`row row-pick${s.frogId === t.id ? ' is-on' : ''}`}
-          onClick={() => {
-            ui.store.act((st) => setFrog(st, t.id));
-            ui.close();
-          }}
-        >
-          <GIcon name="frog" size={16} class={s.frogId === t.id ? 'ic-green' : 'ic-dim'} />
-          <span class="row-title">{t.title}</span>
-          <span class="meta">
-            <LevelMark level={t.level} short />
-          </span>
-        </button>
-      ))}
-    </Sheet>
   );
 }
 

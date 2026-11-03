@@ -34,7 +34,6 @@ export interface Quest {
 export interface Reward {
   gold: number;
   xp: number;
-  frog: boolean;
   /** Задача была нежитью: при отмене «Готово» счёт упокоенных за день уменьшается. */
   undead?: boolean;
   /** Урон логову похода, равен уровню задачи. */
@@ -108,7 +107,6 @@ export interface DayLog {
   done: number;
   workedMs: number;
   restMs: number;
-  frog: boolean;
   undeadSlain: number;
 }
 
@@ -144,7 +142,6 @@ export interface State {
   breakSince: number | null;
   /** Поход последней задачи у огня, для цены переключения. */
   lastQuestId: string | null;
-  frogId: string | null;
   /** День, когда разожгли костёр, то есть утвердили план. */
   litDay: DayKey | null;
   /** День, когда прозвучал отбой. */

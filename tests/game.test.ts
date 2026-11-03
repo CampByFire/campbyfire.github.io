@@ -13,7 +13,6 @@ import {
   planTask,
   release,
   secondWind,
-  setFrog,
   settle,
   start,
   swapInPlan,
@@ -25,7 +24,7 @@ import {
 } from '../src/game/state';
 import { addDays, dayKey, scheduleError, shiftAt } from '../src/game/time';
 import { assignSeats, campView } from '../src/game/view';
-import { SAVE_VERSION, Store, type Storage } from '../src/game/store';
+import { SAVE_VERSION, Store, checkSave, type Storage } from '../src/game/store';
 
 // Пятница, 23 октября 2026.
 const at = (h: number, m = 0, d = 23) => new Date(2026, 9, d, h, m).getTime();
@@ -129,16 +128,15 @@ describe('таймер и мана', () => {
 });
 
 describe('награды', () => {
-  it('золото по уровню, опыт с лягушкой, урон логову', () => {
+  it('золото и опыт по уровню, урон логову', () => {
     const { s, work } = fresh();
     const a = addTask(s, at(8), { title: 'Модуль', questId: work, level: 3, day: s.day });
     addTask(s, at(8), { title: 'Ещё', questId: work, level: 2 });
-    setFrog(s, a);
     const r = complete(s, at(10), a)!;
-    expect(r.reward).toEqual({ gold: 75, xp: 120, frog: true, damage: 3 });
+    expect(r.reward).toEqual({ gold: 75, xp: 60, damage: 3 });
     expect(r.lair).toEqual({ before: 5, after: 2, max: 5 });
     expect(s.hero.gold).toBe(75);
-    expect(s.log[s.day].frog).toBe(true);
+    expect(s.hero.xp).toBe(60);
   });
 
   it('уровень можно поправить при сдаче', () => {
@@ -156,36 +154,44 @@ describe('награды', () => {
     expect(s.tasks[0].status).toBe('open');
   });
 
-  it('отмена «Готово» снимает съеденную лягушку и упокоенную нежить', () => {
+  it('отмена «Готово» снимает упокоенную нежить', () => {
     const { s, work } = fresh();
-    const frog = addTask(s, at(8), { title: 'Лягушка', questId: work, level: 3, day: s.day });
     const old = addTask(s, at(8), { title: 'Просрочка', questId: work, due: '2026-10-21' });
-    setFrog(s, frog);
-    complete(s, at(10), frog);
     complete(s, at(11), old);
-    expect(s.log[s.day].frog).toBe(true);
     expect(s.log[s.day].undeadSlain).toBe(1);
-    undoComplete(s, frog);
     undoComplete(s, old);
-    expect(s.log[s.day].frog).toBe(false);
     expect(s.log[s.day].undeadSlain).toBe(0);
-    expect(s.frogId).toBe(frog);
+  });
+
+  it('старое сохранение теряет поля лягушки дня, опыт за неё остаётся', () => {
+    const { s, work } = fresh();
+    const a = addTask(s, at(8), { title: 'A', questId: work, level: 3, day: s.day });
+    complete(s, at(10), a);
+    const old = JSON.parse(JSON.stringify(s));
+    old.frogId = a;
+    old.log[s.day].frog = true;
+    old.tasks[0].reward = { ...old.tasks[0].reward, xp: 120, frog: true };
+    old.hero.xp = 120;
+    const back = checkSave(old)!;
+    expect('frogId' in back).toBe(false);
+    expect('frog' in back.log[s.day]).toBe(false);
+    expect('frog' in back.tasks[0].reward!).toBe(false);
+    expect(back.hero.xp).toBe(120);
+    undoComplete(back, a);
+    expect(back.hero.xp).toBe(0);
   });
 
   it('отпущенную задачу можно вернуть туда, откуда отпустили', () => {
     const { s, work } = fresh();
     const a = addTask(s, at(8), { title: 'A', questId: work, day: s.day });
     const letter = addTask(s, at(8), { title: 'Письмо', questId: null });
-    setFrog(s, a);
     release(s, at(9), a);
     release(s, at(9), letter);
-    expect(s.frogId).toBeNull();
-    unrelease(s, a, true);
+    unrelease(s, a);
     unrelease(s, letter);
     const [ta, tl] = s.tasks;
     expect(ta.status).toBe('open');
     expect(ta.day).toBe(s.day);
-    expect(s.frogId).toBe(a);
     expect(ta.releasedAt).toBeUndefined();
     expect(tl.status).toBe('inbox');
   });

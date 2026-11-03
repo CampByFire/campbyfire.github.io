@@ -309,7 +309,6 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
         <div class="card-head">
           <GIcon name="check" size={18} class="ic-green" />
           <h2 class="sc">Сделано!</h2>
-          {r.reward.frog && <span class="pill pill-frog">лягушка съедена</span>}
           <button class="link-btn" onClick={() => {
             interrupt();
             store.act((st) => undoComplete(st, cheer.taskId));
@@ -327,12 +326,6 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           </span>
           <span class="rw rw-xp" data-magic="rw-xp">
             +{r.reward.xp} опыта
-            {r.reward.frog && (
-              <>
-                <span aria-hidden="true">, ×2</span>
-                <span class="sr-only">, вдвое за лягушку</span>
-              </>
-            )}
           </span>
           {r.lair && (
             <span class="rw rw-lair" data-magic="rw-lair">
@@ -441,12 +434,6 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             {v.numbers.get(cur.id)}
           </span>
           <h2 class="sc">{W.nowAtFire}</h2>
-          {s.frogId === cur.id && (
-            <span class="pill pill-frog">
-              <GIcon name="frog" size={15} />
-              {W.frog}
-            </span>
-          )}
         </div>
         <button class="card-title-btn" onClick={() => ui.open({ kind: 'task', taskId: cur.id })}>
           <span class="card-title">{cur.title}</span>

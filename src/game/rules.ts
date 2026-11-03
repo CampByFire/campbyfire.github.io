@@ -21,7 +21,6 @@ export const FORGOTTEN_AFTER = 90 * MINUTE;
 
 export const GOLD_PER_LEVEL = 25;
 export const XP_BY_LEVEL: Record<Level, number> = { 1: 25, 2: 40, 3: 60, 4: 85 };
-export const FROG_XP_MULT = 2;
 /** Опыт за каждую задачу в плане, когда разжигаешь костёр. */
 export const PLAN_XP_PER_TASK = 3;
 

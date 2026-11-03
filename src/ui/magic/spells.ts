@@ -319,7 +319,7 @@ function runeRing(sc: Element, sx: number, sy: number, o: { size?: number; col?:
 // ---------- Искра под пальцем ----------
 
 /** Кнопки, по которым от пальца расходится рябь. Остальным достаётся круглый отсвет. */
-const RIPPLE_HOST = '.btn, .row, .act, .banner, .chipbtn, .wind, .check-row, .card-title-btn, .quest-card, .frog-card, .notice-btn, .toast-btn';
+const RIPPLE_HOST = '.btn, .row, .act, .banner, .chipbtn, .wind, .check-row, .card-title-btn, .quest-card, .notice-btn, .toast-btn';
 
 export function tap(e: PointerEvent): void {
   if (off() || !e.isTrusted || !L.app || !L.touch) return;

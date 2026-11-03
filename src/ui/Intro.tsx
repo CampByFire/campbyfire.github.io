@@ -13,7 +13,7 @@ const CARDS: { icon: GameIcon; title: string; text: string }[] = [
   {
     icon: 'sunrise',
     title: 'Утром собери отряд',
-    text: `На экране «План» позови к костру задачи на сегодня, выбери лягушку дня, самую тяжёлую из них, и нажми «${W.lightFire}».`,
+    text: `На экране «План» позови к костру задачи на сегодня и нажми «${W.lightFire}».`,
   },
   {
     icon: 'hourglass',

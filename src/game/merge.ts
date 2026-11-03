@@ -88,7 +88,7 @@ const TASK_GROUPS = [
   ['day', 'order'],
 ];
 const LOG_COUNTERS = ['gold', 'xp', 'done', 'workedMs', 'restMs', 'undeadSlain'];
-const EMPTY_LOG: DayLog = { gold: 0, xp: 0, done: 0, workedMs: 0, restMs: 0, frog: false, undeadSlain: 0 };
+const EMPTY_LOG: DayLog = { gold: 0, xp: 0, done: 0, workedMs: 0, restMs: 0, undeadSlain: 0 };
 
 function mergeLog(b: State['log'], l: State['log'], r: State['log'], localWins: boolean): State['log'] {
   const out: State['log'] = {};
@@ -174,7 +174,6 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   out.current = mergeCurrent(b.current, l.current, r.current, localWins);
   out.breakSince = pick(b.breakSince, l.breakSince, r.breakSince, localWins);
   out.lastQuestId = pick(b.lastQuestId, l.lastQuestId, r.lastQuestId, localWins);
-  out.frogId = pick(b.frogId, l.frogId, r.frogId, localWins);
   out.litDay = pick(b.litDay, l.litDay, r.litDay, localWins);
   out.closedDay = pick(b.closedDay, l.closedDay, r.closedDay, localWins);
   out.secondWindDay = pick(b.secondWindDay, l.secondWindDay, r.secondWindDay, localWins);

@@ -179,8 +179,6 @@ export const W = {
   pause: 'Пауза',
   resume: 'Продолжить',
   release: 'Отпустить',
-  frog: 'лягушка дня',
-  frogTitle: 'Лягушка дня',
   secondWind: 'Второе дыхание',
   lightFire: 'Разжечь костёр',
   lightsOut: 'Отбой',

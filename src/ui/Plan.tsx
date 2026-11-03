@@ -1,4 +1,4 @@
-// Сбор отряда: утренний план дня. Кого позвать к костру, кто лягушка, хватит ли сил.
+// Сбор отряда: утренний план дня. Кого позвать к костру, хватит ли сил.
 import { MANA_DRAIN_PER_HOUR, MANA_MAX, PLAN_XP_PER_TASK, estimateOf, heroLevel } from '../game/rules';
 import { useState } from 'preact/hooks';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
@@ -86,7 +86,7 @@ function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => voi
   );
 }
 
-/** План на сегодня: кто к костру, лягушка, нежить, отряд, повторяющиеся. */
+/** План на сегодня: кто к костру, нежить, отряд, повторяющиеся. */
 function DayPlan({ ui }: { ui: Ui }) {
   const { store, now } = ui;
   const s = store.state;
@@ -102,7 +102,6 @@ function DayPlan({ ui }: { ui: Ui }) {
   const undead = backlog.filter((t) => isUndead(t, s.day));
   const rest = backlog.filter((t) => !isUndead(t, s.day));
   const letters = inboxOf(s).length;
-  const frog = s.frogId ? plan.find((t) => t.id === s.frogId) : undefined;
   const lit = s.litDay === s.day;
 
   const planMin = open.reduce((m, t) => m + (estimateOf(t) ?? 0), 0);
@@ -128,22 +127,6 @@ function DayPlan({ ui }: { ui: Ui }) {
           <LIcon name="chevron" size={16} />
         </button>
       )}
-
-      <button class="frog-card" onClick={() => ui.open({ kind: 'frog' })}>
-        <GIcon name="frog" size={28} class="ic-green" />
-        <span class="frog-body">
-          <span class="sc">{W.frogTitle}</span>
-          {frog ? (
-            <>
-              <span class="frog-title">{frog.title}</span>
-              <span class="frog-sub">Опыт ×2. Лучше браться за неё первой</span>
-            </>
-          ) : (
-            <span class="frog-sub">Выбери самую тяжёлую задачу дня: опыт за неё удвоится</span>
-          )}
-        </span>
-        <span class="link-btn">{frog ? 'сменить' : 'выбрать'}</span>
-      </button>
 
       <section class="group">
         <div class="group-head">
@@ -448,7 +431,7 @@ function PlanRow({ ui, s, t, prev, next }: { ui: Ui; s: State; t: Task; prev?: T
   return (
     <div class="prow">
       <button class="prow-main" onClick={() => ui.open({ kind: 'task', taskId: t.id })}>
-        {s.frogId === t.id ? <GIcon name="frog" size={16} class="ic-green" /> : <QuestDot q={findQuest(s, t.questId)} />}
+        <QuestDot q={findQuest(s, t.questId)} />
         <span class="row-title">{t.title}</span>
         <TaskMeta s={s} t={t} estimate />
       </button>

@@ -192,7 +192,7 @@ npm run icons      # значки приложения из ночного ко�
 ## Авторы и лицензии
 
 - Модели: [KayKit](https://kaylousberg.com/game-assets) (Kay Lousberg), CC0.
-- Иконки: [game-icons.net](https://game-icons.net), CC BY 3.0. Lorc: sun, frog, hourglass, campfire, castle, scroll-unfurled, sunrise. Delapouite: two-coins, check-mark, night-sleep, log, sunset. Sbed: death-skull. Zeromancer: heart-plus. Список со ссылками в `public/licenses/game-icons.txt`.
+- Иконки: [game-icons.net](https://game-icons.net), CC BY 3.0. Lorc: sun, hourglass, campfire, castle, scroll-unfurled, sunrise. Delapouite: two-coins, check-mark, night-sleep, log, sunset. Sbed: death-skull. Zeromancer: heart-plus. Список со ссылками в `public/licenses/game-icons.txt`.
 - Шрифты Alegreya, Alegreya SC и Alegreya Sans (Juan Pablo del Peral, Huerta Tipográfica), SIL Open Font License 1.1.
 - Preact (Jason Miller), MIT.
 

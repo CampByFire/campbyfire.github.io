@@ -4,7 +4,6 @@ https://creativecommons.org/licenses/by/3.0/
 
 Lorc (https://lorcblog.blogspot.com):
   sun            https://game-icons.net/1x1/lorc/sun.html
-  frog           https://game-icons.net/1x1/lorc/frog.html
   hourglass      https://game-icons.net/1x1/lorc/hourglass.html
   campfire       https://game-icons.net/1x1/lorc/campfire.html
   castle         https://game-icons.net/1x1/lorc/castle.html

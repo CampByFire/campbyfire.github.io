@@ -102,7 +102,15 @@ export function checkSave(raw: unknown): State | null {
   s.gameId ??= randomId(12);
   s.touchedAt ??= null;
   if (!Array.isArray(s.routines)) s.routines = [];
+  dropFrog(s);
   return s;
+}
+
+/** Лягушки дня больше нет: старые сохранения теряют её поля. Опыт, уже полученный за неё, остаётся. */
+function dropFrog(s: State): void {
+  delete (s as { frogId?: unknown }).frogId;
+  for (const l of Object.values(s.log ?? {})) delete (l as { frog?: unknown }).frog;
+  for (const t of s.tasks) if (t.reward) delete (t.reward as { frog?: unknown }).frog;
 }
 
 export class Store {
