@@ -99,17 +99,15 @@ export type GitHubMode = 'ok' | 'down' | 'expired';
 
 /**
  * Поддельный GitHub вместо api.github.com: приватный репозиторий igor/lager-data с файлом
- * game/save.json (content это его текст, sha меняется при каждой записи), старый гист g1 для
- * переезда и токены с владельцами. Токен good в режиме expired GitHub больше не принимает,
- * fresh того же аккаунта годится всегда.
+ * game/save.json (content это его текст, sha меняется при каждой записи) и токены с владельцами.
+ * Токен good в режиме expired GitHub больше не принимает, fresh того же аккаунта годится всегда.
  */
 export async function fakeGitHub(page: Page) {
   const gh = {
     mode: 'ok' as GitHubMode,
     content: null as string | null,
     sha: 0,
-    gist: null as string | null,
-    tokens: { good: 'igor', fresh: 'igor', old: 'igor' } as Record<string, string>,
+    tokens: { good: 'igor', fresh: 'igor' } as Record<string, string>,
   };
   const SAVE = '/repos/igor/lager-data/contents/game/save.json';
   const b64 = (text: string) => Buffer.from(text, 'utf8').toString('base64');
@@ -137,9 +135,6 @@ export async function fakeGitHub(page: Page) {
       if (gh.content === null) return json({ message: 'Not Found' }, 404);
       gh.content = null;
       return json({ commit: {} });
-    }
-    if (path === '/gists/g1' && method === 'GET') {
-      return gh.gist === null ? json({ message: 'Not Found' }, 404) : json({ files: { 'taskcraft-lager.json': { content: gh.gist, truncated: false } } });
     }
     return json({ message: 'Not Found' }, 404);
   });

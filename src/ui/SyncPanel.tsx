@@ -1,11 +1,10 @@
-// Сохранение в GitHub: подключение по токену, переезд из старого гиста в репозиторий, состояние,
-// срок и замена токена, выбор, когда в GitHub другая игра, и значок в верхней полосе лагеря,
-// когда сохранение не работает.
+// Сохранение в GitHub: подключение по токену, состояние, срок и замена токена, выбор, когда в GitHub
+// другая игра, и значок в верхней полосе лагеря, когда сохранение не работает.
 import { useEffect, useState } from 'preact/hooks';
 import { HOUR, heroLevel } from '../game/rules';
 import { addDays, dayKey, daysBetween, formatClock, formatDate, formatDayLong, plural } from '../game/time';
 import type { State } from '../game/types';
-import { GitHubError, NEW_REPO_URL, REPO_NAME, TOKEN_URL, TOKENS_URL, gistUrl, historyUrl, repoUrl } from '../sync/github';
+import { GitHubError, NEW_REPO_URL, REPO_NAME, TOKEN_URL, TOKENS_URL, historyUrl, repoUrl } from '../sync/github';
 import type { Sync } from '../sync/sync';
 import type { Ui } from './App';
 import { Sheet } from './Sheets';
@@ -30,11 +29,9 @@ export function tokenDaysLeft(sync: Sync, now: number): number | null {
 /**
  * Что не так с сохранением в GitHub. error: GitHub отказал или там другая игра, сохранение
  * стоит. stale: сети нет уже давно, а действия ждут записи (так выглядит и сеть, где GitHub закрыт).
- * move: подключён старый гист, и сохранение ждёт переезда в репозиторий.
  */
-export function syncTrouble(sync: Sync, now: number): 'error' | 'stale' | 'move' | null {
+export function syncTrouble(sync: Sync, now: number): 'error' | 'stale' | null {
   const { phase } = sync.status;
-  if (phase === 'move') return 'move';
   if (phase === 'error' || phase === 'conflict') return 'error';
   const since = sync.pendingSince;
   if (phase === 'offline' && since !== null && now - since > STALE_AFTER) return 'stale';
@@ -81,44 +78,8 @@ export function SyncPanel({ ui }: { ui: Ui }) {
     );
   }
 
-  if (sync.needsMove) {
-    return (
-      <div class="sync">
-        <div class="sync-state">
-          <span class="sync-dot sync-error" aria-hidden="true" />
-          <span class="sync-who">GitHub · {st.login}</span>
-          <span class="meta">Ждёт переезда</span>
-        </div>
-        <p class="note">
-          Теперь игра сохраняется не в гист, а в приватный репозиторий {REPO_NAME}: там же потом будет дневник. Пока не переедешь, игра сохраняется только в этом
-          браузере.
-        </p>
-        <ol class="steps">
-          <RepoSteps />
-        </ol>
-        <TokenForm label="Новый токен GitHub" button="Переехать" busyText="Переезжаю…" submit={(t) => sync.moveToRepo(t)} onDone={() => {
-          if (sync.status.phase !== 'conflict') ui.toast(`Сохранение переехало в ${REPO_NAME}`);
-        }} />
-        <p class="note">
-          Сохранение из гиста перенесётся само. Гист останется на GitHub запасной копией. На втором устройстве потом вставь тот же новый токен.
-        </p>
-        <div class="btns">
-          <button
-            class="btn btn-ghost"
-            onClick={() => {
-              if (confirm('Отключить GitHub на этом устройстве? Гист на GitHub останется.')) sync.disconnect();
-            }}
-          >
-            Отключить
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   const now = ui.now;
   const repo = sync.repo;
-  const oldGist = sync.oldGist;
   let line: string;
   switch (st.phase) {
     case 'syncing':
@@ -155,18 +116,6 @@ export function SyncPanel({ ui }: { ui: Ui }) {
             истории сохранений
           </a>
           .
-        </p>
-      )}
-      {oldGist && (
-        <p class="note">
-          Старый{' '}
-          <a href={gistUrl(oldGist)} target="_blank" rel="noopener noreferrer">
-            гист с сохранением
-          </a>{' '}
-          остался запасной копией. Когда все устройства переедут и игра на месте, его можно удалить на GitHub.{' '}
-          <button class="link-btn" onClick={() => sync.forgetOldGist()}>
-            Больше не напоминать
-          </button>
         </p>
       )}
       {st.phase === 'error' && st.error && st.errorKind !== 'auth' && <p class="note note-error">{st.error}</p>}

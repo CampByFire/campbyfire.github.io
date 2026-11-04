@@ -1,5 +1,4 @@
-// Сохранение в GitHub с поддельным GitHub: значок беды в лагере, замена токена, напоминание о сроке,
-// переезд из старого гиста в репозиторий.
+// Сохранение в GitHub с поддельным GitHub: значок беды в лагере, замена токена, напоминание о сроке.
 import { expect, test, type Page } from '@playwright/test';
 import { addTask, at, connectGitHub, fakeGitHub, openGame, setTime, sheet, tab, toast } from './helpers';
 
@@ -65,30 +64,4 @@ test('за две недели до конца токена игра напом�
   await expect(notice).toBeVisible();
   await notice.getByRole('button', { name: 'Заменить' }).click();
   await expect(sheet(page, 'Сохранение в GitHub')).toContainText('Токен закончится через 10 дней');
-});
-
-test('устройство со старым гистом: в лагере значок, переезд по новому токену', async ({ page }) => {
-  const gh = await fakeGitHub(page);
-  await openGame(page);
-  await addTask(page, 'Отчёт', { quest: 'Работа' });
-  // Так подключение записала прошлая версия игры: гист вместо репозитория.
-  await page.evaluate(() => {
-    const cfg = { token: 'old', login: 'igor', gistId: 'g1', stamp: null, base: null, dirty: true, replaced: false, syncedAt: null };
-    localStorage.setItem('taskcraft-lager-github', JSON.stringify(cfg));
-  });
-  await page.reload();
-  await tab(page, 'Лагерь').click();
-  await expect(badge(page)).toHaveAccessibleName('Сохранение в GitHub ждёт переезда в репозиторий');
-  expect(gh.content).toBeNull();
-
-  await badge(page).click();
-  const panel = sheet(page, 'Сохранение в GitHub');
-  await expect(panel).toContainText('Ждёт переезда');
-  await panel.getByLabel('Новый токен GitHub').fill('fresh');
-  await panel.getByRole('button', { name: 'Переехать' }).click();
-  await expect(toast(page)).toHaveText('Сохранение переехало в lager-data');
-  await expect(panel).toContainText('igor/lager-data');
-  await panel.getByRole('button', { name: 'Закрыть' }).click();
-  await expect(badge(page)).toHaveCount(0);
-  expect(gh.content).toContain('Отчёт');
 });

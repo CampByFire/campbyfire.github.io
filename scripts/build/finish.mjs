@@ -156,7 +156,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
-  "connect-src 'self' https://api.github.com https://gist.githubusercontent.com",
+  "connect-src 'self' https://api.github.com",
   "worker-src 'self'",
   "manifest-src 'self'",
   "base-uri 'self'",

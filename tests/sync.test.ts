@@ -4,7 +4,7 @@ import { addRoutine, addTask, complete, findTask, newState, pause, removeQuest, 
 import { mergeGames } from '../src/game/merge';
 import { Store, type Storage } from '../src/game/store';
 import type { State } from '../src/game/types';
-import { GIST_FILE, SAVE_PATH, fromBase64, toBase64, type Fetch } from '../src/sync/github';
+import { SAVE_PATH, fromBase64, toBase64, type Fetch } from '../src/sync/github';
 import { Sync, type Prefs } from '../src/sync/sync';
 
 // Пятница, 23 октября 2026.
@@ -18,13 +18,12 @@ interface FakeRepo {
 }
 
 /**
- * Поддельный GitHub: репозитории с файлами и sha (Contents API), старые гисты, токены с владельцами
+ * Поддельный GitHub: репозитории с файлами и sha (Contents API), токены с владельцами
  * и списком репозиториев, которые токен видит; можно «выключить сеть». Если задан net.expiry,
  * GitHub сообщает срок токена в заголовке, как настоящий.
  */
 function fakeGitHub() {
   const repos = new Map<string, FakeRepo>([['igor/lager-data', { private: true, files: new Map(), commits: [] }]]);
-  const gists = new Map<string, string>();
   const tokens: Record<string, string> = { good: 'igor' };
   /** Какие репозитории видит токен; кого нет в списке, видит все репозитории владельца. */
   const scope: Record<string, string[]> = {};
@@ -47,12 +46,6 @@ function fakeGitHub() {
     if (u.pathname === '/user/repos') {
       return json(visible(token, login).map((name) => ({ full_name: name, name: name.split('/')[1], private: repos.get(name)!.private, default_branch: 'main' })));
     }
-    const gist = u.pathname.match(/^\/gists\/(\w+)$/);
-    if (gist && method === 'GET') {
-      const content = gists.get(gist[1]);
-      return content === undefined ? notFound() : json({ files: { [GIST_FILE]: { content, truncated: false } } });
-    }
-    if (gist && method === 'DELETE') return gists.delete(gist[1]) ? new Response(null, { status: 204 }) : notFound();
     const m = u.pathname.match(/^\/repos\/([\w-]+\/[\w-]+)(?:\/contents\/(.+))?$/);
     if (!m || !repos.has(m[1]) || !visible(token, login).includes(m[1])) return notFound();
     const repo = repos.get(m[1])!;
@@ -90,7 +83,7 @@ function fakeGitHub() {
   const repo = () => repos.get('igor/lager-data')!;
   const doc = () => JSON.parse(repo().files.get(SAVE_PATH)!.text);
   const saved = (): State => doc().state;
-  return { fetchFn, repos, repo, gists, net, saved, doc, tokens, scope };
+  return { fetchFn, repos, repo, net, saved, doc, tokens, scope };
 }
 
 type FakeGitHub = ReturnType<typeof fakeGitHub>;
@@ -106,7 +99,6 @@ function device(gh: FakeGitHub, name: string, now: { t: number }, fetchFn: Fetch
 }
 
 const titles = (s: State) => s.tasks.map((t) => t.title).sort();
-const copy = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
@@ -436,102 +428,28 @@ describe('сохранение в GitHub', () => {
   });
 });
 
-describe('переезд из гиста', () => {
-  /**
-   * Устройство, которое сохранялось в гист прошлыми версиями: игра в браузере, в настройках
-   * гист и версия для слияния, а в гисте сохранение.
-   */
-  function gistDevice(gh: FakeGitHub, name: string, now: { t: number }, game: State, stamp: string) {
-    const prefs = JSON.stringify({ token: 'old', login: 'igor', gistId: 'g1', stamp, base: copy(game), dirty: false, replaced: false, syncedAt: now.t });
-    const d = device(gh, name, now, gh.fetchFn, prefs);
-    d.store.replace(copy(game));
-    return d;
-  }
-
-  function oldGist(gh: FakeGitHub, game: State, stamp = 'gist1') {
-    gh.tokens.old = 'igor';
-    gh.gists.set('g1', JSON.stringify({ app: 'taskcraft-lager', format: 1, stamp, savedAt: at(8), device: 'компьютер', state: copy(game) }));
-  }
-
-  it('пока не переехало, в GitHub ничего не пишется; переезд копирует сохранение из гиста как есть', async () => {
+describe('старые настройки', () => {
+  it('подключение к гисту без репозитория не читается: GitHub подключают заново', () => {
     const gh = fakeGitHub();
     const now = { t: at(9) };
-    const game = newState(at(8));
-    addTask(game, at(8), { title: 'Из гиста', questId: game.quests[0].id });
-    oldGist(gh, game);
-    const pc = gistDevice(gh, 'компьютер', now, game, 'gist1');
-    expect(pc.sync.connected).toBe(true);
-    expect(pc.sync.needsMove).toBe(true);
-    expect(pc.sync.status.phase).toBe('move');
+    const prefs = JSON.stringify({ token: 'old', login: 'igor', gistId: 'g1', stamp: null, base: null, dirty: false, replaced: false, syncedAt: null });
+    const pc = device(gh, 'компьютер', now, gh.fetchFn, prefs);
+    expect(pc.sync.connected).toBe(false);
+    expect(pc.sync.status.phase).toBe('off');
+  });
 
-    pc.store.act((s, t) => addTask(s, t, { title: 'До переезда', questId: s.quests[0].id }));
-    await vi.advanceTimersByTimeAsync(5000);
-    await pc.sync.syncNow();
-    expect(gh.net.writes).toBe(0);
+  it('ссылка на старый гист после переезда забывается, репозиторий остаётся', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    const first = device(gh, 'компьютер', now);
+    await first.sync.connect('good');
+    const prefs = JSON.stringify({ ...JSON.parse(first.prefs()!), gistId: 'g1' });
 
-    await pc.sync.moveToRepo('good');
-    expect(pc.sync.needsMove).toBe(false);
-    expect(pc.sync.status.phase).toBe('ok');
+    const pc = device(gh, 'компьютер', now, gh.fetchFn, prefs);
     expect(pc.sync.repo?.repo).toBe('igor/lager-data');
-    expect(gh.repo().commits).toEqual(['Лагерь: переезд из гиста', 'Лагерь: сохранение (компьютер)']);
-    expect(titles(gh.saved())).toEqual(['До переезда', 'Из гиста']);
-    // Гист остался запасной копией.
-    expect(gh.gists.has('g1')).toBe(true);
-    expect(pc.sync.oldGist).toBe('g1');
-    pc.sync.forgetOldGist();
-    expect(pc.sync.oldGist).toBeNull();
-  });
-
-  it('второе устройство переезжает следом: игры сливаются без вопроса, золото не удваивается', async () => {
-    const gh = fakeGitHub();
-    const now = { t: at(9) };
-    const game = newState(at(8));
-    const id = addTask(game, at(8), { title: 'Отчёт', questId: game.quests[0].id, day: game.day });
-    oldGist(gh, game);
-    const pc = gistDevice(gh, 'компьютер', now, game, 'gist1');
-    const phone = gistDevice(gh, 'телефон', now, game, 'gist1');
-
-    // Оба что-то сделали, пока ждали переезда.
-    pc.store.act((s, t) => complete(s, t, id));
-    phone.store.act((s, t) => addTask(s, t, { title: 'Аптека', questId: s.quests[2].id }));
-    phone.store.act((s) => (s.hero.gold += 3));
-
-    await pc.sync.moveToRepo('good');
-    await phone.sync.moveToRepo('good');
-    expect(phone.sync.status.phase).toBe('ok');
-    await pc.sync.syncNow();
-
-    for (const d of [pc, phone]) {
-      expect(titles(d.store.state)).toEqual(['Аптека', 'Отчёт']);
-      expect(findTask(d.store.state, id)!.status).toBe('done');
-      expect(d.store.state.hero.gold).toBe(28);
-    }
-    expect(gh.saved().hero.gold).toBe(28);
-  });
-
-  it('старый токен истёк: в репозиторий уходит игра отсюда', async () => {
-    const gh = fakeGitHub();
-    const now = { t: at(9) };
-    const game = newState(at(8));
-    addTask(game, at(8), { title: 'Своё', questId: game.quests[0].id });
-    oldGist(gh, game);
-    const pc = gistDevice(gh, 'компьютер', now, game, 'gist1');
-    delete gh.tokens.old;
-    await pc.sync.moveToRepo('good');
-    expect(pc.sync.status.phase).toBe('ok');
-    expect(titles(gh.saved())).toEqual(['Своё']);
-  });
-
-  it('без сети переезд не начинается, неверный токен объясняет почему', async () => {
-    const gh = fakeGitHub();
-    const now = { t: at(9) };
-    const game = newState(at(8));
-    oldGist(gh, game);
-    const pc = gistDevice(gh, 'компьютер', now, game, 'gist1');
-    await expect(pc.sync.moveToRepo('bad')).rejects.toThrow('GitHub не принял токен');
-    gh.net.down = true;
-    await expect(pc.sync.moveToRepo('good')).rejects.toThrow('Нет связи');
-    expect(pc.sync.needsMove).toBe(true);
+    pc.store.act((s, t) => addTask(s, t, { title: 'Своё', questId: s.quests[0].id }));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(JSON.parse(pc.prefs()!)).not.toHaveProperty('gistId');
   });
 });
 

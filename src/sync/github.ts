@@ -5,9 +5,6 @@
 //   game/save.json   сохранение Лагеря, его пишет игра
 //   diary/…          место под дневник: игра туда не пишет и его не трогает
 // Каждая запись игры это коммит, поэтому любую прошлую версию сохранения видно в истории.
-//
-// Раньше игра сохранялась в секретный гист. Класс Gist ниже нужен только, чтобы перевезти
-// оттуда сохранение; когда все устройства переедут, его можно убрать.
 
 /** Как называется репозиторий, который игра ищет по токену. */
 export const REPO_NAME = 'lager-data';
@@ -15,8 +12,6 @@ export const REPO_NAME = 'lager-data';
 export const SAVE_PATH = 'game/save.json';
 /** Папка под дневник: игра её не трогает, ни при записи, ни при удалении сохранения. */
 export const DIARY_DIR = 'diary';
-/** Файл сохранения в старом гисте. */
-export const GIST_FILE = 'taskcraft-lager.json';
 
 const API = 'https://api.github.com';
 
@@ -44,7 +39,6 @@ export const TOKENS_URL = 'https://github.com/settings/personal-access-tokens';
 export const repoUrl = (repo: string) => `https://github.com/${repo}`;
 /** История сохранений: все коммиты файла game/save.json. */
 export const historyUrl = (repo: string, branch: string) => `https://github.com/${repo}/commits/${encodeURIComponent(branch)}/${SAVE_PATH}`;
-export const gistUrl = (gistId: string) => `https://gist.github.com/${gistId}`;
 
 /** stale: файл успели поменять с тех пор, как мы его прочитали, и GitHub запись не принял. */
 export type GitHubErrorKind = 'auth' | 'access' | 'missing' | 'network' | 'stale' | 'other';
@@ -90,21 +84,6 @@ interface ContentBody {
   encoding?: string;
 }
 
-interface Messages {
-  access: string;
-  missing: string;
-}
-
-const REPO_MESSAGES: Messages = {
-  access: `У токена нет доступа к репозиторию. Нужно право «Contents: Read and write» на ${REPO_NAME}`,
-  missing: 'Не нашёл репозиторий с сохранением: возможно, его удалили или токен его больше не видит',
-};
-
-const GIST_MESSAGES: Messages = {
-  access: 'У старого токена нет права на гисты',
-  missing: 'Гист с сохранением не найден: возможно, его удалили',
-};
-
 /** base64 из текста в UTF-8: btoa сам по себе кириллицу не умеет. */
 export function toBase64(text: string): string {
   const bytes = new TextEncoder().encode(text);
@@ -128,18 +107,17 @@ function parseDoc(text: string): SaveDoc {
   }
 }
 
-class Api {
+export class GitHub {
   constructor(
-    protected token: string,
-    protected fetchFn: Fetch,
-    private messages: Messages,
+    private token: string,
+    private fetchFn: Fetch = (url, init) => fetch(url, init),
   ) {}
 
-  protected async call<T>(path: string, init: RequestInit = {}, on404: GitHubErrorKind = 'missing'): Promise<T> {
+  private async call<T>(path: string, init: RequestInit = {}, on404: GitHubErrorKind = 'missing'): Promise<T> {
     return (await (await this.request(path, init, on404)).json()) as T;
   }
 
-  protected async request(path: string, init: RequestInit = {}, on404: GitHubErrorKind = 'missing', accept = 'application/vnd.github+json'): Promise<Response> {
+  private async request(path: string, init: RequestInit = {}, on404: GitHubErrorKind = 'missing', accept = 'application/vnd.github+json'): Promise<Response> {
     let res: Response;
     try {
       res = await this.fetchFn(`${API}${path}`, {
@@ -164,15 +142,11 @@ class Api {
     if (res.status === 409 || (res.status === 422 && init.method === 'PUT')) {
       throw new GitHubError('Сохранение в GitHub успели обновить с другого устройства', 'stale');
     }
-    if (res.status === 403 || (res.status === 404 && on404 === 'access')) throw new GitHubError(this.messages.access, 'access');
-    if (res.status === 404) throw new GitHubError(this.messages.missing, on404);
+    if (res.status === 403 || (res.status === 404 && on404 === 'access')) {
+      throw new GitHubError(`У токена нет доступа к репозиторию. Нужно право «Contents: Read and write» на ${REPO_NAME}`, 'access');
+    }
+    if (res.status === 404) throw new GitHubError('Не нашёл репозиторий с сохранением: возможно, его удалили или токен его больше не видит', on404);
     throw new GitHubError(`GitHub ответил ошибкой ${res.status}`, 'other');
-  }
-}
-
-export class GitHub extends Api {
-  constructor(token: string, fetchFn: Fetch = (url, init) => fetch(url, init)) {
-    super(token, fetchFn, REPO_MESSAGES);
   }
 
   /**
@@ -276,39 +250,6 @@ export class GitHub extends Api {
     } catch (e) {
       if (e instanceof GitHubError && e.kind === 'missing') return null;
       throw e;
-    }
-  }
-}
-
-/** Старое сохранение в секретном гисте: только прочитать при переезде или удалить. */
-export class Gist extends Api {
-  constructor(token: string, fetchFn: Fetch = (url, init) => fetch(url, init)) {
-    super(token, fetchFn, GIST_MESSAGES);
-  }
-
-  /** Сохранение из гиста; null, если файла в гисте нет. */
-  async read(gistId: string): Promise<SaveDoc | null> {
-    const gist = await this.call<{ files?: Record<string, { content?: string; truncated?: boolean; raw_url?: string } | null> }>(`/gists/${gistId}`);
-    const file = gist.files?.[GIST_FILE];
-    if (!file) return null;
-    let text = file.content ?? '';
-    // Большой файл GitHub отдаёт обрезанным, целиком он лежит по raw_url.
-    if (file.truncated && file.raw_url) {
-      try {
-        text = await (await this.fetchFn(file.raw_url, { cache: 'no-store' })).text();
-      } catch {
-        throw new GitHubError('Нет связи с GitHub', 'network');
-      }
-    }
-    return parseDoc(text);
-  }
-
-  /** Удаляет гист. Уже удалённый гист не ошибка. */
-  async remove(gistId: string): Promise<void> {
-    try {
-      await this.request(`/gists/${gistId}`, { method: 'DELETE' });
-    } catch (e) {
-      if (!(e instanceof GitHubError && e.kind === 'missing')) throw e;
     }
   }
 }
