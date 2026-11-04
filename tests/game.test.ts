@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { HOUR, MINUTE, heroLevel, levelForEstimate, undeadRank } from '../src/game/rules';
 import {
+  addQuest,
   addTask,
   canSecondWind,
   complete,
   confirmWorking,
   endDay,
-  lairOf,
   lightFire,
   newState,
   planOf,
@@ -20,7 +20,6 @@ import {
   touch,
   undoComplete,
   unrelease,
-  winQuest,
 } from '../src/game/state';
 import { addDays, dayKey, scheduleError, shiftAt } from '../src/game/time';
 import { assignSeats, campView } from '../src/game/view';
@@ -128,8 +127,9 @@ describe('таймер и мана', () => {
 });
 
 describe('награды', () => {
-  it('золото и опыт по уровню, урон логову', () => {
-    const { s, work } = fresh();
+  it('золото и опыт по уровню, прогресс проекту', () => {
+    const { s, work: sphere } = fresh();
+    const work = addQuest(s, at(8), { name: 'Сертификат', kind: 'work', color: 'blue', sphereId: sphere });
     const a = addTask(s, at(8), { title: 'Модуль', questId: work, level: 3, day: s.day });
     addTask(s, at(8), { title: 'Ещё', questId: work, level: 2 });
     const r = complete(s, at(10), a)!;
@@ -214,13 +214,10 @@ describe('награды', () => {
     expect(s.tasks[0].status).toBe('done');
   });
 
-  it('логово падает, когда задач не осталось', () => {
+  it('у задачи прямо в сфере прогресса нет', () => {
     const { s, work } = fresh();
-    const a = addTask(s, at(8), { title: 'A', questId: work, level: 2 });
-    expect(winQuest(s, at(9), work)).toBe(false);
-    complete(s, at(9), a);
-    expect(lairOf(s, work)).toEqual({ hp: 0, max: 2 });
-    expect(winQuest(s, at(9), work)).toBe(true);
+    const a = addTask(s, at(8), { title: 'A', questId: work, level: 2, day: s.day });
+    expect(complete(s, at(9), a)!.lair).toBeNull();
   });
 
   it('разжечь костёр даёт опыт один раз', () => {

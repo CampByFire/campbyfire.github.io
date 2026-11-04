@@ -1,5 +1,5 @@
 // Числа баланса. Все правила, которые хочется крутить, лежат здесь.
-import type { Level } from './types';
+import type { Level, RateEvery } from './types';
 
 export const MINUTE = 60_000;
 export const HOUR = 60 * MINUTE;
@@ -26,6 +26,14 @@ export const PLAN_XP_PER_TASK = 3;
 
 /** Оценка по умолчанию, если у задачи нет своей. У IV уровня оценки нет. */
 export const ESTIMATE_BY_LEVEL: Record<Level, number | null> = { 1: 30, 2: 120, 3: 360, 4: null };
+
+/** Оценка сферы в колесе баланса: от 1 до 10. */
+export const SCORE_MIN = 1;
+export const SCORE_MAX = 10;
+/** Через сколько дней после прошлой оценки напоминать оценить сферы снова. */
+export const RATE_EVERY_DAYS: Record<Exclude<RateEvery, 'never'>, number> = { week: 7, month: 30, quarter: 91 };
+/** Первый раз напоминать оценить сферы, когда игре столько дней. */
+export const RATE_FIRST_AFTER_DAYS = 3;
 
 export const SEATS = 6;
 export const ROAD_SPOTS = 3;

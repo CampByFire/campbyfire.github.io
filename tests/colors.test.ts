@@ -75,12 +75,12 @@ describe('цвет знамени', () => {
 });
 
 describe('свой цвет в игре', () => {
-  it('поход хранит свой цвет, а сохранение остаётся формата 2', () => {
+  it('поход хранит свой цвет, а сохранение остаётся формата 3', () => {
     const s = newState(at(8));
     const id = addQuest(s, at(8), { name: 'Сертификат', kind: 'work', color: '#2bb3a3' });
     updateQuest(s, s.quests[0].id, { color: '#1a237e' });
     const back = checkSave(JSON.parse(JSON.stringify(s)))!;
-    expect(back.v).toBe(2);
+    expect(back.v).toBe(3);
     expect(back.quests.find((q) => q.id === id)?.color).toBe('#2bb3a3');
     expect(back.quests[0].color).toBe('#1a237e');
   });

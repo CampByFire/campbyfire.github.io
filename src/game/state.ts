@@ -9,6 +9,10 @@ import {
   MANA_MAX,
   MANA_REST_PER_HOUR,
   PLAN_XP_PER_TASK,
+  RATE_EVERY_DAYS,
+  RATE_FIRST_AFTER_DAYS,
+  SCORE_MAX,
+  SCORE_MIN,
   SECOND_WIND,
   SWITCH_COST,
   XP_BY_LEVEL,
@@ -16,14 +20,30 @@ import {
 } from './rules';
 import { BIGGER, isPast, periodKind, periodOf, within, type PeriodKey } from './period';
 import { addDays, dayKey, daysBetween, parseDay, repeatsOn, shiftAt } from './time';
-import type { DayKey, DayLog, Level, Quest, QuestColor, QuestKind, Repeat, Reward, Routine, Settings, State, Task } from './types';
+import type { DayKey, DayLog, Level, Quest, QuestColor, QuestKind, Rating, Repeat, Reward, Routine, Settings, State, Task } from './types';
 
 export const DEFAULT_SETTINGS: Settings = {
   workStart: 9 * 60,
   workEnd: 18 * 60,
   workDays: [1, 2, 3, 4, 5],
   bedtime: 23 * 60,
+  rateEvery: 'month',
 };
+
+/**
+ * Сферы новой игры, как в колесе баланса. id постоянные: так одно и то же старое сохранение
+ * на двух устройствах переходит к сферам одинаково, и слияние не видит двух «Здоровий».
+ */
+export const DEFAULT_SPHERES: readonly Pick<Quest, 'id' | 'name' | 'kind' | 'color'>[] = [
+  { id: 'sphere-work', name: 'Работа', kind: 'work', color: 'blue' },
+  { id: 'sphere-health', name: 'Здоровье', kind: 'personal', color: 'green' },
+  { id: 'sphere-home', name: 'Дом и быт', kind: 'any', color: 'brown' },
+  { id: 'sphere-money', name: 'Финансы', kind: 'any', color: 'yellow' },
+  { id: 'sphere-family', name: 'Семья и отношения', kind: 'personal', color: 'red' },
+  { id: 'sphere-friends', name: 'Друзья', kind: 'personal', color: '#d9659e' },
+  { id: 'sphere-growth', name: 'Развитие', kind: 'personal', color: 'purple' },
+  { id: 'sphere-rest', name: 'Отдых', kind: 'personal', color: '#2bb3a3' },
+];
 
 /** Случайная строка для id: два устройства не выдадут одинаковых, даже без связи. */
 export function randomId(len = 8): string {
@@ -37,13 +57,14 @@ export function randomId(len = 8): string {
 
 export function newState(now: number): State {
   const s: State = {
-    v: 2,
+    v: 3,
     gameId: randomId(12),
     createdAt: now,
     touchedAt: null,
     day: dayKey(now),
     hero: { xp: 0, gold: 0, mana: MANA_MAX },
-    quests: [],
+    quests: DEFAULT_SPHERES.map((d) => ({ ...d, sphere: true as const, createdAt: now })),
+    ratings: [],
     tasks: [],
     routines: [],
     current: null,
@@ -57,9 +78,6 @@ export function newState(now: number): State {
     settings: { ...DEFAULT_SETTINGS, workDays: [...DEFAULT_SETTINGS.workDays] },
     seq: 0,
   };
-  addQuest(s, now, { name: 'Работа', kind: 'work', color: 'blue' });
-  addQuest(s, now, { name: 'Личное', kind: 'personal', color: 'green' });
-  addQuest(s, now, { name: 'Дом и быт', kind: 'any', color: 'brown' });
   return s;
 }
 
@@ -150,26 +168,110 @@ export function touch(s: State, now: number): void {
   if (s.current && s.current.runningSince !== null) s.current.seenAt = now;
 }
 
-// ---------- походы ----------
+// ---------- сферы и проекты ----------
+
+/**
+ * Старое сохранение (формат 2) переходит к сферам. Бесконечные походы по умолчанию («Работа»,
+ * «Личное», «Дом и быт») и походы с именем сферы из колеса становятся сферами на месте, с тем же id,
+ * поэтому их задачи никуда не переезжают. Недостающие сферы колеса добавляются. Остальные походы
+ * становятся проектами: рабочий в сфере «Работа», личный в «Личном», если оно было, иначе сам по себе.
+ * Результат зависит только от сохранения, так что два устройства переходят одинаково.
+ */
+export function migrateToSpheres(s: State): void {
+  const norm = (x: string) => x.trim().toLowerCase().replace(/ё/g, 'е');
+  const names = new Set([...DEFAULT_SPHERES.map((d) => norm(d.name)), 'личное']);
+  for (const q of s.quests) if (!q.wonAt && names.has(norm(q.name)) && !s.quests.some((o) => o.sphere && norm(o.name) === norm(q.name))) q.sphere = true;
+  for (const d of DEFAULT_SPHERES) {
+    if (!s.quests.some((q) => q.sphere && norm(q.name) === norm(d.name))) s.quests.push({ ...d, sphere: true, createdAt: s.createdAt });
+  }
+  const spheres = s.quests.filter((q) => q.sphere);
+  const work = spheres.find((q) => norm(q.name) === 'работа');
+  const personal = spheres.find((q) => norm(q.name) === 'личное');
+  for (const q of s.quests) {
+    if (q.sphere) continue;
+    q.sphereId = q.kind === 'work' ? work?.id ?? null : q.kind === 'personal' ? personal?.id ?? null : null;
+  }
+  s.quests = [...spheres, ...s.quests.filter((q) => !q.sphere)];
+}
+
+export function spheresOf(s: State): Quest[] {
+  return s.quests.filter((q) => q.sphere);
+}
+
+/** Проекты сферы (null: проекты сами по себе). Завершённые не входят, если не попросить. */
+export function projectsOf(s: State, sphereId: string | null, won = false): Quest[] {
+  return s.quests.filter((q) => !q.sphere && (findSphere(s, q.sphereId ?? null)?.id ?? null) === sphereId && !!q.wonAt === won);
+}
+
+/**
+ * Куда можно положить задачу, в порядке экрана: каждая сфера и следом её проекты, потом проекты
+ * без сферы. Завершённые проекты не предлагаются, кроме keep (там задача уже лежит).
+ */
+export function pickableQuests(s: State, keep?: string | null): Quest[] {
+  const out: Quest[] = [];
+  const add = (list: Quest[]) => {
+    for (const q of list) if (!q.wonAt || q.id === keep) out.push(q);
+  };
+  for (const sp of spheresOf(s)) {
+    out.push(sp);
+    add([...projectsOf(s, sp.id), ...projectsOf(s, sp.id, true)]);
+  }
+  add([...projectsOf(s, null), ...projectsOf(s, null, true)]);
+  return out;
+}
+
+function findSphere(s: State, id: string | null): Quest | undefined {
+  const q = findQuest(s, id);
+  return q?.sphere ? q : undefined;
+}
+
+/** Сфера, к которой относится задача: сама сфера или сфера её проекта. */
+export function sphereOf(s: State, questId: string | null): Quest | undefined {
+  const q = findQuest(s, questId);
+  if (!q) return undefined;
+  return q.sphere ? q : findSphere(s, q.sphereId ?? null);
+}
+
+/** Когда задача в полной силе: по типу её сферы. Проект без сферы живёт по своему типу, задача без всего в любое время. */
+export function kindOf(s: State, questId: string | null): QuestKind {
+  const q = findQuest(s, questId);
+  if (!q) return 'any';
+  return (sphereOf(s, questId) ?? q).kind;
+}
 
 export function addQuest(
   s: State,
   now: number,
-  q: { name: string; kind: QuestKind; color: QuestColor },
+  q: { name: string; kind: QuestKind; color: QuestColor; sphere?: boolean; sphereId?: string | null },
 ): string {
-  const id = nextId(s, 'q');
-  s.quests.push({ id, name: q.name.trim() || 'Без названия', kind: q.kind, color: q.color, createdAt: now });
+  const id = nextId(s, q.sphere ? 's' : 'q');
+  const home = q.sphere ? undefined : findSphere(s, q.sphereId ?? null);
+  const quest: Quest = { id, name: q.name.trim() || 'Без названия', kind: home?.kind ?? q.kind, color: q.color, createdAt: now };
+  if (q.sphere) quest.sphere = true;
+  else quest.sphereId = home?.id ?? null;
+  // Новая сфера встаёт после остальных сфер, проект в конец.
+  const at = q.sphere ? s.quests.filter((x) => x.sphere).length : s.quests.length;
+  s.quests.splice(at, 0, quest);
   return id;
 }
 
-export function updateQuest(s: State, id: string, patch: Partial<Pick<Quest, 'name' | 'kind' | 'color'>>): void {
+export function updateQuest(s: State, id: string, patch: Partial<Pick<Quest, 'name' | 'kind' | 'color' | 'sphereId'>>): void {
   const q = findQuest(s, id);
-  if (q) Object.assign(q, patch);
+  if (!q) return;
+  if (q.sphere) delete patch.sphereId;
+  Object.assign(q, patch);
+  if (q.sphere) {
+    for (const p of s.quests) if (!p.sphere && p.sphereId === q.id) p.kind = q.kind;
+    return;
+  }
+  const home = findSphere(s, q.sphereId ?? null);
+  if (home) q.kind = home.kind;
+  else q.sphereId = null;
 }
 
 /**
- * Логово: сумма уровней всех задач похода, урон равен уровням сделанных. Повторяющиеся задачи
- * не в счёт: они не кончаются, и поход из-за них никогда бы не завершился.
+ * Прогресс проекта (по-старому логово): сумма уровней его задач и сколько из них ещё не сделано.
+ * Повторяющиеся задачи не в счёт: они не кончаются.
  */
 export function lairOf(s: State, questId: string): { hp: number; max: number } {
   let hp = 0;
@@ -182,28 +284,89 @@ export function lairOf(s: State, questId: string): { hp: number; max: number } {
   return { hp, max };
 }
 
-/** Поход выигран: логово пало, поход уходит в зал трофеев. Открытых задач быть не должно. */
+/**
+ * Проект завершён: игрок сам решил, что цель достигнута, и проект уходит в зал трофеев.
+ * Незаконченные задачи и повторяющиеся задачи переходят в сферу проекта, а если её нет,
+ * остаются без сферы, как у убранного проекта. Сферу завершить нельзя.
+ */
 export function winQuest(s: State, now: number, id: string): boolean {
   const q = findQuest(s, id);
-  if (!q || q.wonAt) return false;
-  if (lairOf(s, id).hp > 0) return false;
+  if (!q || q.wonAt || q.sphere) return false;
   q.wonAt = now;
+  moveOut(s, id, findSphere(s, q.sphereId ?? null)?.id ?? null, (t) => t.status === 'open');
   return true;
 }
 
+/** Вернуть завершённый проект из зала трофеев. */
+export function reopenQuest(s: State, id: string): void {
+  const q = findQuest(s, id);
+  if (q) delete q.wonAt;
+}
+
+/** Задачи и повторяющиеся задачи уходят из сферы или проекта к to. Без нового места открытая задача становится письмом. */
+function moveOut(s: State, from: string, to: string | null, which: (t: Task) => boolean = () => true): void {
+  for (const r of s.routines) if (r.questId === from) r.questId = to;
+  for (const t of s.tasks) {
+    if (t.questId !== from || !which(t)) continue;
+    t.questId = to;
+    if (!to && t.status === 'open' && !(t.routineId && t.day) && !t.period) t.status = 'inbox';
+  }
+}
+
 /**
- * Убрать поход: его задачи возвращаются письмами к вестнику. Повторяющиеся задачи остаются
- * без похода и приходят как прежде, а уже позванная на день остаётся в плане.
+ * Убрать сферу или проект. Задачи проекта переходят в его сферу, а без сферы возвращаются письмами
+ * к вестнику. Задачи сферы тоже становятся письмами, а её проекты остаются сами по себе.
+ * Повторяющиеся задачи приходят как прежде, а уже позванная на день остаётся в плане.
  */
 export function removeQuest(s: State, id: string): void {
-  s.quests = s.quests.filter((q) => q.id !== id);
-  for (const r of s.routines) if (r.questId === id) r.questId = null;
-  for (const t of s.tasks) {
-    if (t.questId === id) {
-      t.questId = null;
-      if (t.status === 'open' && !(t.routineId && t.day) && !t.period) t.status = 'inbox';
-    }
+  const q = findQuest(s, id);
+  s.quests = s.quests.filter((x) => x.id !== id);
+  if (q?.sphere) {
+    for (const p of s.quests) if (p.sphereId === id) p.sphereId = null;
   }
+  moveOut(s, id, q && !q.sphere ? findSphere(s, q.sphereId ?? null)?.id ?? null : null);
+}
+
+/** Сдвинуть сферу или проект на одно место среди соседей того же рода (dir: -1 выше, 1 ниже). */
+export function moveQuest(s: State, id: string, dir: -1 | 1): void {
+  const q = findQuest(s, id);
+  if (!q) return;
+  const same = s.quests.filter((x) => !!x.sphere === !!q.sphere && (q.sphere || (x.sphereId ?? null) === (q.sphereId ?? null)) && !!x.wonAt === !!q.wonAt);
+  const other = same[same.indexOf(q) + dir];
+  if (!other) return;
+  const i = s.quests.indexOf(q);
+  const j = s.quests.indexOf(other);
+  [s.quests[i], s.quests[j]] = [s.quests[j], s.quests[i]];
+}
+
+// ---------- колесо баланса ----------
+
+/** Оценить сферы сегодня. Баллы приводятся к целым от 1 до 10, чужие id отбрасываются. Вторая оценка за день заменяет первую. */
+export function rateSpheres(s: State, now: number, scores: Record<string, number>): void {
+  const clean: Record<string, number> = {};
+  for (const q of spheresOf(s)) {
+    const v = scores[q.id];
+    if (typeof v === 'number' && Number.isFinite(v)) clean[q.id] = Math.max(SCORE_MIN, Math.min(SCORE_MAX, Math.round(v)));
+  }
+  if (Object.keys(clean).length === 0) return;
+  s.ratings = s.ratings.filter((r) => r.id !== s.day);
+  s.ratings.push({ id: s.day, at: now, scores: clean });
+  s.ratings.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/** Последняя оценка и та, что была перед ней (до before, если задан день). */
+export function lastRating(s: State, before?: DayKey): Rating | undefined {
+  const list = before ? s.ratings.filter((r) => r.id < before) : s.ratings;
+  return list[list.length - 1];
+}
+
+/** Пора напомнить оценить сферы: по настройке, считая от прошлой оценки, а в новой игре через несколько дней. */
+export function ratingDue(s: State): boolean {
+  const every = s.settings.rateEvery ?? 'month';
+  if (every === 'never' || spheresOf(s).length === 0) return false;
+  const last = lastRating(s);
+  if (!last) return daysBetween(dayKey(s.createdAt), s.day) >= RATE_FIRST_AFTER_DAYS;
+  return daysBetween(last.id, s.day) >= RATE_EVERY_DAYS[every];
 }
 
 // ---------- задачи ----------
@@ -429,7 +592,18 @@ export function swapInPlan(s: State, a: string, b: string): void {
   [x.order, y.order] = [y.order, x.order];
 }
 
-/** Позвать к огню: таймер задачи пошёл. Задача из другого похода стоит маны. */
+/** Сфера задачи, а у проекта без сферы сам проект: переход между ними и есть смена дела. */
+function rootOf(s: State, questId: string | null): string | null {
+  return sphereOf(s, questId)?.id ?? questId;
+}
+
+/** Сколько маны стоит позвать задачу к огню: задача из другой сферы стоит SWITCH_COST, из той же сферы и её проектов ничего. */
+export function switchCostOf(s: State, t: Task): number {
+  if (s.lastQuestId === null || s.current?.taskId === t.id) return 0;
+  return rootOf(s, t.questId) !== rootOf(s, s.lastQuestId) ? SWITCH_COST : 0;
+}
+
+/** Позвать к огню: таймер задачи пошёл. Задача из другой сферы стоит маны. */
 export function start(s: State, now: number, id: string): { switchCost: number } {
   settle(s, now);
   const t = findTask(s, id);
@@ -437,12 +611,9 @@ export function start(s: State, now: number, id: string): { switchCost: number }
   if (t.status === 'inbox') t.status = 'open';
   if (t.day !== s.day) planTask(s, id, s.day);
   s.breakSince = null;
-  let switchCost = 0;
-  if (s.lastQuestId !== null && t.questId !== s.lastQuestId) {
-    switchCost = SWITCH_COST;
-    s.hero.mana = clampMana(s.hero.mana - SWITCH_COST);
-  }
-  s.lastQuestId = t.questId;
+  const switchCost = switchCostOf(s, t);
+  if (switchCost) s.hero.mana = clampMana(s.hero.mana - switchCost);
+  s.lastQuestId = rootOf(s, t.questId);
   s.current = { taskId: id, runningSince: now, seenAt: now, idleSince: null };
   return { switchCost };
 }
@@ -511,7 +682,8 @@ export function complete(s: State, now: number, id: string, level?: Level): Comp
   if (!t || t.status === 'done' || t.status === 'released') return null;
   if (level) t.level = level;
   if (t.status === 'inbox') t.status = 'open';
-  const lairBefore = t.questId && !t.routineId ? lairOf(s, t.questId) : null;
+  const project = findQuest(s, t.questId);
+  const lairBefore = project && !project.sphere && !t.routineId ? lairOf(s, project.id) : null;
   const undead = isUndead(t, s.day);
   const reward = rewardFor(t, t.level);
   if (undead) reward.undead = true;

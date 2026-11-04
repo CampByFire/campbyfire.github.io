@@ -2,7 +2,7 @@
 import { MANA_DRAIN_PER_HOUR, MANA_MAX, PLAN_XP_PER_TASK, estimateOf, heroLevel } from '../game/rules';
 import { useState } from 'preact/hooks';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
-import { backlogOf, findQuest, inboxOf, isUndead, lightFire, nestedTasks, periodTasks, planOf, planTask, swapInPlan, tailsOf, waitingOf } from '../game/state';
+import { backlogOf, findQuest, inboxOf, isUndead, kindOf as kindOfQuest, lightFire, nestedTasks, periodTasks, planOf, planTask, swapInPlan, tailsOf, waitingOf } from '../game/state';
 import { formatClock, formatDate, formatDuration, isMainFor, plural, shiftAt } from '../game/time';
 import type { State, Task } from '../game/types';
 import { PERIOD_KIND_NAME, W, periodName, periodShort, repeatName, weekRange } from '../game/words';
@@ -95,7 +95,7 @@ function DayPlan({ ui }: { ui: Ui }) {
   const done = plan.length - open.length;
   const shift = shiftAt(now, s.settings);
   const isWorkday = shift === 'morning' || shift === 'work';
-  const kindOf = (t: Task) => findQuest(s, t.questId)?.kind ?? 'any';
+  const kindOf = (t: Task) => kindOfQuest(s, t.questId);
   const dayTasks = isWorkday ? open.filter((t) => isMainFor(kindOf(t), 'work')) : open;
   const eveningTasks = isWorkday ? open.filter((t) => !isMainFor(kindOf(t), 'work')) : [];
   const backlog = backlogOf(s);
@@ -201,7 +201,7 @@ function DayPlan({ ui }: { ui: Ui }) {
             <div key={qid ?? 'none'} class="quest-group">
               <div class="quest-name">
                 <QuestDot q={q} />
-                {q?.name ?? 'Без похода'}
+                {q?.name ?? W.noSphere}
               </div>
               {tasks.map((t) => (
                 <AddRow key={t.id} ui={ui} s={s} t={t} />
@@ -337,7 +337,7 @@ function PeriodPlan({ ui, kind }: { ui: Ui; kind: PeriodKind }) {
             <div key={qid ?? 'none'} class="quest-group">
               <div class="quest-name">
                 <QuestDot q={q} />
-                {q?.name ?? 'Без похода'}
+                {q?.name ?? W.noSphere}
               </div>
               {list.map((t) => (
                 <AddRow key={t.id} ui={ui} s={s} t={t} inPeriod />

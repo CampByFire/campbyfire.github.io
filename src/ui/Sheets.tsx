@@ -1,9 +1,9 @@
-// Листы поверх экрана: новая задача, карточка задачи, письма, поход, итоги дня.
+// Листы поверх экрана: новая задача, карточка задачи, письма, сфера и проект, оценка сфер, итоги дня.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { PRESETS } from '../game/color';
+import { PRESETS, questHex } from '../game/color';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { parsePhrase, type Parsed } from '../game/phrase';
-import { ESTIMATE_BY_LEVEL, SWITCH_COST, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
+import { ESTIMATE_BY_LEVEL, SCORE_MAX, SCORE_MIN, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
 import {
   addQuest,
   addRoutine,
@@ -16,7 +16,15 @@ import {
   inboxOf,
   isUndead,
   lairOf,
+  lastRating,
+  pickableQuests,
   planOf,
+  projectsOf,
+  rateSpheres,
+  reopenQuest,
+  sphereOf,
+  spheresOf,
+  switchCostOf,
   planTask,
   release,
   removeQuest,
@@ -32,8 +40,8 @@ import {
   waitingOf,
   winQuest,
 } from '../game/state';
-import { addDays, formatDue, formatDuration, nextRepeat, parseDay } from '../game/time';
-import type { DayKey, Level, QuestColor, QuestKind, Repeat, State, Task } from '../game/types';
+import { addDays, formatDue, formatDuration, nextRepeat, parseDay, plural } from '../game/time';
+import type { DayKey, Level, Quest, QuestColor, QuestKind, Repeat, State, Task } from '../game/types';
 import type { DiaryEntry } from '../notes/diary';
 import {
   CLASS_BY_LEVEL,
@@ -44,6 +52,7 @@ import {
   PERIOD_KIND_NAME,
   QUEST_KIND_HINT,
   QUEST_KIND_NAME,
+  SPHERE_KIND_NAME,
   UNDEAD_NAME,
   W,
   WEEKDAY_CHIPS,
@@ -73,8 +82,9 @@ export type SheetState =
   | { kind: 'letters' }
   | { kind: 'tails' }
   | { kind: 'quest'; questId: string }
-  | { kind: 'newQuest' }
+  | { kind: 'newQuest'; sphere?: boolean; sphereId?: string | null }
   | { kind: 'editQuest'; questId: string }
+  | { kind: 'rate' }
   | { kind: 'sync' }
   | { kind: 'syncConflict' }
   | { kind: 'rules' }
@@ -104,7 +114,9 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
     case 'quest':
       return <QuestSheet ui={ui} questId={sheet.questId} />;
     case 'newQuest':
-      return <QuestForm ui={ui} />;
+      return <QuestForm ui={ui} sphere={sheet.sphere} sphereId={sheet.sphereId} />;
+    case 'rate':
+      return <RateSheet ui={ui} />;
     case 'editQuest':
       return <QuestForm ui={ui} questId={sheet.questId} />;
     case 'sync':
@@ -213,7 +225,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const editing = taskId ? findTask(s, taskId) : undefined;
   const routine = findRoutine(s, routineId ?? editing?.routineId);
   const from = editing ?? routine;
-  const quests = s.quests.filter((q) => !q.wonAt || q.id === from?.questId);
+  const quests = pickableQuests(s, from?.questId);
   const [title, setTitle] = useState(from?.title ?? '');
   const [questId, setQuestId] = useState<string | null>(from ? from.questId : preset?.questId ?? null);
   const [estimate, setEstimate] = useState<number | null>(from ? estimateOf(from) : 30);
@@ -319,7 +331,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       <Chips
         label={W.quest}
         value={v.questId}
-        options={[...quests.map((q) => ({ value: q.id as string | null, label: q.name })), { value: null, label: 'Без похода' }]}
+        options={[...quests.map((q) => ({ value: q.id as string | null, label: q.name, sr: q.sphere ? `сфера ${q.name}` : `проект ${q.name}` })), { value: null, label: W.noSphere }]}
         onChange={(x) => { touch('questId'); setQuestId(x); }}
       />
       <Chips
@@ -372,9 +384,9 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
           <input class="input" type="time" value={v.at} onInput={(e) => { touch('at'); setAt(e.currentTarget.value); }} />
         </label>
       </div>
-      {repeat && <p class="note">В свои дни задача сама встаёт в план дня. Пока прошлая не сделана, новая не приходит. Логово похода повторяющиеся задачи не ранят: они не кончаются.</p>}
+      {repeat && <p class="note">В свои дни задача сама встаёт в план дня. Пока прошлая не сделана, новая не приходит. В прогресс проекта повторяющиеся задачи не идут: они не кончаются.</p>}
       {!repeat && v.period && !v.day && <p class="note">Задача ждёт в отряде и видна в сборе отряда на вкладке «{PERIOD_KIND_NAME[kind!]}». К костру её можно позвать в любой день периода.</p>}
-      {willBeLetter && <p class="note">Без похода, без дня и без горизонта задача уходит письмом к вестнику. Разобрать письма можно в сборе отряда.</p>}
+      {willBeLetter && <p class="note">Без сферы, без дня и без горизонта задача уходит письмом к вестнику. Разобрать письма можно в сборе отряда.</p>}
       {routine && !editing && (
         <div class="actions">
           <button
@@ -435,7 +447,7 @@ const FOUND_NAME: Record<Parsed['found'][number]['kind'], string> = {
   at: 'время',
   estimate: 'займёт',
   period: 'горизонт',
-  quest: 'поход',
+  quest: 'сфера',
 };
 
 /** Под полем: что игра узнала во фразе и каким выйдет название. */
@@ -460,7 +472,7 @@ function PhraseHint({ s, parsed, raw }: { s: State; parsed: Parsed; raw: string 
     <div class="phrase" id="phrase-hint" aria-live="polite">
       {parsed.found.map((f) => (
         <span key={f.kind} class="phrase-tag">
-          {FOUND_NAME[f.kind]}: <b>{value(f.kind)}</b>
+          {f.kind === 'quest' && !findQuest(s, parsed.questId ?? null)?.sphere ? 'проект' : FOUND_NAME[f.kind]}: <b>{value(f.kind)}</b>
         </span>
       ))}
       {changed && (
@@ -496,7 +508,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
   const inToday = t.day === s.day;
   const est = estimateOf(t);
   const spent = spentNow(s, t, ui.now);
-  const switchCost = s.lastQuestId !== null && t.questId !== s.lastQuestId && !isCurrent ? SWITCH_COST : 0;
+  const switchCost = switchCostOf(s, t);
   const done = t.status === 'done';
   const routine = findRoutine(s, t.routineId);
 
@@ -690,7 +702,7 @@ const capital = (x: string) => x[0].toUpperCase() + x.slice(1);
 function LettersSheet({ ui }: { ui: Ui }) {
   const s = ui.store.state;
   const letters = inboxOf(s);
-  const quests = s.quests.filter((q) => !q.wonAt);
+  const quests = pickableQuests(s);
   return (
     <Sheet title={`${W.inbox} у вестника`} onClose={ui.close}>
       {letters.length === 0 && <p class="note">Писем нет. Всё разобрано.</p>}
@@ -814,34 +826,56 @@ function Stat({ v, label }: { v: string; label: string }) {
   );
 }
 
-// ---------- походы ----------
+// ---------- сферы и проекты ----------
 
-function QuestForm({ ui, questId }: { ui: Ui; questId?: string }) {
+/** Новая сфера или новый проект (sphere решает, что именно), а с questId правка существующего. */
+function QuestForm({ ui, questId, sphere, sphereId }: { ui: Ui; questId?: string; sphere?: boolean; sphereId?: string | null }) {
   const s = ui.store.state;
   const q = questId ? findQuest(s, questId) : undefined;
+  const isSphere = q ? !!q.sphere : !!sphere;
+  const spheres = spheresOf(s);
   const [name, setName] = useState(q?.name ?? '');
-  const [kind, setKind] = useState<QuestKind>(q?.kind ?? 'work');
-  const [first] = useState<QuestColor>(() => q?.color ?? PRESETS[s.quests.length % PRESETS.length]);
+  const [kind, setKind] = useState<QuestKind>(q?.kind ?? (isSphere ? 'personal' : 'work'));
+  const [home, setHome] = useState<string | null>(q ? sphereOf(s, q.id)?.id ?? null : sphereId ?? null);
+  const homeSphere = home && !isSphere ? findQuest(s, home) : undefined;
+  const [first] = useState<QuestColor>(() => q?.color ?? homeSphere?.color ?? PRESETS[s.quests.length % PRESETS.length]);
   // null: в поле кода сейчас не цвет, под ним уже сказано, что не так.
   const [color, setColor] = useState<QuestColor | null>(first);
   const save = () => {
     if (!name.trim() || !color) return;
-    if (q) ui.store.act((st) => updateQuest(st, q.id, { name: name.trim(), kind, color }));
-    else ui.store.act((st, now) => addQuest(st, now, { name, kind, color }));
+    if (q) ui.store.act((st) => updateQuest(st, q.id, { name: name.trim(), kind, color, ...(isSphere ? {} : { sphereId: home }) }));
+    else ui.store.act((st, now) => addQuest(st, now, { name, kind, color, sphere: isSphere, sphereId: isSphere ? null : home }));
     ui.close();
   };
+  const what = isSphere ? 'Сфера' : 'Проект';
   return (
-    <Sheet title={q ? 'Поход' : 'Новый поход'} onClose={ui.close} footer={<button class="btn btn-gold btn-wide" onClick={save}>{q ? 'Сохранить' : 'Выступить в поход'}</button>}>
+    <Sheet
+      title={q ? what : isSphere ? 'Новая сфера' : 'Новый проект'}
+      onClose={ui.close}
+      footer={<button class="btn btn-gold btn-wide" onClick={save}>{q ? 'Сохранить' : isSphere ? 'Добавить сферу' : 'Начать проект'}</button>}
+    >
       <label class="field">
         <span class="field-label">Название</span>
-        <input class="input" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder="Например, сертификат Fullstack" maxLength={60} />
+        <input class="input" value={name} onInput={(e) => setName(e.currentTarget.value)} placeholder={isSphere ? 'Например, Творчество' : 'Например, сертификат Fullstack'} maxLength={60} />
       </label>
-      <Chips
-        label={`Когда: ${QUEST_KIND_HINT[kind]}`}
-        value={kind}
-        options={(['work', 'personal', 'any'] as QuestKind[]).map((k) => ({ value: k, label: QUEST_KIND_NAME[k] }))}
-        onChange={setKind}
-      />
+      {!isSphere && (
+        <Chips
+          label="В какой сфере"
+          value={home}
+          options={[...spheres.map((x) => ({ value: x.id as string | null, label: x.name })), { value: null, label: W.noSphere }]}
+          onChange={setHome}
+        />
+      )}
+      {isSphere || !homeSphere ? (
+        <Chips
+          label={`Когда: ${QUEST_KIND_HINT[kind]}`}
+          value={kind}
+          options={(['work', 'personal', 'any'] as QuestKind[]).map((k) => ({ value: k, label: (isSphere ? SPHERE_KIND_NAME : QUEST_KIND_NAME)[k] }))}
+          onChange={setKind}
+        />
+      ) : (
+        <p class="note">Когда: как у сферы «{homeSphere.name}», {QUEST_KIND_HINT[homeSphere.kind]}.</p>
+      )}
       <QuestColorPicker initial={first} onChange={setColor} />
     </Sheet>
   );
@@ -851,70 +885,200 @@ function QuestSheet({ ui, questId }: { ui: Ui; questId: string }) {
   const s = ui.store.state;
   const q = findQuest(s, questId);
   if (!q) return null;
+  if (q.sphere) return <SphereSheet ui={ui} q={q} />;
   const lair = lairOf(s, q.id);
+  const home = sphereOf(s, q.id);
   const open = s.tasks.filter((t) => t.questId === q.id && t.status === 'open');
   const done = s.tasks.filter((t) => t.questId === q.id && t.status === 'done').length;
+  const where = home ? `проект в сфере «${home.name}»` : q.kind === 'any' ? 'проект в любое время' : `${QUEST_KIND_NAME[q.kind]} проект`;
+  const finishIt = () => {
+    const rest = open.filter((t) => !t.routineId).length;
+    if (rest > 0 && !confirm(`Отметить проект «${q.name}» выполненным? ${rest} ${plural(rest, 'незаконченная задача перейдёт', 'незаконченные задачи перейдут', 'незаконченных задач перейдут')} ${home ? `в сферу «${home.name}»` : 'к вестнику письмами'}.`)) return;
+    ui.store.act((st, now) => winQuest(st, now, q.id));
+    ui.toast('Проект выполнен! Его знамя в зале трофеев');
+    ui.close();
+    lairFall(q.id, q.name, q.color);
+  };
   return (
     <Sheet title={q.name} onClose={ui.close}>
       <div class="task-sub">
         <QuestDot q={q} />
-        {q.kind === 'any' ? 'поход в любое время' : `${QUEST_KIND_NAME[q.kind]} поход`} · {done} сделано · {open.length} в отряде
+        {where} · {done} сделано · {open.length} в отряде
       </div>
+      {q.wonAt && <p class="note">Выполнен {new Date(q.wonAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}, знамя в зале трофеев.</p>}
       {lair.max > 0 && (
-        <div class="lair">
+        <div class="lair lair-progress">
           <span>
-            Логово: {lair.hp} из {lair.max}
+            Сделано {lair.max - lair.hp} из {lair.max}
           </span>
-          <span class="bar bar-red" aria-hidden="true">
-            <span style={{ width: `${(lair.hp / lair.max) * 100}%` }} />
+          <span class="bar bar-gold" aria-hidden="true">
+            <span style={{ width: `${((lair.max - lair.hp) / lair.max) * 100}%` }} />
           </span>
         </div>
       )}
-      {lair.max > 0 && lair.hp === 0 && !q.wonAt && (
-        <button
-          class="btn btn-gold btn-wide"
-          onClick={() => {
-            ui.store.act((st, now) => winQuest(st, now, q.id));
-            ui.toast('Логово пало! Поход в зале трофеев');
-            ui.close();
-            lairFall(q.id, q.name, q.color);
-          }}
-        >
-          Логово пало: завершить поход
+      {!q.wonAt && (
+        <button class="btn btn-gold btn-wide" onClick={finishIt}>
+          Проект выполнен
         </button>
       )}
-      <div class="sublist">
-        {open.map((t) => (
-          <button key={t.id} class="row" onClick={() => ui.open({ kind: 'task', taskId: t.id })}>
-            <span class={`num num-${isUndead(t, s.day) ? 'undead' : t.day === s.day ? 'today' : 'idle'} num-sm`} aria-hidden="true">
-              {LEVEL_ROMAN[t.level]}
-            </span>
-            <span class="row-title">{t.title}</span>
-            <TaskMeta s={s} t={t} />
-          </button>
-        ))}
-      </div>
+      <TaskList ui={ui} s={s} tasks={open} />
       <div class="actions">
-        <button class="act" onClick={() => ui.open({ kind: 'add', questId: q.id, day: null })}>
-          <LIcon name="plus" size={16} />
-          Задача в этот поход
-        </button>
+        {!q.wonAt && (
+          <button class="act" onClick={() => ui.open({ kind: 'add', questId: q.id, day: null })}>
+            <LIcon name="plus" size={16} />
+            Задача в этот проект
+          </button>
+        )}
+        {q.wonAt && (
+          <button
+            class="act"
+            onClick={() => {
+              ui.store.act((st) => reopenQuest(st, q.id));
+              ui.toast('Проект снова в работе');
+            }}
+          >
+            <LIcon name="undo" size={16} />
+            Вернуть в работу
+          </button>
+        )}
         <button class="act" onClick={() => ui.open({ kind: 'editQuest', questId: q.id })}>
           <LIcon name="edit" size={16} />
-          Изменить поход
+          Изменить проект
         </button>
         <button
           class="act act-danger"
           onClick={() => {
-            if (!confirm(`Убрать поход «${q.name}»? Его задачи вернутся письмами к вестнику.`)) return;
+            if (!confirm(`Убрать проект «${q.name}»? ${home ? `Его задачи перейдут в сферу «${home.name}».` : 'Его задачи вернутся письмами к вестнику.'}`)) return;
             ui.store.act((st) => removeQuest(st, q.id));
             ui.close();
           }}
         >
           <LIcon name="trash" size={16} />
-          Убрать поход
+          Убрать проект
         </button>
       </div>
+    </Sheet>
+  );
+}
+
+function SphereSheet({ ui, q }: { ui: Ui; q: Quest }) {
+  const s = ui.store.state;
+  const open = s.tasks.filter((t) => t.questId === q.id && t.status === 'open');
+  const projects = projectsOf(s, q.id);
+  const score = lastRating(s)?.scores[q.id];
+  return (
+    <Sheet title={q.name} onClose={ui.close}>
+      <div class="task-sub">
+        <QuestDot q={q} />
+        {SPHERE_KIND_NAME[q.kind]} сфера · {open.length} в отряде{score !== undefined && ` · оценка ${score} из ${SCORE_MAX}`}
+      </div>
+      <p class="note">Сфера не кончается. {QUEST_KIND_HINT[q.kind][0].toUpperCase() + QUEST_KIND_HINT[q.kind].slice(1)}.</p>
+      <div class="field-label">{W.quests}</div>
+      {projects.length === 0 && <p class="note">Проектов пока нет.</p>}
+      <div class="sublist">
+        {projects.map((p) => (
+          <button key={p.id} class="row" onClick={() => ui.open({ kind: 'quest', questId: p.id })}>
+            <QuestDot q={p} />
+            <span class="row-title">{p.name}</span>
+            <span class="meta">{s.tasks.filter((t) => t.questId === p.id && t.status === 'open').length} в отряде</span>
+          </button>
+        ))}
+      </div>
+      {open.length > 0 && <div class="field-label">Задачи сферы</div>}
+      <TaskList ui={ui} s={s} tasks={open} />
+      <div class="actions">
+        <button class="act" onClick={() => ui.open({ kind: 'add', questId: q.id, day: null })}>
+          <LIcon name="plus" size={16} />
+          Задача в эту сферу
+        </button>
+        <button class="act" onClick={() => ui.open({ kind: 'newQuest', sphereId: q.id })}>
+          <LIcon name="plus" size={16} />
+          Проект в этой сфере
+        </button>
+        <button class="act" onClick={() => ui.open({ kind: 'editQuest', questId: q.id })}>
+          <LIcon name="edit" size={16} />
+          Изменить сферу
+        </button>
+        <button
+          class="act act-danger"
+          onClick={() => {
+            if (!confirm(`Убрать сферу «${q.name}»? Её задачи вернутся письмами к вестнику, а проекты останутся без сферы.`)) return;
+            ui.store.act((st) => removeQuest(st, q.id));
+            ui.close();
+          }}
+        >
+          <LIcon name="trash" size={16} />
+          Убрать сферу
+        </button>
+      </div>
+    </Sheet>
+  );
+}
+
+function TaskList({ ui, s, tasks }: { ui: Ui; s: State; tasks: Task[] }) {
+  return (
+    <div class="sublist">
+      {tasks.map((t) => (
+        <button key={t.id} class="row" onClick={() => ui.open({ kind: 'task', taskId: t.id })}>
+          <span class={`num num-${isUndead(t, s.day) ? 'undead' : t.day === s.day ? 'today' : 'idle'} num-sm`} aria-hidden="true">
+            {LEVEL_ROMAN[t.level]}
+          </span>
+          <span class="row-title">{t.title}</span>
+          <TaskMeta s={s} t={t} />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ---------- оценка сфер ----------
+
+/** Оценить каждую сферу от 1 до 10. Ползунок стоит на прошлой оценке, а без неё посередине. */
+function RateSheet({ ui }: { ui: Ui }) {
+  const s = ui.store.state;
+  const spheres = spheresOf(s);
+  const last = lastRating(s);
+  const [scores, setScores] = useState<Record<string, number>>(() =>
+    Object.fromEntries(spheres.map((q) => [q.id, last?.scores[q.id] ?? Math.round((SCORE_MIN + SCORE_MAX) / 2)])),
+  );
+  const save = () => {
+    ui.store.act((st, now) => rateSpheres(st, now, scores));
+    ui.toast('Оценка сохранена');
+    ui.close();
+  };
+  return (
+    <Sheet title={W.rate} onClose={ui.close} footer={<button class="btn btn-gold btn-wide" onClick={save}>Сохранить оценку</button>}>
+      <p class="note">Насколько ты доволен каждой сферой сейчас: 1 совсем плохо, {SCORE_MAX} лучше не бывает. Оценивай честно, это видишь только ты.</p>
+      {spheres.map((q) => {
+        const v = scores[q.id];
+        const was = last?.scores[q.id];
+        const id = `rate-${q.id}`;
+        return (
+          <div key={q.id} class="rate-row">
+            <label class="rate-head" for={id}>
+              <QuestDot q={q} />
+              <span class="row-title">{q.name}</span>
+              <span class="rate-v" aria-hidden="true">{v}</span>
+            </label>
+            <input
+              id={id}
+              class="qslider rate-range"
+              style={{ '--track': `linear-gradient(90deg, rgba(255, 236, 200, 0.1), ${questHex(q.color)})`, '--thumb': questHex(q.color) }}
+              type="range"
+              min={SCORE_MIN}
+              max={SCORE_MAX}
+              step={1}
+              value={v}
+              aria-valuetext={`${v} из ${SCORE_MAX}`}
+              onInput={(e) => {
+                const n = Number(e.currentTarget.value);
+                setScores((x) => ({ ...x, [q.id]: n }));
+              }}
+            />
+            {was !== undefined && <span class="rate-was">в прошлый раз {was}</span>}
+          </div>
+        );
+      })}
     </Sheet>
   );
 }

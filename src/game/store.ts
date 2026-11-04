@@ -1,5 +1,5 @@
 // Хранилище: держит State, сохраняет его в localStorage и оповещает экраны.
-import { newState, randomId, settle, touch } from './state';
+import { DEFAULT_SETTINGS, migrateToSpheres, newState, randomId, settle, touch } from './state';
 import type { State } from './types';
 
 const KEY = 'taskcraft-lager-v1';
@@ -8,7 +8,7 @@ const SAVE_EVERY_MS = 15_000;
 type Listener = () => void;
 
 /** Версия формата сохранения. Растёт, когда меняется устройство State. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 /**
  * Переходы между версиями: MIGRATIONS[n] переводит сохранение версии n в версию n + 1.
@@ -18,6 +18,13 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => void> = {
   // 0.3.0: повторяющиеся задачи.
   1: (s) => {
     s.routines = [];
+  },
+  // 0.8.0: сферы как в колесе баланса, проекты внутри них, оценки сфер.
+  2: (s) => {
+    const st = s as unknown as State;
+    st.ratings = [];
+    if (st.settings) st.settings.rateEvery = DEFAULT_SETTINGS.rateEvery;
+    migrateToSpheres(st);
   },
 };
 
@@ -102,6 +109,8 @@ export function checkSave(raw: unknown): State | null {
   s.gameId ??= randomId(12);
   s.touchedAt ??= null;
   if (!Array.isArray(s.routines)) s.routines = [];
+  if (!Array.isArray(s.ratings)) s.ratings = [];
+  if (s.settings) s.settings.rateEvery ??= DEFAULT_SETTINGS.rateEvery;
   dropFrog(s);
   return s;
 }

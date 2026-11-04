@@ -315,7 +315,7 @@ function pennantSVG(color: string): string {
   </svg>`;
 }
 
-/** Логово пало: знамя разворачивается, идёт золотой дождь, знамя улетает в зал трофеев. */
+/** Проект выполнен: знамя разворачивается, идёт золотой дождь, знамя улетает в зал трофеев. */
 export function lairFall(questId: string, name: string, color: QuestColor): void {
   cast(async (s) => {
     await s.frame();
@@ -338,7 +338,7 @@ export function lairFall(questId: string, name: string, color: QuestColor): void
     await s.wait(300);
     rain(10, w - 10, { n: 60, kinds: ['coin', 'coin', 'star'], pal: 'gold', y: -12, speed: [90, 170], gravity: 170, over: 900, life: [900, 1200], size: [3.2, 5], sway: 20 });
     await s.wait(200);
-    const txt = fxNode('lvl-text is-gold', L.fx, { top: px(top + 268) }, '<b>Логово пало!</b><small></small>');
+    const txt = fxNode('lvl-text is-gold', L.fx, { top: px(top + 268) }, '<b>Проект выполнен!</b><small></small>');
     const small = txt?.querySelector('small');
     if (small) small.textContent = name;
     anim(txt, [{ opacity: 0, transform: 'translateX(-50%) scale(.75)' }, { opacity: 1, transform: 'translateX(-50%) scale(1.03)', offset: 0.3 }, { opacity: 1, transform: 'translateX(-50%) scale(1)' }], { dur: 500 });

@@ -3,7 +3,7 @@
 /** Уровень задачи: I до получаса, II пара часов, III целый день, IV несколько дней. */
 export type Level = 1 | 2 | 3 | 4;
 
-/** Когда поход в полной силе: в рабочие часы, вечером и в выходные, или в любое время. */
+/** Когда сфера (и её проекты) в полной силе: в рабочие часы, вечером и в выходные, или в любое время. */
 export type QuestKind = 'work' | 'personal' | 'any';
 
 /** Готовые цвета знамени похода. */
@@ -21,15 +21,37 @@ export type TaskStatus = 'inbox' | 'open' | 'done' | 'released';
 /** Игровой день в виде YYYY-MM-DD. День начинается в 4:00, а не в полночь. */
 export type DayKey = string;
 
+/**
+ * Сфера жизни или проект. Сфера (sphere: true) это часть колеса баланса: «Работа», «Здоровье».
+ * Она не кончается, её оценивают от 1 до 10. Проект это большая цель из многих задач: он лежит
+ * в сфере (sphereId) или сам по себе и завершается, когда игрок так решит. Задача и повторяющаяся
+ * задача ссылаются через questId и на сферу, и на проект.
+ */
 export interface Quest {
   id: string;
   name: string;
+  /** У проекта в сфере работает тип сферы, а свой остаётся на случай, если проект вынут из сферы. */
   kind: QuestKind;
   color: QuestColor;
   createdAt: number;
-  /** Логово пало, поход ушёл в зал трофеев. */
+  /** Это сфера, а не проект. */
+  sphere?: true;
+  /** Проект: в какой он сфере. Нет поля или null: проект сам по себе. */
+  sphereId?: string | null;
+  /** Проект завершён и ушёл в зал трофеев. */
   wonAt?: number;
 }
+
+/** Оценка сфер за один день: id сферы и балл от 1 до 10. Оценка того же дня ещё раз заменяет прежнюю. */
+export interface Rating {
+  /** День оценки, он же id: две оценки одного дня сливаются в одну. */
+  id: DayKey;
+  at: number;
+  scores: Record<string, number>;
+}
+
+/** Как часто напоминать оценить сферы. */
+export type RateEvery = 'week' | 'month' | 'quarter' | 'never';
 
 export interface Reward {
   gold: number;
@@ -99,6 +121,8 @@ export interface Settings {
   /** Дни недели с работой, 0 воскресенье. */
   workDays: number[];
   bedtime: number;
+  /** Как часто напоминать оценить сферы. */
+  rateEvery: RateEvery;
 }
 
 export interface DayLog {
@@ -127,7 +151,7 @@ export interface Hero {
 }
 
 export interface State {
-  v: 2;
+  v: 3;
   /** Своя у каждой игры: по ней сохранение в GitHub узнаёт, та же это игра или другая. */
   gameId: string;
   createdAt: number;
@@ -135,7 +159,10 @@ export interface State {
   touchedAt: number | null;
   day: DayKey;
   hero: Hero;
+  /** Сферы и проекты вместе, порядок как на экране. */
   quests: Quest[];
+  /** Оценки сфер, старые сверху. */
+  ratings: Rating[];
   tasks: Task[];
   routines: Routine[];
   current: Current | null;

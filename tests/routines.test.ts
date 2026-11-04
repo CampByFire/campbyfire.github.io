@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { isPristine, mergeGames } from '../src/game/merge';
 import {
+  addQuest,
   addRoutine,
   addTask,
   complete,
@@ -123,8 +124,9 @@ describe('повторяющиеся задачи', () => {
     expect(waitingOf(s, r)?.day).toBe('2026-10-24');
   });
 
-  it('логово не ранят и поход завершить не мешают', () => {
-    const { s, work } = fresh();
+  it('в прогресс проекта не идут и завершить его не мешают', () => {
+    const { s, work: sphere } = fresh();
+    const work = addQuest(s, at(8), { name: 'Сертификат', kind: 'work', color: 'blue', sphereId: sphere });
     const task = addTask(s, at(8), { title: 'Отчёт', questId: work, level: 2, day: s.day });
     const r = addRoutine(s, at(8), routine('Почта', { every: 'day' }, work));
     expect(lairOf(s, work)).toEqual({ hp: 2, max: 2 });
@@ -247,9 +249,9 @@ describe('сохранение прошлой версии', () => {
     const storage: Storage = { load: () => raw, save: (j) => { raw = j; } };
     const st = new Store(storage, () => at(9));
     expect(st.problem).toBeNull();
-    expect(st.state.v).toBe(2);
+    expect(st.state.v).toBe(3);
     expect(st.state.routines).toEqual([]);
     expect(st.state.tasks.map((t) => t.title)).toEqual(['Отчёт']);
-    expect(JSON.parse(raw!).v).toBe(2);
+    expect(JSON.parse(raw!).v).toBe(3);
   });
 });

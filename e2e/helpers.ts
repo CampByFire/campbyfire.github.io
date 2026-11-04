@@ -60,7 +60,7 @@ export async function addTask(
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
   await form.getByLabel('Что сделать').fill(title);
-  if (quest) await form.getByRole('radiogroup', { name: 'Поход' }).getByRole('radio', { name: quest }).click();
+  if (quest) await form.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio', { name: quest }).click();
   if (size) await form.getByRole('radiogroup', { name: 'Сколько займёт' }).getByRole('radio', { name: size, exact: true }).click();
   if (repeat) await form.getByRole('radiogroup', { name: 'Повторять' }).getByRole('radio', { name: repeat }).click();
   if (weekday) await form.getByRole('radiogroup', { name: 'В какой день недели' }).getByRole('radio', { name: weekday }).click();

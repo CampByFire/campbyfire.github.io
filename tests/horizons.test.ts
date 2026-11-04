@@ -168,7 +168,7 @@ describe('задачи с горизонтом', () => {
     const s = newState(at(9));
     addTask(s, at(9), { title: 'Неделя', questId: null, period: '2026-W45' });
     const back = checkSave(JSON.parse(JSON.stringify(s)))!;
-    expect(back.v).toBe(2);
+    expect(back.v).toBe(3);
     expect(back.tasks.find((t) => t.title === 'Неделя')?.period).toBe('2026-W45');
   });
 
@@ -260,7 +260,9 @@ describe('задача одной фразой', () => {
     expect(p('на 45 минут зарядка').estimate).toBe(45);
     expect(p('на весь день уборка')).toMatchObject({ title: 'Уборка', estimate: 480 });
     expect(p('ремонт займёт неделю в поход Дом')).toMatchObject({ title: 'Ремонт', estimate: null, questId: s.quests[2].id });
-    expect(p('#личное кино').questId).toBe(s.quests[1].id);
+    expect(p('#здоровье зарядка').questId).toBe(s.quests[1].id);
+    expect(p('ремонт ванной в проект Дом')).toMatchObject({ title: 'Ремонт ванной', questId: s.quests[2].id });
+    expect(p('бег в сферу здоровье')).toMatchObject({ title: 'Бег', questId: s.quests[1].id });
   });
 
   it('обычные названия не трогаются', () => {

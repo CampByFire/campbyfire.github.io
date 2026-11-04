@@ -2550,3 +2550,140 @@ h2.sc {
 .phrase-title em {
   color: var(--red-text);
 }
+
+/* ---------- Королевство: колесо баланса и сферы ---------- */
+
+.wheel {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 4px;
+}
+
+.wheel svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.wheel-ring {
+  fill: none;
+  stroke: rgba(255, 236, 200, 0.12);
+  stroke-width: 1;
+}
+
+.wheel-sector {
+  fill-opacity: 0.78;
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+
+.wheel-prev {
+  fill: none;
+  stroke: rgba(255, 236, 200, 0.55);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.wheel-legend {
+  list-style: none;
+  margin: 4px 0 6px;
+  padding: 0;
+}
+
+.wheel-legend li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  border-top: 1px solid var(--line);
+}
+
+.wheel-score {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-hi);
+}
+
+.wheel-up {
+  color: var(--green-text);
+}
+
+.wheel-down {
+  color: var(--red-text);
+}
+
+.wheel-due {
+  color: var(--gold-hi);
+}
+
+.sphere {
+  margin-bottom: 10px;
+}
+
+.sphere .quest-name {
+  margin: 6px 0 8px;
+}
+
+.project-card {
+  width: calc(100% - 18px);
+  margin-left: 18px;
+  padding: 10px 14px;
+}
+
+.project-card .quest-card-name {
+  font-size: 17px;
+}
+
+.sphere-score {
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid var(--gold);
+  color: var(--gold-hi);
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+button.trophy {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.lair-progress {
+  color: var(--gold-hi);
+}
+
+.rate-row {
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.rate-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rate-v {
+  min-width: 28px;
+  text-align: right;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--gold-hi);
+}
+
+.rate-range {
+  width: 100%;
+}
+
+.rate-was {
+  font-size: 13.5px;
+  color: var(--muted);
+}

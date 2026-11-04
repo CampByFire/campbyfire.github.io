@@ -174,9 +174,9 @@ const RULES: Rule[] = [
   { kind: 'day', re: `через\\s+${NUM}?\\s*недел[юие]`, set: (m, c) => ({ day: addDays(c.today, 7 * (m[1] ? num(m[1]) : 1)) }) },
   { kind: 'day', re: `(?:на\\s+)?(\\d{1,2})\\s+${MONTH}(?:\\s+(\\d{4}))?`, set: (m, c) => opt('day', dateOf(c.today, Number(m[1]), monthOf(m[2]), fullYear(m[3]))) },
 
-  // Поход: «#работа», «в поход Дом», «поход: Работа».
+  // Сфера или проект: «#работа», «в сферу Здоровье», «проект: Ремонт», «в поход Дом» (по-старому).
   { kind: 'quest', re: `#(\\p{L}[\\p{L}\\d_-]*)`, set: (m, c) => questBy(m[1], c.quests) },
-  { kind: 'quest', re: `(?:в\\s+)?поход(?:е)?[:\\s]+[«"]?(\\p{L}[\\p{L}\\d-]*)[»"]?`, set: (m, c) => questBy(m[1], c.quests) },
+  { kind: 'quest', re: `(?:в\\s+)?(?:поход(?:е)?|проект(?:е)?|сфер[уеа])[:\\s]+[«"]?(\\p{L}[\\p{L}\\d-]*)[»"]?`, set: (m, c) => questBy(m[1], c.quests) },
 ];
 
 /** Слова-команды в начале фразы: их не должно быть в названии. */
@@ -198,7 +198,7 @@ function clock(h: number, m: number): { at: string } | null {
   return { at: `${pad(h)}:${pad(m)}` };
 }
 
-/** Поход по слову: точное имя, потом начало имени, потом начало любого слова в имени. */
+/** Сфера или проект по слову: точное имя, потом начало имени, потом начало любого слова в имени. */
 function questBy(word: string, quests: Quest[]): { questId: string } | null {
   const w = word.toLowerCase().replace(/ё/g, 'е');
   const norm = (q: Quest) => q.name.toLowerCase().replace(/ё/g, 'е');

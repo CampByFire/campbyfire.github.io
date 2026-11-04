@@ -4,8 +4,8 @@ import { useRef, useState } from 'preact/hooks';
 import { heroLevel } from '../game/rules';
 import { isNewerSave, parseSave } from '../game/store';
 import { formatMinutes, scheduleError } from '../game/time';
-import type { Settings as Schedule } from '../game/types';
-import { W, WEEKDAY_CHIPS } from '../game/words';
+import type { RateEvery, Settings as Schedule } from '../game/types';
+import { RATE_EVERY_NAME, W, WEEKDAY_CHIPS } from '../game/words';
 import { GitHubError } from '../sync/github';
 import { BUILD, VERSION } from '../version';
 import type { Ui } from './App';
@@ -103,6 +103,12 @@ export function Settings({ ui }: { ui: Ui }) {
             })}
           </div>
         </div>
+        <Chips
+          label="Напоминать оценить сферы"
+          value={s.settings.rateEvery}
+          options={(['week', 'month', 'quarter', 'never'] as RateEvery[]).map((k) => ({ value: k, label: RATE_EVERY_NAME[k] }))}
+          onChange={(v) => setSetting({ rateEvery: v })}
+        />
       </section>
 
       <section class="group">
@@ -231,7 +237,7 @@ export function WipeSheet({ ui }: { ui: Ui }) {
       }
     >
       <p class="note">
-        Из этого браузера пропадут задачи, походы, золото, опыт, итоги дней и заметки. Отменить это нельзя: вернуть игру можно только из копии в файле или из GitHub.
+        Из этого браузера пропадут задачи, сферы и проекты, золото, опыт, итоги дней и заметки. Отменить это нельзя: вернуть игру можно только из копии в файле или из GitHub.
       </p>
       {notes.pending > 0 && <p class="note note-error">Часть заметок есть только в этом браузере, в GitHub их нет. Они пропадут совсем.</p>}
       {played && (

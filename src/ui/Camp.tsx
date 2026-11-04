@@ -465,7 +465,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           <span class="card-title">{cur.title}</span>
         </button>
         <div class="card-sub">
-          {q ? q.name : 'Без похода'} · <LevelMark level={cur.level} /> · {CLASS_AT[cls]}
+          {q ? q.name : W.noSphere} · <LevelMark level={cur.level} /> · {CLASS_AT[cls]}
         </div>
         <div class="timer">
           <GIcon name="hourglass" size={16} class="ic-gold" />
@@ -594,7 +594,7 @@ export function callToFire(ui: Ui, t: Task): void {
   const mana = Math.round(s.hero.mana);
   const { switchCost } = ui.store.act((st, n) => start(st, n, t.id));
   summon(t.id, switchCost, mana);
-  if (switchCost) ui.toast(`Смена похода: −${switchCost} маны`);
+  if (switchCost) ui.toast(`Смена сферы: −${switchCost} маны`);
 }
 
 export function finish(ui: Ui, t: Task, level?: 1 | 2 | 3 | 4): void {

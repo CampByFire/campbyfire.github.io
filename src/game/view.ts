@@ -1,7 +1,7 @@
 // Что показывает экран дня: чистая функция «состояние → лагерь».
 import { questHex } from './color';
 import { ROAD_SPOTS, SEATS, undeadRank, type UndeadRank } from './rules';
-import { findQuest, inboxOf, isUndead, planOf, daysOverdue, undeadOf } from './state';
+import { findQuest, inboxOf, isUndead, kindOf, planOf, daysOverdue, undeadOf } from './state';
 import { addDays, isMainFor, lightOf, shiftAt, type Light, type Shift } from './time';
 import type { State, Task } from './types';
 import { CLASS_BY_LEVEL, type ClassId } from './words';
@@ -105,14 +105,14 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
   const main: Task[] = [];
   const later: Task[] = [];
   for (const t of open) {
-    const kind = findQuest(s, t.questId)?.kind ?? 'any';
+    const kind = kindOf(s, t.questId);
     const isMain = isMainFor(kind, shift);
     tones.set(t.id, isUndead(t, s.day) ? 'undead' : isMain ? 'today' : 'evening');
     (isMain ? main : later).push(t);
   }
   // Вечером сначала личное, потом то, что осталось от работы.
   if (shift === 'evening' || shift === 'weekend' || shift === 'night') {
-    const personalFirst = (t: Task) => (findQuest(s, t.questId)?.kind === 'work' ? 1 : 0);
+    const personalFirst = (t: Task) => (kindOf(s, t.questId) === 'work' ? 1 : 0);
     main.sort((a, b) => personalFirst(a) - personalFirst(b) || a.order - b.order);
   }
   for (const t of undead) if (!tones.has(t.id)) tones.set(t.id, 'undead');

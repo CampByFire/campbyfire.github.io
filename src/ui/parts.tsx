@@ -74,7 +74,7 @@ export function QuestDot({ q }: { q: Quest | undefined }) {
 }
 
 export function questName(s: State, t: Task): string {
-  return findQuest(s, t.questId)?.name ?? (t.status === 'inbox' ? 'Письмо без похода' : 'Без похода');
+  return findQuest(s, t.questId)?.name ?? (t.status === 'inbox' ? 'Письмо без сферы' : 'Без сферы');
 }
 
 /** Выбор одного из вариантов. Как у радиокнопок: Tab попадает на выбранный, стрелки выбирают соседний. */

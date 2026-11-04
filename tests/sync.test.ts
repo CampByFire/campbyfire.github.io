@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HOUR, MINUTE } from '../src/game/rules';
-import { addRoutine, addTask, complete, findTask, newState, pause, removeQuest, start, updateTask } from '../src/game/state';
+import { addQuest, addRoutine, addTask, complete, findTask, newState, pause, rateSpheres, removeQuest, settle, start, updateTask } from '../src/game/state';
 import { mergeGames } from '../src/game/merge';
 import { Store, type Storage } from '../src/game/store';
 import type { State } from '../src/game/types';
@@ -593,5 +593,40 @@ describe('слияние версий', () => {
     pause(remote, at(11, 30));
     const m = mergeGames(base, local, remote, at(12));
     expect(m.log[m.day].workedMs).toBe(HOUR + 30 * MINUTE);
+  });
+
+  it('оценки сфер с двух устройств: разные дни остаются оба, один день берётся у того, кто оценивал позже', () => {
+    const { base, local, remote } = pair();
+    const [work, health] = base.quests.map((q) => q.id);
+    rateSpheres(local, at(9), { [work]: 6, [health]: 4 });
+    rateSpheres(remote, at(9, 30), { [work]: 8 });
+    const sameDay = mergeGames(base, local, remote, at(10));
+    expect(sameDay.ratings).toEqual([{ id: base.day, at: at(9, 30), scores: { [work]: 8 } }]);
+
+    // Оценка вчерашнего дня с телефона и сегодняшняя с компьютера.
+    const older = JSON.parse(JSON.stringify(local)) as State;
+    older.ratings[0].id = '2026-10-22';
+    const both = mergeGames(base, older, remote, at(10));
+    expect(both.ratings.map((r) => r.id)).toEqual(['2026-10-22', base.day]);
+    // Без общей версии тоже не теряются.
+    expect(mergeGames(null, older, remote, at(10)).ratings.map((r) => r.id)).toEqual(['2026-10-22', base.day]);
+  });
+
+  it('проект, перенесённый в другую сферу, и новый проект с другого устройства сливаются', () => {
+    const { base, local, remote } = pair();
+    const [work, health] = base.quests.map((q) => q.id);
+    const p = addQuest(base, at(8), { name: 'Сертификат', kind: 'work', color: 'blue', sphereId: work });
+    const l = JSON.parse(JSON.stringify(base)) as State;
+    const r = JSON.parse(JSON.stringify(base)) as State;
+    l.quests.find((q) => q.id === p)!.sphereId = health;
+    l.touchedAt = at(9);
+    const fresh = addQuest(r, at(9), { name: 'Марафон', kind: 'personal', color: 'red', sphereId: health });
+    r.touchedAt = at(9, 30);
+    settle(l, at(9));
+    const m = mergeGames(base, l, r, at(10));
+    expect(m.quests.find((q) => q.id === p)!.sphereId).toBe(health);
+    expect(m.quests.some((q) => q.id === fresh)).toBe(true);
+    void local;
+    void remote;
   });
 });

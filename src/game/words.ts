@@ -2,7 +2,7 @@
 import { periodEnd, periodKind, periodOf, periodStart, shiftPeriod, type PeriodKey, type PeriodKind } from './period';
 import type { UndeadRank } from './rules';
 import { parseDay, type Shift } from './time';
-import type { Level, QuestKind, QuestPreset, Repeat } from './types';
+import type { Level, QuestKind, QuestPreset, RateEvery, Repeat } from './types';
 
 export type ClassId = 'rogue' | 'barbarian' | 'mage' | 'knight';
 
@@ -43,6 +43,21 @@ export const QUEST_KIND_NAME: Record<QuestKind, string> = {
   work: 'рабочий',
   personal: 'личный',
   any: 'в любое время',
+};
+
+/** Тип сферы: «рабочая сфера», «личная сфера». */
+export const SPHERE_KIND_NAME: Record<QuestKind, string> = {
+  work: 'рабочая',
+  personal: 'личная',
+  any: 'в любое время',
+};
+
+/** Как часто напоминать оценить сферы. */
+export const RATE_EVERY_NAME: Record<RateEvery, string> = {
+  week: 'Раз в неделю',
+  month: 'Раз в месяц',
+  quarter: 'Раз в квартал',
+  never: 'Не напоминать',
 };
 
 export const QUEST_KIND_HINT: Record<QuestKind, string> = {
@@ -185,11 +200,15 @@ export const W = {
   lightsOut: 'Отбой',
   notSleeping: 'Ещё не сплю',
   keepAtFire: 'Оставить у костра на завтра',
-  lair: 'логово',
+  lair: 'в проекте осталось',
   trophies: 'Зал трофеев',
   inbox: 'Письма',
-  quest: 'Поход',
-  quests: 'Походы',
+  quest: 'Сфера или проект',
+  quests: 'Проекты',
+  spheres: 'Сферы',
+  noSphere: 'Без сферы',
+  wheel: 'Колесо баланса',
+  rate: 'Оценить сферы',
   undead: 'Нежить на дороге',
   slay: 'Упокоить',
   stillWorking: 'Да, работаю',

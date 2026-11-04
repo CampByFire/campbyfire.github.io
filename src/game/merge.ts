@@ -10,7 +10,7 @@
 // с обеих сторон остаются, удалённое на одной стороне уходит, если на другой его с тех пор не трогали.
 import { MANA_MAX } from './rules';
 import { settle, tidyRoutines } from './state';
-import type { Current, DayLog, Quest, Routine, State, Task } from './types';
+import type { Current, DayLog, Quest, Rating, Routine, State, Task } from './types';
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
@@ -150,6 +150,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
     out.quests = unionById(l.quests, r.quests, localWins);
     out.tasks = unionById(l.tasks, r.tasks, localWins);
     out.routines = unionById(l.routines, r.routines, localWins);
+    out.ratings = mergeRatings(l.ratings, r.ratings);
     out.log = {};
     for (const day of new Set([...Object.keys(l.log), ...Object.keys(r.log)])) {
       const a = l.log[day];
@@ -169,6 +170,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   out.quests = mergeById<Quest>(b.quests, l.quests, r.quests, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
   out.tasks = mergeById<Task>(b.tasks, l.tasks, r.tasks, (x, y, z) => mergeFields(x, y, z, localWins, TASK_COUNTERS, TASK_GROUPS), localWins);
   out.routines = mergeById<Routine>(b.routines, l.routines, r.routines, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
+  out.ratings = mergeRatings(l.ratings, r.ratings);
   out.log = mergeLog(b.log, l.log, r.log, localWins);
   out.settings = mergeFields(b.settings, l.settings, r.settings, localWins, []);
   out.current = mergeCurrent(b.current, l.current, r.current, localWins);
@@ -181,6 +183,19 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   if (out.current && !out.tasks.some((t) => t.id === out.current!.taskId)) out.current = null;
   tidyRoutines(out);
   return out;
+}
+
+/**
+ * Оценки сфер: все дни с обеих сторон. Оценка одного дня берётся целиком у того, кто оценивал позже,
+ * баллы одной оценки не смешиваются. Удалять оценки игра не умеет, поэтому общая версия не нужна.
+ */
+function mergeRatings(local: Rating[], remote: Rating[]): Rating[] {
+  const out = new Map<string, Rating>();
+  for (const x of [...local, ...remote]) {
+    const had = out.get(x.id);
+    if (!had || x.at > had.at) out.set(x.id, clone(x));
+  }
+  return [...out.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 /** В игре ещё ничего не делали: такую можно молча заменить игрой из GitHub. */

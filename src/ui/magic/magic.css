@@ -651,7 +651,7 @@
   overflow: visible;
 }
 
-/* «Логово пало!»: золотом, а не светом Восхождения. */
+/* «Проект выполнен!»: золотом, а не светом Восхождения. */
 .lvl-text.is-gold b {
   background: linear-gradient(180deg, #fffbe8 0%, #ffe08a 45%, #e3a23a 100%);
   -webkit-background-clip: text;

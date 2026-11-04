@@ -38,14 +38,14 @@ test('фраза Игоря: задача на неделю с название�
   await expect(page.locator('.prow', { hasText: 'Съесть мороженое' })).toBeVisible();
 });
 
-test('фраза выставляет день, время, оценку и поход, а руками можно поправить', async ({ page }) => {
+test('фраза выставляет день, время, оценку и сферу, а руками можно поправить', async ({ page }) => {
   await openGame(page, { time: new Date('2026-11-02T09:00:00+03:00') });
-  const form = await phrase(page, 'завтра в 19:00 позвонить маме на полчаса #личное');
+  const form = await phrase(page, 'завтра в 19:00 позвонить маме на полчаса #семья');
   const hint = form.locator('#phrase-hint');
   await expect(hint).toContainText('к костру: завтра');
   await expect(hint).toContainText('время: 19:00');
   await expect(hint).toContainText('займёт: 30 мин');
-  await expect(hint).toContainText('поход: Личное');
+  await expect(hint).toContainText('сфера: Семья и отношения');
   await expect(form.getByLabel('Во сколько')).toHaveValue('19:00');
   // Выбранное руками сильнее фразы.
   await form.getByRole('radiogroup', { name: 'Когда к костру' }).getByRole('radio', { name: 'Сегодня' }).click();

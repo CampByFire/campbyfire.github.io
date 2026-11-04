@@ -72,10 +72,10 @@ test('заклинания не держат кнопки: следующее н
   await expect(page.locator('.topbar')).toContainText('Золото: 0');
   await expectNumbersSettled(page);
 
-  // Другой поход: смена стоит маны, и на привал можно уйти, не дожидаясь, пока она досчитается.
+  // Другая сфера: смена стоит маны, и на привал можно уйти, не дожидаясь, пока она досчитается.
   await day.getByRole('button', { name: /Купить продукты/ }).first().click();
   await page.getByRole('dialog').filter({ hasText: 'Купить продукты' }).getByRole('button', { name: /^К огню/ }).click();
-  await expect(toast(page)).toHaveText('Смена похода: −5 маны');
+  await expect(toast(page)).toHaveText('Смена сферы: −5 маны');
   await tapNow(day.getByRole('button', { name: 'Привал' }));
   await expect(day.getByRole('heading', { name: 'Привал' })).toBeVisible();
   await tapNow(day.getByRole('button', { name: 'Снова в путь' }));
@@ -159,11 +159,11 @@ test('день от разжигания до отбоя: заклинания �
   await expect(toast(page)).toContainText('Костёр горит');
   await expectCleanedUp(page);
 
-  // Вестник: письмо без похода и дня прилетает к значку писем.
+  // Вестник: письмо без сферы и дня прилетает к значку писем.
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
   await form.getByLabel('Что сделать').fill('Письмо от бабушки');
-  await form.getByRole('radiogroup', { name: 'Поход' }).getByRole('radio', { name: 'Без похода' }).click();
+  await form.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio', { name: 'Без сферы' }).click();
   await form.getByRole('radiogroup', { name: 'Когда к костру' }).getByRole('radio', { name: 'Потом' }).click();
   await form.getByRole('button', { name: 'Отдать вестнику' }).click();
   await expect(page.getByRole('button', { name: /^Письма у вестника/ })).toBeVisible();
@@ -183,12 +183,12 @@ test('день от разжигания до отбоя: заклинания �
   await expect(page.getByRole('button', { name: /у костра: Купить продукты/ })).toBeVisible();
   await expectCleanedUp(page);
 
-  // Смена похода у огня тратит ману: к вечеру будет что долить.
+  // Смена сферы у огня тратит ману: к вечеру будет что долить.
   const day = page.getByRole('region', { name: 'Задачи дня' });
   await day.getByRole('button', { name: 'Позвать к огню' }).click();
   await page.getByRole('button', { name: /у костра: Купить продукты/ }).click();
   await page.getByRole('dialog').filter({ hasText: 'Купить продукты' }).getByRole('button', { name: /^К огню/ }).click();
-  await expect(toast(page)).toHaveText('Смена похода: −5 маны');
+  await expect(toast(page)).toHaveText('Смена сферы: −5 маны');
   await day.getByRole('button', { name: 'Готово' }).click();
   await expect(day.getByRole('heading', { name: 'Сделано!' })).toBeVisible();
 
@@ -208,19 +208,27 @@ test('день от разжигания до отбоя: заклинания �
   expect(errors).toEqual([]);
 });
 
-test('логово пало: знамя улетает в зал трофеев, и трофей там виден', async ({ page }) => {
+test('проект выполнен: знамя улетает в зал трофеев, и трофей там виден', async ({ page }) => {
   const errors = watchErrors(page);
   await openGame(page);
-  await addTask(page, 'Сдать отчёт', { quest: 'Работа' });
+  await tab(page, 'Королевство').click();
+  await page.getByRole('button', { name: 'новый проект' }).click();
+  const form = sheet(page, 'Новый проект');
+  await form.getByLabel('Название').fill('Сертификат');
+  await form.getByRole('button', { name: 'Начать проект' }).click();
+  await expect(form).toBeHidden();
+  await tab(page, 'План').click();
+  await addTask(page, 'Сдать отчёт', { quest: 'Сертификат' });
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   const day = page.getByRole('region', { name: 'Задачи дня' });
   await day.getByRole('button', { name: 'Позвать к огню' }).click();
   await day.getByRole('button', { name: 'Готово' }).click();
   await tab(page, 'Королевство').click();
-  await page.locator('.quest-card').filter({ hasText: 'Работа' }).click();
-  await page.getByRole('button', { name: 'Логово пало: завершить поход' }).click();
-  await expect(toast(page)).toContainText('Логово пало');
-  const trophy = page.locator('.trophy').filter({ hasText: 'Работа' });
+  await page.locator('.quest-card').filter({ hasText: 'Сертификат' }).click();
+  await expect(sheet(page, 'Сертификат')).toContainText('Сделано 1 из 1');
+  await page.getByRole('button', { name: 'Проект выполнен' }).click();
+  await expect(toast(page)).toContainText('Проект выполнен');
+  const trophy = page.locator('.trophy').filter({ hasText: 'Сертификат' });
   await expect(trophy).toBeVisible();
   await expectCleanedUp(page);
   await expect.poll(() => trophy.evaluate((el) => [getComputedStyle(el).opacity, (el as HTMLElement).style.clipPath || 'нет'])).toEqual(['1', 'нет']);

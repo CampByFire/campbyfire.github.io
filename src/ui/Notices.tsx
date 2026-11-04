@@ -1,6 +1,7 @@
 // Одна строка над меню: то, что игроку важно знать прямо сейчас. Важнее всего сбой записи,
 // потом новая версия, потом подсказки, которые берегут игру от потери.
 import { useState } from 'preact/hooks';
+import { ratingDue } from '../game/state';
 import { plural } from '../game/time';
 import type { Ui } from './App';
 import { isIos, isStandalone } from './device';
@@ -82,6 +83,19 @@ export function Notices({ ui, covered }: { ui: Ui; covered: boolean }) {
       return {
         text: 'Добавь Лагерь на экран «Домой»: «Поделиться», затем «На экран „Домой“». Safari стирает данные сайтов, которые не открывали неделю.',
         close: () => hush('ios', 14),
+      };
+    }
+    if (ratingDue(store.state) && !quiet('rate')) {
+      return {
+        text: 'Пора оценить сферы жизни: колесо баланса покажет, где всё хорошо, а где проседает.',
+        action: {
+          label: 'Оценить',
+          run: () => {
+            ui.go('realm');
+            ui.open({ kind: 'rate' });
+          },
+        },
+        close: () => hush('rate', 3),
       };
     }
     const played = store.state.tasks.length > 0 && now - local.firstSeen > BACKUP_AFTER;
