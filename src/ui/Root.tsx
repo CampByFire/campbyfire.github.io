@@ -1,6 +1,7 @@
 // Корень: игра, экран спасения сохранения или экран ошибки.
 import { Component } from 'preact';
 import type { Store } from '../game/store';
+import type { Notes } from '../notes/notes';
 import type { Sync } from '../sync/sync';
 import { App } from './App';
 import { Crash, Recovery } from './Rescue';
@@ -8,6 +9,7 @@ import { Crash, Recovery } from './Rescue';
 interface Props {
   store: Store;
   sync: Sync;
+  notes: Notes;
 }
 
 /** Ошибка из кода Лагеря, а не из расширения браузера. */
@@ -18,6 +20,7 @@ function ours(e: Error, file = ''): boolean {
 export class Root extends Component<Props, { crash: unknown }> {
   state = { crash: null as unknown };
   private stopSync: (() => void) | null = null;
+  private stopNotes: (() => void) | null = null;
 
   componentDidMount() {
     window.addEventListener('error', this.onError);
@@ -29,6 +32,7 @@ export class Root extends Component<Props, { crash: unknown }> {
     window.removeEventListener('error', this.onError);
     window.removeEventListener('unhandledrejection', this.onRejection);
     this.stopSync?.();
+    this.stopNotes?.();
   }
 
   componentDidCatch(error: unknown) {
@@ -48,12 +52,13 @@ export class Root extends Component<Props, { crash: unknown }> {
 
   private startSync = () => {
     this.stopSync ??= this.props.sync.start();
+    this.stopNotes ??= this.props.notes.start();
     this.forceUpdate();
   };
 
-  render({ store, sync }: Props, { crash }: { crash: unknown }) {
+  render({ store, sync, notes }: Props, { crash }: { crash: unknown }) {
     if (crash) return <Crash error={crash} />;
     if (store.problem) return <Recovery store={store} sync={sync} onDone={this.startSync} />;
-    return <App store={store} sync={sync} />;
+    return <App store={store} sync={sync} notes={notes} />;
   }
 }

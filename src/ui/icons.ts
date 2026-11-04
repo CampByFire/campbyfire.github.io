@@ -1,5 +1,5 @@
 // Игровые иконки с game-icons.net, лицензия CC BY 3.0 (список с авторами: public/licenses/game-icons.txt,
-// в игре: Летопись → «О приложении»). Откуда каждая:
+// в игре: Настройки → «О приложении»). Откуда каждая:
 //   Lorc: sun, hourglass, campfire, kingdom (castle), scroll (scroll-unfurled), sunrise
 //   Delapouite: coins (two-coins), check (check-mark), zzz (night-sleep), logs (log), sunset
 //   Sbed: skull (death-skull). Zeromancer: heart (heart-plus).
@@ -42,6 +42,13 @@ export const LINE_ICONS = {
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   repeat: 'M3 11v-1a4 4 0 0 1 4-4h13M17 3l3 3l-3 3M21 13v1a4 4 0 0 1-4 4H4M7 15l-3 3l3 3',
   cloudAlert: 'M7 19h10.5a4.5 4.5 0 0 0 .6-8.96A6.5 6.5 0 0 0 5.6 9.4A4.8 4.8 0 0 0 7 19zM12 10.5v3.5M12 16.6v.01',
+  // Значки разделов Летописи.
+  bulb: 'M9 18h6M10 21h4M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z',
+  book: 'M12 6.5C10.5 5 8 4.5 4 4.5v13c4 0 6.5.5 8 2c1.5-1.5 4-2 8-2v-13c-4 0-6.5.5-8 2zM12 6.5v13',
+  feather: 'M20 4C12 4 7 9 6.5 17.5L4 20M6.5 17.5H13c3.5-1.5 6-6 7-13.5M8.5 13H16',
+  star: 'M12 3.5l2.6 5.3l5.9.9l-4.25 4.1l1 5.85L12 16.9l-5.25 2.75l1-5.85L3.5 9.7l5.9-.9z',
+  list: 'M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01',
+  flag: 'M5 21V4M5 4h12l-2.5 4.5L17 13H5',
 } as const;
 
 export type LineIcon = keyof typeof LINE_ICONS;

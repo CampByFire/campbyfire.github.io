@@ -5,7 +5,7 @@ export type Motion = 'full' | 'calm' | 'off';
 export const MOTIONS: Motion[] = ['full', 'calm', 'off'];
 
 /**
- * Что показывать. Пока в Летописи ничего не выбрано, решает система: при «Уменьшить движение»
+ * Что показывать. Пока в Настройках ничего не выбрано, решает система: при «Уменьшить движение»
  * магия спокойная, мягкий наплыв вместо движения. Без анимаций только по выбору человека.
  */
 export function resolveMotion(choice: Motion | undefined, reduced: boolean): Motion {

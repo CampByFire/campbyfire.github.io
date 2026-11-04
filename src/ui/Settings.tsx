@@ -1,10 +1,10 @@
-// Летопись: герой, последние дни, настройки, копия сохранения, справка и «Стереть всё».
+// Настройки: герой, распорядок, магия, сохранение в GitHub, копия в файл, справка и «Стереть всё».
+// Раньше этот раздел назывался Летописью; теперь Летопись это заметки (Notes.tsx).
 import { useRef, useState } from 'preact/hooks';
 import { heroLevel } from '../game/rules';
-import { doneOn } from '../game/state';
 import { isNewerSave, parseSave } from '../game/store';
-import { addDays, formatDate, formatDuration, formatMinutes, scheduleError } from '../game/time';
-import type { Settings } from '../game/types';
+import { formatMinutes, scheduleError } from '../game/time';
+import type { Settings as Schedule } from '../game/types';
 import { W, WEEKDAY_CHIPS } from '../game/words';
 import { GitHubError } from '../sync/github';
 import { BUILD, VERSION } from '../version';
@@ -17,17 +17,16 @@ import { ChipText, Chips } from './parts';
 import { Sheet } from './Sheets';
 import { SyncPanel, useSync } from './SyncPanel';
 
-export function Chronicle({ ui }: { ui: Ui }) {
+export function Settings({ ui }: { ui: Ui }) {
   const { store } = ui;
   const s = store.state;
   const lvl = heroLevel(s.hero.xp);
-  const days = Array.from({ length: 14 }, (_, i) => addDays(s.day, -i)).filter((d) => s.log[d]);
   const file = useRef<HTMLInputElement>(null);
 
-  const setSetting = (patch: Partial<Settings>) => store.act((st) => Object.assign(st.settings, patch));
+  const setSetting = (patch: Partial<Schedule>) => store.act((st) => Object.assign(st.settings, patch));
   const [timeError, setTimeError] = useState<string | null>(null);
   // Время, при котором смены путаются, не сохраняется: поле возвращается к прежнему.
-  const setTime = (patch: Partial<Settings>) => {
+  const setTime = (patch: Partial<Schedule>) => {
     const error = scheduleError({ ...s.settings, ...patch });
     setTimeError(error);
     if (!error) setSetting(patch);
@@ -49,7 +48,7 @@ export function Chronicle({ ui }: { ui: Ui }) {
 
   return (
     <div class="page">
-      <h1 class="page-title">{W.chronicle}</h1>
+      <h1 class="page-title">{W.settings}</h1>
 
       <div class="hero-card">
         <div class="hero-level">
@@ -75,33 +74,6 @@ export function Chronicle({ ui }: { ui: Ui }) {
           </div>
         </div>
       </div>
-
-      <section class="group">
-        <div class="group-head">
-          <h2 class="sc">Последние дни</h2>
-        </div>
-        {days.length === 0 && <p class="note">Летопись пуста. Первая запись появится после первой сделанной задачи.</p>}
-        {days.map((d) => {
-          const l = s.log[d];
-          const done = doneOn(s, d);
-          return (
-            <details key={d} class="day">
-              <summary>
-                <span class="day-date">{formatDate(d)}</span>
-                <span class="meta">
-                  {l.done} сделано · +{l.gold} · {formatDuration(Math.round(l.workedMs / 60_000))}
-                </span>
-              </summary>
-              {done.map((t) => (
-                <div key={t.id} class="day-task">
-                  <GIcon name="check" size={12} class="ic-green" />
-                  {t.title}
-                </div>
-              ))}
-            </details>
-          );
-        })}
-      </section>
 
       <section class="group">
         <div class="group-head">
@@ -215,7 +187,7 @@ const MOTION_NOTE: Record<Motion, string> = {
 
 /** Стереть игру из браузера, а по желанию и сохранение в GitHub. Потом страница открывается с чистого листа. */
 export function WipeSheet({ ui }: { ui: Ui }) {
-  const { store, sync } = ui;
+  const { store, sync, notes } = ui;
   useSync(sync);
   const [remote, setRemote] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -238,6 +210,7 @@ export function WipeSheet({ ui }: { ui: Ui }) {
     }
     sync.disconnect();
     store.wipe();
+    notes.clear();
     clearLocal();
     location.reload();
   };
@@ -258,8 +231,9 @@ export function WipeSheet({ ui }: { ui: Ui }) {
       }
     >
       <p class="note">
-        Из этого браузера пропадут задачи, походы, золото, опыт и летопись дней. Отменить это нельзя: вернуть игру можно только из копии в файле или из GitHub.
+        Из этого браузера пропадут задачи, походы, золото, опыт, итоги дней и заметки. Отменить это нельзя: вернуть игру можно только из копии в файле или из GitHub.
       </p>
+      {notes.pending > 0 && <p class="note note-error">Часть заметок есть только в этом браузере, в GitHub их нет. Они пропадут совсем.</p>}
       {played && (
         <div class="btns btns-one">
           <button class="btn btn-ghost btn-sm" onClick={() => downloadGame(store)}>
@@ -275,8 +249,8 @@ export function WipeSheet({ ui }: { ui: Ui }) {
           </label>
           <p class="note">
             {remote
-              ? 'Файл game/save.json удалится из репозитория, а сам репозиторий и дневник останутся. Прошлые версии игры остаются в истории репозитория. На других устройствах игра останется, но сохраняться в GitHub перестанет.'
-              : 'Сохранение останется на GitHub: если подключить GitHub снова, игра вернётся. Токен на этом устройстве забудется.'}
+              ? 'Файл game/save.json удалится из репозитория, а сам репозиторий, дневник и заметки останутся. Прошлые версии игры остаются в истории репозитория. На других устройствах игра останется, но сохраняться в GitHub перестанет.'
+              : 'Сохранение и заметки останутся на GitHub: если подключить GitHub снова, они вернутся. Токен на этом устройстве забудется.'}
           </p>
         </>
       )}

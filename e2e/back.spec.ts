@@ -56,7 +56,7 @@ test('«Назад» с любого раздела возвращает в Ла
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   await inCamp(page);
 
-  for (const name of ['План', 'Королевство', 'Летопись']) {
+  for (const name of ['План', 'Королевство', 'Летопись', 'Настройки']) {
     await tab(page, name).click();
     await expect(tab(page, name)).toHaveAttribute('aria-current', 'page');
     await page.goBack();

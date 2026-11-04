@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Store } from '../game/store';
+import type { Notes } from '../notes/notes';
 import type { Sync } from '../sync/sync';
 import type { CompleteResult } from '../game/state';
 import { W } from '../game/words';
 import { Camp } from './Camp';
-import { Chronicle } from './Chronicle';
 import { sheetBack, useBackButton } from './back';
 import { isLost, restoreFocus, spotOf, type FocusSpot } from './focus';
 import { useStore } from './hooks';
@@ -16,12 +16,14 @@ import { MagicLayers, SheetLayer } from './magic/layers';
 import { onSystemReduced, resolveMotion, systemReduced, type Motion } from './magic/mode';
 import { pageEnter, pageLeave } from './magic/spells';
 import { Notices } from './Notices';
+import { NotesScreen, useNotes } from './Notes';
 import { Plan } from './Plan';
 import { Realm } from './Realm';
+import { Settings } from './Settings';
 import { Sheets, type SheetState } from './Sheets';
 import { useSync } from './SyncPanel';
 
-export type Screen = 'camp' | 'plan' | 'realm' | 'chronicle';
+export type Screen = 'camp' | 'plan' | 'realm' | 'notes' | 'settings';
 
 export interface ToastAction {
   label: string;
@@ -38,8 +40,13 @@ export interface Cheer {
 export interface Ui {
   store: Store;
   sync: Sync;
+  notes: Notes;
   now: number;
   go(screen: Screen): void;
+  /** Открытый раздел Летописи (имя папки или 'days' для «Последних дней»); null, когда виден список разделов. */
+  section: string | null;
+  /** Открыть раздел Летописи (и саму Летопись) или вернуться к списку разделов. */
+  openSection(slug: string | null): void;
   open(sheet: SheetState): void;
   close(): void;
   /** Короткое сообщение внизу; с действием живёт дольше, чтобы успеть нажать. */
@@ -69,14 +76,16 @@ const CHEER_MS = 12_000;
 /** Столько лист уезжает вниз после закрытия, потом его нет. */
 const SHEET_OUT_MS = 200;
 
-/** Сила магии: выбранная в Летописи или по настройке системы «Уменьшить движение». */
+/** Сила магии: выбранная в Настройках или по настройке системы «Уменьшить движение». */
 const motionOf = (now: number) => resolveMotion(loadLocal(now).magic, systemReduced());
 
-export function App({ store, sync }: { store: Store; sync: Sync }) {
+export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: Notes }) {
   useStore(store);
   useSync(sync);
+  useNotes(notes);
   const s = store.state;
   const [screen, setScreen] = useState<Screen>(() => (s.litDay !== s.day && s.closedDay !== s.day ? 'plan' : 'camp'));
+  const [section, setSection] = useState<string | null>(null);
   const [sheet, setSheet] = useState<SheetState | null>(null);
   /** Лист закрыт, но ещё уезжает вниз. */
   const [closing, setClosing] = useState(false);
@@ -163,7 +172,7 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
   }, [phase]);
 
   // Ошибку GitHub показываем один раз, а не при каждой новой попытке; пропавшая сеть не ошибка,
-  // о ней сказано в Летописи.
+  // о ней сказано в Настройках.
   const shownError = useRef<string | null>(null);
   const syncError = sync.status.error;
   useEffect(() => {
@@ -202,6 +211,14 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
     return () => cancelAnimationFrame(id);
   });
 
+  // Свою версию заметки положили рядом копией: говорим об этом.
+  useEffect(() => {
+    notes.onNotice = (text) => setToast({ text, id: Date.now() });
+    return () => {
+      notes.onNotice = null;
+    };
+  }, [notes]);
+
   useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), toast.action ? 6000 : 2600);
@@ -216,11 +233,20 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
   const ui: Ui = {
     store,
     sync,
+    notes,
     now,
     go: (sc) => {
       closeSheet();
       if (sc !== screen) pageLeave(main.current);
       setScreen(sc);
+      if (sc === 'notes' && screen === 'notes') setSection(null);
+    },
+    section: screen === 'notes' ? section : null,
+    openSection: (slug) => {
+      closeSheet();
+      if (screen !== 'notes' || slug !== section) pageLeave(main.current);
+      setSection(slug);
+      setScreen('notes');
     },
     open: (next) => {
       if (!sheetShown.current) opener.current = spotOf(document.activeElement);
@@ -250,11 +276,13 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
     });
   };
 
-  // «Назад» на телефоне закрывает знакомство или лист, с других разделов ведёт в Лагерь,
-  // и только из Лагеря без открытых листов выходит из приложения.
-  useBackButton((covered ? 1 : 0) + (screen !== 'camp' ? 1 : 0), () => {
+  // «Назад» на телефоне закрывает знакомство или лист, из раздела Летописи ведёт к списку разделов,
+  // с других разделов в Лагерь, и только из Лагеря без открытых листов выходит из приложения.
+  const inSection = screen === 'notes' && section !== null;
+  useBackButton((covered ? 1 : 0) + (screen !== 'camp' ? 1 : 0) + (inSection ? 1 : 0), () => {
     if (intro) closeIntro();
     else if (sheetShown.current) (sheetBack() ?? closeSheet)();
+    else if (inSection) ui.openSection(null);
     else if (screen !== 'camp') ui.go('camp');
   });
   return (
@@ -263,7 +291,8 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
         {screen === 'camp' && <Camp ui={ui} />}
         {screen === 'plan' && <Plan ui={ui} />}
         {screen === 'realm' && <Realm ui={ui} />}
-        {screen === 'chronicle' && <Chronicle ui={ui} />}
+        {screen === 'notes' && <NotesScreen ui={ui} />}
+        {screen === 'settings' && <Settings ui={ui} />}
       </main>
       <Notices ui={ui} covered={covered} />
       <nav class="tabbar" aria-label="Разделы" inert={covered}>
@@ -275,7 +304,8 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
           </span>
         </button>
         <TabButton icon="kingdom" label={W.realm} active={screen === 'realm'} onClick={() => ui.go('realm')} />
-        <TabButton icon="scroll" label={W.chronicle} active={screen === 'chronicle'} onClick={() => ui.go('chronicle')} />
+        <TabButton icon="scroll" label={W.chronicle} active={screen === 'notes'} onClick={() => ui.go('notes')} />
+        <TabButton icon="gear" label={W.settings} active={screen === 'settings'} onClick={() => ui.go('settings')} />
       </nav>
       {sheet && (
         <SheetLayer key={sheetKey} closing={closing}>
@@ -308,10 +338,10 @@ export function App({ store, sync }: { store: Store; sync: Sync }) {
   );
 }
 
-function TabButton(p: { icon: 'campfire' | 'sunrise' | 'kingdom' | 'scroll'; label: string; active: boolean; onClick: () => void }) {
+function TabButton(p: { icon: 'campfire' | 'sunrise' | 'kingdom' | 'scroll' | 'gear'; label: string; active: boolean; onClick: () => void }) {
   return (
     <button class={`tab${p.active ? ' is-active' : ''}`} aria-current={p.active ? 'page' : undefined} onClick={p.onClick}>
-      <GIcon name={p.icon} size={24} />
+      {p.icon === 'gear' ? <LIcon name="gear" size={22} /> : <GIcon name={p.icon} size={24} />}
       {p.label}
     </button>
   );

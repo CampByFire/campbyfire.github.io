@@ -58,7 +58,8 @@ import { bedtime, expectJoin, expectLetter, lairFall } from './magic/world';
 import { Chips, LevelMark, QuestDot, TaskMeta, questName } from './parts';
 import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
-import { WipeSheet } from './Chronicle';
+import { WipeSheet } from './Settings';
+import { NoteSheet, SectionSheet, ThoughtSheet } from './NoteSheets';
 import { SyncConflictSheet, SyncSheet } from './SyncPanel';
 import { setSheetBack } from './back';
 
@@ -77,7 +78,10 @@ export type SheetState =
   | { kind: 'syncConflict' }
   | { kind: 'rules' }
   | { kind: 'about' }
-  | { kind: 'wipe' };
+  | { kind: 'wipe' }
+  | { kind: 'thought'; slug?: string }
+  | { kind: 'note'; slug: string; path?: string }
+  | { kind: 'section'; slug?: string };
 
 export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
   switch (sheet.kind) {
@@ -111,6 +115,12 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <AboutSheet ui={ui} />;
     case 'wipe':
       return <WipeSheet ui={ui} />;
+    case 'thought':
+      return <ThoughtSheet ui={ui} slug={sheet.slug} />;
+    case 'note':
+      return <NoteSheet key={sheet.path ?? sheet.slug} ui={ui} slug={sheet.slug} path={sheet.path} />;
+    case 'section':
+      return <SectionSheet key={sheet.slug ?? ''} ui={ui} slug={sheet.slug} />;
   }
 }
 

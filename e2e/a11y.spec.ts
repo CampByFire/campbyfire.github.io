@@ -14,6 +14,8 @@ test('axe не находит нарушений на экранах и в ли�
   expect(await axe(page), 'Королевство').toEqual([]);
   await tab(page, 'Летопись').click();
   expect(await axe(page), 'Летопись').toEqual([]);
+  await tab(page, 'Настройки').click();
+  expect(await axe(page), 'Настройки').toEqual([]);
   await tab(page, 'Добавить задачу').click();
   expect(await axe(page), 'Новая задача').toEqual([]);
   await page.keyboard.press('Escape');

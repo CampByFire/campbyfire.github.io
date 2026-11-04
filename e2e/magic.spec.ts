@@ -1,4 +1,4 @@
-// Магия: заклинания не держат игру, сила магии выбирается в Летописи и помнится на этом устройстве.
+// Магия: заклинания не держат игру, сила магии выбирается в Настройках и помнится на этом устройстве.
 // Идёт на телефоне со всей магией и на телефоне с «Уменьшить движение» в системе, где магия спокойная.
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { addTask, at, openGame, setTime, sheet, tab, toast, unlock } from './helpers';
@@ -119,13 +119,13 @@ test('закрытый лист ещё уезжает, но под ним уже
   await expect(page.getByRole('heading', { level: 1, name: 'Летопись' })).toBeVisible();
 });
 
-test('сила магии выбирается в Летописи и помнится на этом устройстве', async ({ page }) => {
+test('сила магии выбирается в Настройках и помнится на этом устройстве', async ({ page }) => {
   await openGame(page);
   const html = page.locator('html');
   const reduced = await reducedMotion(page);
   await expect(html).toHaveAttribute('data-motion', reduced ? 'calm' : 'full');
 
-  await tab(page, 'Летопись').click();
+  await tab(page, 'Настройки').click();
   const magic = page.getByRole('radiogroup', { name: 'Сколько анимаций' });
   await expect(magic.getByRole('radio', { name: reduced ? 'Спокойная' : 'Вся' })).toBeChecked();
   await magic.getByRole('radio', { name: 'Без анимаций' }).click();
@@ -135,7 +135,7 @@ test('сила магии выбирается в Летописи и помни
   await page.reload();
   await unlock(page);
   await expect(html).toHaveAttribute('data-motion', 'off');
-  await tab(page, 'Летопись').click();
+  await tab(page, 'Настройки').click();
   await expect(magic.getByRole('radio', { name: 'Без анимаций' })).toBeChecked();
   await magic.getByRole('radio', { name: 'Вся' }).click();
   await expect(html).toHaveAttribute('data-motion', 'full');

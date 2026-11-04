@@ -141,6 +141,17 @@ export class Sync {
     return this.cfg ? { repo: this.cfg.repo, branch: this.cfg.branch || 'main' } : null;
   }
 
+  /** Токен и репозиторий для заметок Летописи; null, пока GitHub не подключён. */
+  get access(): { token: string; repo: string; branch: string } | null {
+    const c = this.cfg;
+    return c ? { token: c.token, repo: c.repo, branch: c.branch || 'main' } : null;
+  }
+
+  /** Откуда записано: «телефон» или «компьютер». */
+  get deviceName(): string {
+    return this.device;
+  }
+
   /** С какого времени действия игрока ждут записи в GitHub; null, если всё записано. */
   get pendingSince(): number | null {
     return this.cfg?.dirty ? this.cfg.dirtyAt ?? null : null;

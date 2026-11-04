@@ -97,6 +97,16 @@ export function Camp({ ui }: { ui: Ui }) {
           />
         </div>
         <TopBar ui={ui} v={v} />
+        {/* Книга у костра: Летопись с заметками, и рядом быстрая мысль, чтобы записать, не уходя из лагеря. */}
+        <div class="camp-book">
+          <button class="chip camp-book-btn" aria-label="Записать мысль" title="Записать мысль" onClick={() => ui.open({ kind: 'thought' })}>
+            <LIcon name="bulb" size={18} />
+          </button>
+          <button class="chip camp-book-btn" onClick={() => ui.go('notes')}>
+            <LIcon name="book" size={18} />
+            {W.chronicle}
+          </button>
+        </div>
         {(v.extraSeated > 0 || v.extraRoad > 0) && (
           <button class="scene-more" onClick={() => ui.go('plan')}>
             {v.extraSeated > 0 && `ещё ${v.extraSeated} у костра`}

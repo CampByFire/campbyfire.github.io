@@ -88,7 +88,7 @@ export function Notices({ ui, covered }: { ui: Ui; covered: boolean }) {
     const stale = local.backupAt === null || now - local.backupAt > BACKUP_EVERY;
     if (!sync.connected && played && stale && !quiet('backup')) {
       return {
-        text: 'Игра хранится только в этом браузере. Сохрани копию в файл или подключи GitHub в Летописи.',
+        text: 'Игра хранится только в этом браузере. Сохрани копию в файл или подключи GitHub в Настройках.',
         action: { label: 'Копия', run: backup },
         close: () => hush('backup', 3),
       };

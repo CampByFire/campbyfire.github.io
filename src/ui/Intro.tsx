@@ -41,7 +41,7 @@ export function Intro({ onDone }: { onDone: () => void }) {
         </div>
         <h2 class="intro-title">{card.title}</h2>
         <p class="intro-text">{card.text}</p>
-        {last && <p class="note">Игра хранится в этом браузере. Копия в файл и сохранение в GitHub живут в Летописи.</p>}
+        {last && <p class="note">Игра хранится в этом браузере. Копия в файл и сохранение в GitHub живут в Настройках.</p>}
         <div class="intro-dots" aria-hidden="true">
           {CARDS.map((_, n) => (
             <span key={n} class={n === i ? 'is-on' : ''} />

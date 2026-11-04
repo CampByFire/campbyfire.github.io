@@ -108,7 +108,10 @@ export async function fakeGitHub(page: Page) {
     content: null as string | null,
     sha: 0,
     tokens: { good: 'igor', fresh: 'igor' } as Record<string, string>,
+    /** Файлы заметок Летописи в notes/: путь, текст и sha. */
+    notes: new Map<string, { text: string; sha: string }>(),
   };
+  let blob = 0;
   const SAVE = '/repos/igor/lager-data/contents/game/save.json';
   const b64 = (text: string) => Buffer.from(text, 'utf8').toString('base64');
   await page.route('https://api.github.com/**', async (route) => {
@@ -131,6 +134,31 @@ export async function fakeGitHub(page: Page) {
       gh.sha += 1;
       return json({ content: { sha: `s${gh.sha}` } });
     }
+    // Заметки Летописи: список файлов деревом, текст по sha, запись и удаление через Contents API.
+    if (path === '/repos/igor/lager-data/git/trees/main') {
+      return json({ sha: 't', truncated: false, tree: [...gh.notes].map(([p, f]) => ({ path: p, type: 'blob', sha: f.sha })) });
+    }
+    const blobSha = path.match(/^\/repos\/igor\/lager-data\/git\/blobs\/(.+)$/)?.[1];
+    if (blobSha) {
+      const f = [...gh.notes.values()].find((x) => x.sha === blobSha);
+      return f ? json({ sha: blobSha, content: b64(f.text), encoding: 'base64' }) : json({ message: 'Not Found' }, 404);
+    }
+    const note = path.match(/^\/repos\/igor\/lager-data\/contents\/(notes\/.+)$/)?.[1];
+    if (note) {
+      const p = note.split('/').map(decodeURIComponent).join('/');
+      const f = gh.notes.get(p);
+      if (method === 'PUT') {
+        if (f && body.sha !== f.sha) return json({ message: 'conflict' }, body.sha ? 409 : 422);
+        const sha = `n${++blob}`;
+        gh.notes.set(p, { text: Buffer.from(body.content, 'base64').toString('utf8'), sha });
+        return json({ content: { sha } });
+      }
+      if (method === 'DELETE') {
+        if (!f) return json({ message: 'Not Found' }, 404);
+        gh.notes.delete(p);
+        return json({ commit: {} });
+      }
+    }
     if (path === SAVE && method === 'DELETE') {
       if (gh.content === null) return json({ message: 'Not Found' }, 404);
       gh.content = null;
@@ -141,9 +169,9 @@ export async function fakeGitHub(page: Page) {
   return gh;
 }
 
-/** Подключить GitHub в Летописи токеном good. */
+/** Подключить GitHub в Настройках токеном good. */
 export async function connectGitHub(page: Page) {
-  await tab(page, 'Летопись').click();
+  await tab(page, 'Настройки').click();
   await page.getByLabel('Токен GitHub').fill('good');
   await page.getByRole('button', { name: 'Подключить' }).click();
   await expect(toast(page)).toHaveText('GitHub подключён');

@@ -4,6 +4,7 @@
 // Раскладка репозитория:
 //   game/save.json   сохранение Лагеря, его пишет игра
 //   diary/…          место под дневник: игра туда не пишет и его не трогает
+//   notes/<раздел>/… заметки Летописи: по файлу на заметку, в папке раздела _razdel.json
 // Каждая запись игры это коммит, поэтому любую прошлую версию сохранения видно в истории.
 
 /** Как называется репозиторий, который игра ищет по токену. */
@@ -12,6 +13,8 @@ export const REPO_NAME = 'lager-data';
 export const SAVE_PATH = 'game/save.json';
 /** Папка под дневник: игра её не трогает, ни при записи, ни при удалении сохранения. */
 export const DIARY_DIR = 'diary';
+/** Папка заметок Летописи. Игра пишет в неё только заметки и не трогает её, удаляя сохранение. */
+export const NOTES_DIR = 'notes';
 
 const API = 'https://api.github.com';
 
@@ -77,6 +80,15 @@ interface RepoBody {
   private: boolean;
   default_branch?: string;
 }
+
+/** Файл из дерева репозитория: путь и sha его содержимого. */
+export interface TreeFile {
+  path: string;
+  sha: string;
+}
+
+/** Путь к файлу для адреса API: каждая часть отдельно, чтобы пробелы и кириллица не ломали адрес. */
+const filePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
 interface ContentBody {
   sha: string;
@@ -241,6 +253,48 @@ export class GitHub {
       }
     }
     throw new GitHubError('Сохранение в GitHub всё время меняется с другого устройства, удалить не получилось', 'other');
+  }
+
+  /**
+   * Все файлы в папке dir одним запросом. В пустом репозитории и без такой ветки список пустой.
+   */
+  async files(repo: string, branch: string, dir: string): Promise<TreeFile[]> {
+    let body: { tree: { path: string; type: string; sha: string }[] };
+    try {
+      body = await this.call(`/repos/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+    } catch (e) {
+      // Пустой репозиторий GitHub отдаёт с 409, ветку, которой ещё нет, с 404.
+      if (e instanceof GitHubError && (e.kind === 'stale' || e.kind === 'missing')) return [];
+      throw e;
+    }
+    return body.tree.filter((f) => f.type === 'blob' && f.path.startsWith(`${dir}/`)).map((f) => ({ path: f.path, sha: f.sha }));
+  }
+
+  /** Текст файла по sha его содержимого. */
+  async blob(repo: string, sha: string): Promise<string> {
+    const body = await this.call<ContentBody>(`/repos/${repo}/git/blobs/${sha}`);
+    return body.content ? fromBase64(body.content) : '';
+  }
+
+  /**
+   * Пишет текстовый файл и возвращает sha новой версии. sha это прочитанная версия (null для
+   * нового файла): если файл с тех пор поменяли или он уже есть, GitHub не примет (ошибка stale).
+   */
+  async putFile(repo: string, path: string, text: string, sha: string | null, message: string): Promise<string> {
+    const res = await this.call<{ content: { sha: string } }>(`/repos/${repo}/contents/${filePath(path)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ message, content: toBase64(text), ...(sha ? { sha } : {}) }),
+    });
+    return res.content.sha;
+  }
+
+  /** Удаляет файл той версии, что мы видели. Уже удалённый файл не ошибка. */
+  async deleteFile(repo: string, path: string, sha: string, message: string): Promise<void> {
+    try {
+      await this.request(`/repos/${repo}/contents/${filePath(path)}`, { method: 'DELETE', body: JSON.stringify({ message, sha }) });
+    } catch (e) {
+      if (!(e instanceof GitHubError && e.kind === 'missing')) throw e;
+    }
   }
 
   /** sha файла сохранения (null, если его нет), даже если его содержимое не читается. */

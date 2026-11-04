@@ -164,6 +164,7 @@ export const W = {
   plan: 'Сбор отряда',
   realm: 'Королевство',
   chronicle: 'Летопись',
+  settings: 'Настройки',
   gold: 'Золото',
   mana: 'Мана',
   xp: 'опыт',
