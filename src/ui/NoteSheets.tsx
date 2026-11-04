@@ -1,7 +1,7 @@
 // Листы Летописи: быстрая мысль, заметка или статья, запись дневника, новый раздел и его настройки.
 import { useState } from 'preact/hooks';
 import { formatDate } from '../game/time';
-import { diaryDay, type DiaryEntry } from '../notes/diary';
+import { diaryDay, sameEntry, type DiaryEntry } from '../notes/diary';
 import { SECTION_ICONS, type SectionIcon, type SectionKind } from '../notes/model';
 import type { Ui } from './App';
 import { LIcon } from './Icon';
@@ -32,11 +32,12 @@ export function ThoughtSheet({ ui, slug }: { ui: Ui; slug?: string }) {
   const [text, setText] = useState('');
   const chosen = sections.find((s) => s.slug === target);
   const stati = chosen?.vid === 'stati';
+  const diary = target === DIARY;
   const ready = !!text.trim() && (target !== NEW || !!newName.trim());
   const save = () => {
     if (!ready) return;
     const where = target === NEW ? ui.notes.createSection({ title: newName, icon: 'bulb', vid: 'lenta' }) : target;
-    if (where === DIARY) ui.notes.addDiary(text);
+    if (where === DIARY) ui.notes.addDiary(text, title);
     else ui.notes.addNote(where, { title, text });
     updateLocal(ui.now, (l) => {
       l.lastSection = where;
@@ -66,9 +67,9 @@ export function ThoughtSheet({ ui, slug }: { ui: Ui; slug?: string }) {
           <input class="input" value={newName} maxLength={40} placeholder="Например, Идеи" onInput={(e) => setNewName(e.currentTarget.value)} />
         </label>
       )}
-      {stati && (
+      {(stati || diary) && (
         <label class="field">
-          <span class="field-label">Заголовок</span>
+          <span class="field-label">{diary ? 'Название' : 'Заголовок'}</span>
           <input class="input" value={title} maxLength={80} onInput={(e) => setTitle(e.currentTarget.value)} />
         </label>
       )}
@@ -162,9 +163,10 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
 
 /** Запись дневника: поправить или удалить. Время записи остаётся прежним. */
 export function DiarySheet({ ui, path, entry }: { ui: Ui; path: string; entry: DiaryEntry }) {
+  const [title, setTitle] = useState(entry.title ?? '');
   const [text, setText] = useState(entry.text);
   const day = diaryDay(path);
-  const still = ui.notes.diary().some((d) => d.path === path && d.entries.some((e) => e.time === entry.time && e.text === entry.text));
+  const still = ui.notes.diary().some((d) => d.path === path && d.entries.some((e) => sameEntry(e, entry)));
   if (!still) {
     // Запись поправили или удалили, пока лист был открыт (например, на другом устройстве).
     return (
@@ -175,7 +177,7 @@ export function DiarySheet({ ui, path, entry }: { ui: Ui; path: string; entry: D
   }
   const save = () => {
     if (!text.trim()) return;
-    ui.notes.saveDiaryEntry(path, entry, text);
+    ui.notes.saveDiaryEntry(path, entry, text, title);
     ui.close();
   };
   const remove = () => {
@@ -198,6 +200,12 @@ export function DiarySheet({ ui, path, entry }: { ui: Ui; path: string; entry: D
         {day ? formatDate(day) : ''}
         {entry.time ? `, ${entry.time.replace(/^0/, '')}` : ''}
       </p>
+      {entry.time && (
+        <label class="field">
+          <span class="field-label">Название</span>
+          <input class="input" value={title} maxLength={80} onInput={(e) => setTitle(e.currentTarget.value)} />
+        </label>
+      )}
       <RichEditor ui={ui} label="Текст" value={text} onChange={setText} />
       <p class="note nfile">{path}</p>
       <div class="actions">

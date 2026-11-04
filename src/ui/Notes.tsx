@@ -69,9 +69,9 @@ function SearchResults({ ui, query }: { ui: Ui; query: string }) {
     <section class="group nlist" aria-label="Найдено">
       {hits.length === 0 && <p class="note">Ничего не нашлось.</p>}
       {hits.map((h) => (
-        <button key={h.kind === 'note' ? h.path : `${h.path}|${h.entry.time}|${h.entry.text}`} class="ncard nhit" onClick={() => open(h)}>
+        <button key={h.kind === 'note' ? h.path : `${h.path}|${h.entry.time}|${h.entry.title ?? ''}|${h.entry.text}`} class="ncard nhit" onClick={() => open(h)}>
           <span class="ncard-date">{h.kind === 'note' ? h.where : `Дневник · ${dayName(ui, h.day)}${h.entry.time ? `, ${h.entry.time.replace(/^0/, '')}` : ''}`}</span>
-          {h.kind === 'note' && h.title && <span class="ncard-title">{h.title}</span>}
+          {(h.kind === 'note' ? h.title : h.entry.title) && <span class="ncard-title">{h.kind === 'note' ? h.title : h.entry.title}</span>}
           <span class="ncard-line nhit-text">
             {h.snippet.before}
             <mark>{h.snippet.match}</mark>
@@ -198,18 +198,21 @@ function FeedInput({ ui, slug }: { ui: Ui; slug: string }) {
   return <WriteBox ui={ui} label="Новая запись" placeholder="Что пришло в голову?" onSave={(text) => ui.notes.addNote(slug, { text })} />;
 }
 
-function WriteBox({ ui, label, placeholder, onSave }: { ui: Ui; label: string; placeholder: string; onSave: (text: string) => void }) {
+function WriteBox({ ui, label, placeholder, named, onSave }: { ui: Ui; label: string; placeholder: string; named?: boolean; onSave: (text: string, title: string) => void }) {
+  const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const box = useRef<HTMLTextAreaElement>(null);
   const save = () => {
     if (!text.trim()) return;
-    onSave(text);
+    onSave(text, title);
+    setTitle('');
     setText('');
     ui.toast(HERO_NOTED);
     box.current?.focus();
   };
   return (
     <div class="nfeed-in">
+      {named && <input class="input" value={title} maxLength={80} placeholder="Название" aria-label="Название записи" onInput={(e) => setTitle(e.currentTarget.value)} />}
       <textarea
         ref={box}
         class="input ntext"
@@ -274,7 +277,7 @@ function DiaryView({ ui }: { ui: Ui }) {
         <LIcon name="feather" size={26} class="nsec-ic" />
         Дневник
       </h1>
-      <WriteBox ui={ui} label="Запись в дневник" placeholder="Как прошёл день?" onSave={(text) => ui.notes.addDiary(text)} />
+      <WriteBox ui={ui} label="Запись в дневник" placeholder="Как прошёл день?" named onSave={(text, title) => ui.notes.addDiary(text, title)} />
       <div class="nlist">
         {days.length === 0 && <p class="note">Здесь пока пусто. Каждый день ляжет в репозиторий отдельным файлом, записи в нём по времени.</p>}
         {days.map((d) => (
@@ -300,7 +303,8 @@ function DiaryDayBlock({ ui, d }: { ui: Ui; d: DiaryDay }) {
       {d.entries.map((e, i) => (
         <button key={`${i}-${e.time}`} class="ncard" onClick={() => ui.open({ kind: 'diary', path: d.path, entry: e })}>
           {e.time && <span class="ncard-date">{e.time.replace(/^0/, '')}</span>}
-          {e.text ? <RichText class="ncard-text" text={e.text} links={false} /> : <span class="ncard-text">Пустая запись</span>}
+          {e.title && <span class="ncard-title">{e.title}</span>}
+          {e.text ?<RichText class="ncard-text" text={e.text} links={false} /> : <span class="ncard-text">Пустая запись</span>}
         </button>
       ))}
     </section>

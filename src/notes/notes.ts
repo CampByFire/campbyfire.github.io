@@ -14,7 +14,7 @@
 // столкновение там обычное дело: записи дня сливаются (mergeDiary), а не ложатся копией рядом.
 import type { DayKey } from '../game/types';
 import { DIARY_DIR, GitHub, GitHubError, NOTES_DIR, type Fetch } from '../sync/github';
-import { diaryDay, diaryPath, diaryText, entryDay, entryTime, mergeDiary, parseDiary, sortEntries, type DiaryDay, type DiaryEntry } from './diary';
+import { diaryDay, diaryEntry, diaryPath, diaryText, entryDay, entryTime, mergeDiary, parseDiary, sameEntry, sortEntries, type DiaryDay, type DiaryEntry } from './diary';
 import {
   META_FILE,
   articleText,
@@ -118,7 +118,6 @@ const isMetaFile = (path: string) => path.endsWith(`/${META_FILE}`);
 const isDiary = (path: string) => diaryDay(path) !== null;
 /** Какие файлы репозитория Летопись держит у себя: заметки, _razdel.json и дни дневника. */
 const isOurs = (path: string) => (path.startsWith(`${NOTES_DIR}/`) ? isNoteFile(path) || isMetaFile(path) : isDiary(path));
-const sameEntry = (a: DiaryEntry, b: DiaryEntry) => a.time === b.time && a.text.trim() === b.text.trim();
 
 export class Notes {
   status: NotesStatus;
@@ -257,25 +256,25 @@ export class Notes {
   }
 
   /** Запись в дневник за сегодняшний (игровой) день: дописывается в файл дня. Вернёт путь файла. */
-  addDiary(text: string): string {
+  addDiary(text: string, title = ''): string {
     const t = this.now();
     const day: DayKey = entryDay(t);
     const path = this.paths().find((p) => diaryDay(p) === day) ?? diaryPath(day);
     const rec = this.files[path];
     const entries = rec && !rec.deleted ? parseDiary(rec.text) : [];
-    entries.push({ time: entryTime(t), text: text.trim() });
+    entries.push(diaryEntry(entryTime(t), text.trim(), title));
     this.put(path, diaryText(sortEntries(entries)));
     return path;
   }
 
-  /** Правит запись дня; пустой текст удаляет её, а с последней записью уходит и файл дня. */
-  saveDiaryEntry(path: string, entry: DiaryEntry, text: string): void {
+  /** Правит запись дня; без title название остаётся прежним. Пустой текст удаляет запись, а с последней уходит и файл дня. */
+  saveDiaryEntry(path: string, entry: DiaryEntry, text: string, title = entry.title): void {
     const rec = this.files[path];
     if (!rec || rec.deleted) return;
     const entries = parseDiary(rec.text);
     const i = entries.findIndex((e) => sameEntry(e, entry));
     if (i < 0) return;
-    if (text.trim()) entries[i] = { time: entry.time, text: text.trim() };
+    if (text.trim()) entries[i] = diaryEntry(entry.time, text.trim(), title);
     else entries.splice(i, 1);
     if (entries.length) {
       const next = diaryText(entries);

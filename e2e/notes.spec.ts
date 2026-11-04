@@ -154,6 +154,44 @@ test('дневник: записи за день в одном файле diary/
   await expect(sheet(page, 'Записать мысль').getByRole('radio', { name: 'Дневник' })).toHaveAttribute('aria-checked', 'true');
 });
 
+test('дневник: у записи есть название, оно видно на карточке, правится и находится поиском', async ({ page }) => {
+  const gh = await fakeGitHub(page);
+  await openGame(page);
+  await connectGitHub(page);
+  await tab(page, 'Летопись').click();
+  await page.getByRole('button', { name: /^Дневник/ }).click();
+  await page.getByLabel('Название записи').fill('Прогулка');
+  await page.getByLabel('Запись в дневник').fill('Утром прошёлся пешком.');
+  await page.getByRole('button', { name: 'Записать', exact: true }).click();
+  await expect(page.locator('.nday .ncard-title')).toHaveText('Прогулка');
+  await expect(page.getByLabel('Название записи')).toHaveValue('');
+
+  await page.getByRole('button', { name: /Прогулка/ }).click();
+  const edit = sheet(page, 'Запись в дневнике');
+  await expect(edit.getByLabel('Название')).toHaveValue('Прогулка');
+  await edit.getByLabel('Название').fill('Утренняя прогулка');
+  await edit.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(page.locator('.nday .ncard-title')).toHaveText('Утренняя прогулка');
+  await page.clock.runFor(3000);
+  await expect.poll(() => gh.notes.get('diary/2026/2026-10-23.md')?.text).toMatch(/^## 09:0\d Утренняя прогулка\n\nУтром прошёлся пешком\.\n$/);
+
+  // Быстрая мысль: поле названия появляется, только когда выбран дневник.
+  await tab(page, 'Лагерь').click();
+  await page.getByRole('button', { name: 'Записать мысль' }).click();
+  const form = sheet(page, 'Записать мысль');
+  await form.getByRole('radio', { name: 'Дневник' }).click();
+  await form.getByLabel('Название').fill('Отчёт');
+  await form.getByLabel('Мысль').fill('Вспомнил про него.');
+  await form.getByRole('button', { name: 'Записать', exact: true }).click();
+
+  await tab(page, 'Летопись').click();
+  await expect(page.locator('.nday .ncard-title')).toHaveText(['Утренняя прогулка', 'Отчёт']);
+  await page.getByRole('main').getByRole('button', { name: 'Летопись' }).click();
+  await page.getByLabel('Поиск по Летописи').fill('утренняя');
+  await expect(page.locator('.nhit .ncard-title')).toHaveText('Утренняя прогулка');
+  await expectNoSideScroll(page);
+});
+
 test('оформление: жирный и свой цвет в записи ленты ложатся в Markdown; поиск находит запись', async ({ page }) => {
   const gh = await fakeGitHub(page);
   await openGame(page);

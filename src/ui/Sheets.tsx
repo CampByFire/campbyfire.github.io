@@ -136,7 +136,7 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
     case 'section':
       return <SectionSheet key={sheet.slug ?? ''} ui={ui} slug={sheet.slug} />;
     case 'diary':
-      return <DiarySheet key={`${sheet.path}|${sheet.entry.time}|${sheet.entry.text}`} ui={ui} path={sheet.path} entry={sheet.entry} />;
+      return <DiarySheet key={`${sheet.path}|${sheet.entry.time}|${sheet.entry.title ?? ''}|${sheet.entry.text}`} ui={ui} path={sheet.path} entry={sheet.entry} />;
   }
 }
 

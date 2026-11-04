@@ -46,7 +46,7 @@ export function search(notes: Notes, query: string, limit = 50): Hit[] {
   }
   for (const d of notes.diary()) {
     for (const e of d.entries) {
-      const sn = snippet(plainText(e.text), query);
+      const sn = snippet(`${e.title ?? ''}\n${plainText(e.text)}`, query);
       if (sn) hits.push({ kind: 'diary', path: d.path, day: d.day, entry: e, snippet: sn });
     }
   }

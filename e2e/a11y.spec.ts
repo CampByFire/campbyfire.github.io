@@ -112,8 +112,10 @@ test('axe не находит нарушений в Летописи и её л�
   // Дневник и запись в нём.
   await page.getByRole('button', { name: /^Дневник/ }).click();
   expect(await axe(page), 'Дневник').toEqual([]);
+  await page.getByLabel('Название записи').fill('Прогулка');
   await page.getByLabel('Запись в дневник').fill('Утром прошёлся пешком.');
   await page.getByRole('button', { name: 'Записать', exact: true }).click();
+  expect(await axe(page), 'Дневник с названием записи').toEqual([]);
   await page.getByRole('button', { name: /Утром прошёлся пешком/ }).click();
   await expect(sheet(page, 'Запись в дневнике').getByRole('toolbar', { name: 'Оформление' })).toBeVisible();
   expect(await axe(page), 'Запись в дневнике').toEqual([]);

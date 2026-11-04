@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { diaryDay, diaryPath, diaryText, mergeDiary, parseDiary } from '../src/notes/diary';
+import { diaryDay, diaryEntry, diaryPath, diaryText, mergeDiary, parseDiary } from '../src/notes/diary';
 import { conflictPath, parseMeta, parseNote, slugify, stampName, stampTime } from '../src/notes/model';
 import { Notes, type NotesHost, type NotesStorage } from '../src/notes/notes';
+import { search } from '../src/notes/search';
 import { SAVE_PATH, fromBase64, toBase64, type Fetch } from '../src/sync/github';
 
 // Среда, 4 ноября 2026, 08:12.
@@ -365,6 +366,31 @@ describe('дневник: файл дня', () => {
     expect(diaryText([])).toBe('');
   });
 
+  it('название записи лежит в заголовке после времени, запись без названия пишется как раньше', () => {
+    const text = '## 8:12 Новая глава\n\nУтро.\n\n## 21:40\n\nВечер.\n';
+    expect(parseDiary(text)).toEqual([
+      { time: '08:12', title: 'Новая глава', text: 'Утро.' },
+      { time: '21:40', text: 'Вечер.' },
+    ]);
+    expect(diaryText(parseDiary(text))).toBe('## 08:12 Новая глава\n\nУтро.\n\n## 21:40\n\nВечер.\n');
+  });
+
+  it('название из нескольких строк ложится в одну и не ломает файл; у записи без времени его нет', () => {
+    expect(diaryEntry('08:12', 'Утро.', '  Новая\n  глава ')).toEqual({ time: '08:12', title: 'Новая глава', text: 'Утро.' });
+    expect(diaryEntry('08:12', 'Утро.', '   ')).toEqual({ time: '08:12', text: 'Утро.' });
+    expect(diaryEntry('', 'Написано руками', 'Название')).toEqual({ time: '', text: 'Написано руками' });
+  });
+
+  it('слияние: название, поправленное на одной стороне, не задваивает запись', () => {
+    const base = '## 08:12\n\nУтро.\n';
+    const local = '## 08:12 Подъём\n\nУтро.\n';
+    const remote = '## 08:12\n\nУтро.\n\n## 12:00 Обед\n\nСуп.\n';
+    expect(parseDiary(mergeDiary(base, local, remote))).toEqual([
+      { time: '08:12', title: 'Подъём', text: 'Утро.' },
+      { time: '12:00', title: 'Обед', text: 'Суп.' },
+    ]);
+  });
+
   it('слияние: новые записи с обеих сторон остаются, ночная встаёт в конец', () => {
     const base = '## 08:12\n\nУтро.\n';
     const local = '## 08:12\n\nУтро.\n\n## 01:10\n\nНочью с телефона.\n';
@@ -415,6 +441,33 @@ describe('дневник в Летописи', () => {
     notes.saveDiaryEntry(path, notes.diary()[0].entries[0], '');
     expect(notes.diary()).toEqual([]);
     expect(notes.pending).toBe(0);
+  });
+
+  it('запись с названием: название правится и убирается, правка текста его не теряет, поиск его находит', async () => {
+    const gh = fakeGitHub();
+    const notes = make(gh);
+    const path = notes.addDiary('Утро.', 'Подъём');
+    await notes.syncNow();
+    expect(gh.files.get(path)?.text).toBe('## 08:12 Подъём\n\nУтро.\n');
+    expect(search(notes, 'подъем').map((h) => h.kind === 'diary' && h.entry.title)).toEqual(['Подъём']);
+
+    notes.saveDiaryEntry(path, notes.diary()[0].entries[0], 'Раннее утро.');
+    expect(notes.diary()[0].entries).toEqual([{ time: '08:12', title: 'Подъём', text: 'Раннее утро.' }]);
+    notes.saveDiaryEntry(path, notes.diary()[0].entries[0], 'Раннее утро.', 'Рассвет');
+    expect(notes.diary()[0].entries).toEqual([{ time: '08:12', title: 'Рассвет', text: 'Раннее утро.' }]);
+    notes.saveDiaryEntry(path, notes.diary()[0].entries[0], 'Раннее утро.', '');
+    expect(notes.diary()[0].entries).toEqual([{ time: '08:12', text: 'Раннее утро.' }]);
+  });
+
+  it('две записи в одну минуту с одним текстом различаются названием: правится нужная', () => {
+    const notes = make(fakeGitHub(), { host: host(false) });
+    notes.addDiary('Текст.', 'Первая');
+    const path = notes.addDiary('Текст.', 'Вторая');
+    notes.saveDiaryEntry(path, notes.diary()[0].entries[1], 'Новый текст.');
+    expect(notes.diary()[0].entries).toEqual([
+      { time: '08:12', title: 'Первая', text: 'Текст.' },
+      { time: '08:12', title: 'Вторая', text: 'Новый текст.' },
+    ]);
   });
 
   it('день уходит в GitHub файлом diary/2026/…, рядом с заметками; сохранение игры не трогается', async () => {

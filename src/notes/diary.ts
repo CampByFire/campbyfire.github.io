@@ -6,11 +6,13 @@
 //
 //   Проснулся раньше будильника.
 //
-//   ## 21:40
+//   ## 21:40 Новая глава
 //
 //   Вечером дописал главу.
 //
-// Текст до первого «## ЧЧ:ММ» (например, написанный руками на GitHub) тоже запись, только без времени.
+// Название записи идёт в её заголовке после времени, его можно не писать.
+// Текст до первого «## ЧЧ:ММ» (например, написанный руками на GitHub) тоже запись, только без времени
+// и без названия: в файле ему негде лежать.
 // День считается игровым: запись в 01:30 ночи попадает во вчерашний день, как и в игре.
 import { DAY_STARTS_AT_HOUR } from '../game/rules';
 import { dayKey } from '../game/time';
@@ -20,8 +22,19 @@ import { DIARY_DIR } from '../sync/github';
 export interface DiaryEntry {
   /** «08:12»; пустая строка у текста без времени. */
   time: string;
+  /** Название записи; у записи без названия поля нет. */
+  title?: string;
   text: string;
 }
+
+/** Запись из того, что ввели: название в одну строку, пустое не хранится. */
+export function diaryEntry(time: string, text: string, title = ''): DiaryEntry {
+  const name = time ? title.replace(/\s+/g, ' ').trim() : '';
+  return name ? { time, title: name, text } : { time, text };
+}
+
+/** Одна и та же запись: совпали время, название и текст. */
+export const sameEntry = (a: DiaryEntry, b: DiaryEntry) => a.time === b.time && (a.title ?? '') === (b.title ?? '') && a.text.trim() === b.text.trim();
 
 export interface DiaryDay {
   day: DayKey;
@@ -49,22 +62,24 @@ export function entryTime(t: number): string {
 /** Игровой день записи, сделанной в момент t. */
 export const entryDay = (t: number): DayKey => dayKey(t);
 
-const HEAD = /^##[ \t]+(\d{1,2}:\d{2})[ \t]*$/;
+const HEAD = /^##[ \t]+(\d{1,2}:\d{2})(?:[ \t]+(.+?))?[ \t]*$/;
 
 export function parseDiary(text: string): DiaryEntry[] {
   const out: DiaryEntry[] = [];
-  let cur: DiaryEntry = { time: '', text: '' };
+  let time = '';
+  let title = '';
   const lines: string[] = [];
   const flush = () => {
     const body = lines.join('\n').trim();
-    if (cur.time || body) out.push({ time: cur.time, text: body });
+    if (time || body) out.push(diaryEntry(time, body, title));
     lines.length = 0;
   };
   for (const line of text.replace(/\r\n?/g, '\n').split('\n')) {
     const m = line.match(HEAD);
     if (m) {
       flush();
-      cur = { time: m[1].padStart(5, '0'), text: '' };
+      time = m[1].padStart(5, '0');
+      title = m[2] ?? '';
     } else lines.push(line);
   }
   flush();
@@ -74,7 +89,7 @@ export function parseDiary(text: string): DiaryEntry[] {
 export function diaryText(entries: DiaryEntry[]): string {
   return entries
     .filter((e) => e.time || e.text.trim())
-    .map((e) => (e.time ? `## ${e.time}\n\n${e.text.trim()}` : e.text.trim()))
+    .map((e) => (e.time ? `## ${e.time}${e.title ? ` ${e.title}` : ''}\n\n${e.text.trim()}` : e.text.trim()))
     .join('\n\n')
     .concat('\n')
     .replace(/^\n$/, '');
@@ -89,7 +104,7 @@ function order(e: DiaryEntry): number {
 
 export const sortEntries = (list: DiaryEntry[]) => list.map((e, i) => ({ e, i })).sort((a, b) => order(a.e) - order(b.e) || a.i - b.i).map((x) => x.e);
 
-const key = (e: DiaryEntry) => `${e.time}\n${e.text.trim()}`;
+const key = (e: DiaryEntry) => `${e.time}\n${e.title ?? ''}\n${e.text.trim()}`;
 
 /**
  * Слияние дня, который меняли на двух устройствах. base это версия из GitHub, от которой шли свои
