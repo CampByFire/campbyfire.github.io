@@ -1,10 +1,11 @@
-// Сохранение в GitHub: подключение по токену, состояние, срок и замена токена, выбор, когда
-// в GitHub другая игра, и значок в верхней полосе лагеря, когда сохранение не работает.
+// Сохранение в GitHub: подключение по токену, переезд из старого гиста в репозиторий, состояние,
+// срок и замена токена, выбор, когда в GitHub другая игра, и значок в верхней полосе лагеря,
+// когда сохранение не работает.
 import { useEffect, useState } from 'preact/hooks';
 import { HOUR, heroLevel } from '../game/rules';
 import { addDays, dayKey, daysBetween, formatClock, formatDate, formatDayLong, plural } from '../game/time';
 import type { State } from '../game/types';
-import { GitHubError, TOKEN_URL, TOKENS_URL } from '../sync/github';
+import { GitHubError, NEW_REPO_URL, REPO_NAME, TOKEN_URL, TOKENS_URL, gistUrl, historyUrl, repoUrl } from '../sync/github';
 import type { Sync } from '../sync/sync';
 import type { Ui } from './App';
 import { Sheet } from './Sheets';
@@ -29,9 +30,11 @@ export function tokenDaysLeft(sync: Sync, now: number): number | null {
 /**
  * Что не так с сохранением в GitHub. error: GitHub отказал или там другая игра, сохранение
  * стоит. stale: сети нет уже давно, а действия ждут записи (так выглядит и сеть, где GitHub закрыт).
+ * move: подключён старый гист, и сохранение ждёт переезда в репозиторий.
  */
-export function syncTrouble(sync: Sync, now: number): 'error' | 'stale' | null {
+export function syncTrouble(sync: Sync, now: number): 'error' | 'stale' | 'move' | null {
   const { phase } = sync.status;
+  if (phase === 'move') return 'move';
   if (phase === 'error' || phase === 'conflict') return 'error';
   const since = sync.pendingSince;
   if (phase === 'offline' && since !== null && now - since > STALE_AFTER) return 'stale';
@@ -57,63 +60,65 @@ export function SyncPanel({ ui }: { ui: Ui }) {
   const { sync } = ui;
   useSync(sync);
   const st = sync.status;
-  const [token, setToken] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   if (!sync.connected) {
-    const connect = async (e: Event) => {
-      e.preventDefault();
-      setBusy(true);
-      setError(null);
-      try {
-        await sync.connect(token);
-        setToken('');
-        // Если в GitHub другая игра, сейчас откроется выбор, и сообщение его только заслонит.
-        if (sync.status.phase !== 'conflict') ui.toast('GitHub подключён');
-      } catch (err) {
-        setError(err instanceof GitHubError ? err.message : 'Не получилось подключиться');
-      } finally {
-        setBusy(false);
-      }
-    };
     return (
       <div class="sync">
         <p class="note">
-          Игра сохраняется в секретный гист на твоём GitHub, и телефон с компьютером видят одну и ту же игру. Нужен токен, которому разрешены только гисты.
+          Игра сохраняется в твой приватный репозиторий {REPO_NAME} на GitHub, и телефон с компьютером видят одну и ту же игру. Каждое сохранение остаётся в
+          истории репозитория, а рядом, в папке diary, потом можно будет вести дневник.
         </p>
         <ol class="steps">
-          <li>
-            <a href={TOKEN_URL} target="_blank" rel="noopener noreferrer">
-              Создай токен на GitHub
-            </a>
-            . Название, срок на год и право «Gists: Read and write» уже выбраны, внизу страницы нажми «Generate token».
-          </li>
-          <li>Скопируй токен (он начинается с github_pat_) и вставь сюда.</li>
+          <RepoSteps />
           <li>На втором устройстве вставь тот же токен: сохранение найдётся само.</li>
         </ol>
-        <form class="sync-form" onSubmit={connect}>
-          <input
-            class="input"
-            type="password"
-            autocomplete="off"
-            spellcheck={false}
-            placeholder="github_pat_…"
-            aria-label="Токен GitHub"
-            value={token}
-            onInput={(e) => setToken(e.currentTarget.value)}
-          />
-          <button class="btn btn-gold" type="submit" disabled={busy || !token.trim()}>
-            {busy ? 'Подключаю…' : 'Подключить'}
-          </button>
-        </form>
-        {error && <p class="note note-error">{error}</p>}
+        <TokenForm label="Токен GitHub" button="Подключить" busyText="Подключаю…" submit={(t) => sync.connect(t)} onDone={() => {
+          // Если в GitHub другая игра, сейчас откроется выбор, и сообщение его только заслонит.
+          if (sync.status.phase !== 'conflict') ui.toast('GitHub подключён');
+        }} />
         <p class="note">Токен лежит в этом браузере без пароля: подключай GitHub только на своих устройствах.</p>
       </div>
     );
   }
 
+  if (sync.needsMove) {
+    return (
+      <div class="sync">
+        <div class="sync-state">
+          <span class="sync-dot sync-error" aria-hidden="true" />
+          <span class="sync-who">GitHub · {st.login}</span>
+          <span class="meta">Ждёт переезда</span>
+        </div>
+        <p class="note">
+          Теперь игра сохраняется не в гист, а в приватный репозиторий {REPO_NAME}: там же потом будет дневник. Пока не переедешь, игра сохраняется только в этом
+          браузере.
+        </p>
+        <ol class="steps">
+          <RepoSteps />
+        </ol>
+        <TokenForm label="Новый токен GitHub" button="Переехать" busyText="Переезжаю…" submit={(t) => sync.moveToRepo(t)} onDone={() => {
+          if (sync.status.phase !== 'conflict') ui.toast(`Сохранение переехало в ${REPO_NAME}`);
+        }} />
+        <p class="note">
+          Сохранение из гиста перенесётся само. Гист останется на GitHub запасной копией. На втором устройстве потом вставь тот же новый токен.
+        </p>
+        <div class="btns">
+          <button
+            class="btn btn-ghost"
+            onClick={() => {
+              if (confirm('Отключить GitHub на этом устройстве? Гист на GitHub останется.')) sync.disconnect();
+            }}
+          >
+            Отключить
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   const now = ui.now;
+  const repo = sync.repo;
+  const oldGist = sync.oldGist;
   let line: string;
   switch (st.phase) {
     case 'syncing':
@@ -139,6 +144,31 @@ export function SyncPanel({ ui }: { ui: Ui }) {
         <span class="sync-who">GitHub · {st.login}</span>
         <span class="meta">{line}</span>
       </div>
+      {repo && (
+        <p class="note">
+          Сохранение лежит в{' '}
+          <a href={repoUrl(repo.repo)} target="_blank" rel="noopener noreferrer">
+            {repo.repo}
+          </a>
+          , файл game/save.json. Прошлые версии видны в{' '}
+          <a href={historyUrl(repo.repo, repo.branch)} target="_blank" rel="noopener noreferrer">
+            истории сохранений
+          </a>
+          .
+        </p>
+      )}
+      {oldGist && (
+        <p class="note">
+          Старый{' '}
+          <a href={gistUrl(oldGist)} target="_blank" rel="noopener noreferrer">
+            гист с сохранением
+          </a>{' '}
+          остался запасной копией. Когда все устройства переедут и игра на месте, его можно удалить на GitHub.{' '}
+          <button class="link-btn" onClick={() => sync.forgetOldGist()}>
+            Больше не напоминать
+          </button>
+        </p>
+      )}
       {st.phase === 'error' && st.error && st.errorKind !== 'auth' && <p class="note note-error">{st.error}</p>}
       {st.phase === 'offline' && (
         <p class="note">
@@ -171,9 +201,72 @@ export function SyncPanel({ ui }: { ui: Ui }) {
         <a href={TOKENS_URL} target="_blank" rel="noopener noreferrer">
           отзови токен на GitHub
         </a>
-        : гист останется, а токен перестанет работать.
+        : сохранение останется, а токен перестанет работать.
       </p>
     </div>
+  );
+}
+
+/** Шаги до токена: приватный репозиторий и токен только на него. */
+function RepoSteps() {
+  return (
+    <>
+      <li>
+        <a href={NEW_REPO_URL} target="_blank" rel="noopener noreferrer">
+          Создай приватный репозиторий {REPO_NAME}
+        </a>
+        , если его ещё нет. Название и «Private» уже выбраны, внизу нажми «Create repository».
+      </li>
+      <li>
+        <a href={TOKEN_URL} target="_blank" rel="noopener noreferrer">
+          Создай токен на GitHub
+        </a>
+        . Название, срок на год и право «Contents: Read and write» уже выбраны. В «Repository access» выбери «Only select repositories» и {REPO_NAME}, внизу
+        нажми «Generate token».
+      </li>
+      <li>Скопируй токен (он начинается с github_pat_) и вставь сюда.</li>
+    </>
+  );
+}
+
+/** Поле для токена с кнопкой: ошибку GitHub показывает под полем. */
+function TokenForm(props: { label: string; button: string; busyText: string; submit: (token: string) => Promise<void>; onDone: () => void }) {
+  const [token, setToken] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const send = async (e: Event) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await props.submit(token);
+      setToken('');
+      props.onDone();
+    } catch (err) {
+      setError(err instanceof GitHubError ? err.message : 'Не получилось подключиться');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <form class="sync-form" onSubmit={send}>
+        <input
+          class="input"
+          type="password"
+          autocomplete="off"
+          spellcheck={false}
+          placeholder="github_pat_…"
+          aria-label={props.label}
+          value={token}
+          onInput={(e) => setToken(e.currentTarget.value)}
+        />
+        <button class="btn btn-gold" type="submit" disabled={busy || !token.trim()}>
+          {busy ? props.busyText : props.button}
+        </button>
+      </form>
+      {error && <p class="note note-error">{error}</p>}
+    </>
   );
 }
 
@@ -259,7 +352,8 @@ function TokenBlock({ ui }: { ui: Ui }) {
             <a href={TOKEN_URL} target="_blank" rel="noopener noreferrer">
               Создай новый токен
             </a>{' '}
-            на том же аккаунте GitHub ({sync.status.login}): название, срок и право уже выбраны, внизу нажми «Generate token». Старый можно потом удалить на{' '}
+            на том же аккаунте GitHub ({sync.status.login}): название, срок и право уже выбраны. В «Repository access» выбери «Only select repositories» и{' '}
+            {sync.repo?.repo.split('/')[1] ?? REPO_NAME}, внизу нажми «Generate token». Старый можно потом удалить на{' '}
             <a href={TOKENS_URL} target="_blank" rel="noopener noreferrer">
               странице токенов
             </a>

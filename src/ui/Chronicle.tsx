@@ -213,11 +213,11 @@ const MOTION_NOTE: Record<Motion, string> = {
   off: 'Никакого движения: экран сразу показывает итог.',
 };
 
-/** Стереть игру из браузера, а по желанию и гист с сохранением. Потом страница открывается с чистого листа. */
+/** Стереть игру из браузера, а по желанию и сохранение в GitHub. Потом страница открывается с чистого листа. */
 export function WipeSheet({ ui }: { ui: Ui }) {
   const { store, sync } = ui;
   useSync(sync);
-  const [gist, setGist] = useState(false);
+  const [remote, setRemote] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const s = store.state;
@@ -226,12 +226,12 @@ export function WipeSheet({ ui }: { ui: Ui }) {
   const wipe = async () => {
     setBusy(true);
     setError(null);
-    if (gist && sync.connected) {
+    if (remote && sync.connected) {
       try {
         await sync.removeSave();
       } catch (e) {
         const why = e instanceof GitHubError ? e.message : 'GitHub не ответил';
-        setError(`Гист не удалился, и игра не стёрта. ${why}${/[.?!]$/.test(why) ? '' : '.'}`);
+        setError(`Сохранение в GitHub не удалилось, и игра не стёрта. ${why}${/[.?!]$/.test(why) ? '' : '.'}`);
         setBusy(false);
         return;
       }
@@ -249,7 +249,7 @@ export function WipeSheet({ ui }: { ui: Ui }) {
       footer={
         <div class="btns btns-col">
           <button class="btn btn-danger" disabled={busy} onClick={() => void wipe()}>
-            {busy ? 'Стираю…' : gist ? 'Стереть игру и гист' : 'Стереть игру'}
+            {busy ? 'Стираю…' : remote ? 'Стереть игру и сохранение' : 'Стереть игру'}
           </button>
           <button class="btn btn-ghost" onClick={ui.close}>
             Оставить как есть
@@ -270,13 +270,15 @@ export function WipeSheet({ ui }: { ui: Ui }) {
       {sync.connected && (
         <>
           <label class="check-row">
-            <input type="checkbox" checked={gist} onChange={() => setGist(!gist)} />
+            <input type="checkbox" checked={remote} onChange={() => setRemote(!remote)} />
             <span>Удалить и сохранение в GitHub</span>
           </label>
           <p class="note">
-            {gist
-              ? 'Гист с игрой удалится с GitHub навсегда. На других устройствах игра останется, но сохраняться в GitHub перестанет.'
-              : 'Гист с игрой останется на GitHub: если подключить GitHub снова, игра вернётся. Токен на этом устройстве забудется.'}
+            {remote
+              ? sync.needsMove
+                ? 'Гист с игрой удалится с GitHub навсегда. На других устройствах игра останется, но сохраняться в GitHub перестанет.'
+                : 'Файл game/save.json удалится из репозитория, а сам репозиторий и дневник останутся. Прошлые версии игры остаются в истории репозитория. На других устройствах игра останется, но сохраняться в GitHub перестанет.'
+              : 'Сохранение останется на GitHub: если подключить GitHub снова, игра вернётся. Токен на этом устройстве забудется.'}
           </p>
         </>
       )}

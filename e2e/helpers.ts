@@ -98,12 +98,21 @@ export async function expectNoSideScroll(page: Page) {
 export type GitHubMode = 'ok' | 'down' | 'expired';
 
 /**
- * Поддельный GitHub вместо api.github.com: один гист в памяти с историей версий и токены с владельцами.
- * Токен good в режиме expired GitHub больше не принимает, fresh того же аккаунта годится всегда.
+ * Поддельный GitHub вместо api.github.com: приватный репозиторий igor/lager-data с файлом
+ * game/save.json (content это его текст, sha меняется при каждой записи), старый гист g1 для
+ * переезда и токены с владельцами. Токен good в режиме expired GitHub больше не принимает,
+ * fresh того же аккаунта годится всегда.
  */
 export async function fakeGitHub(page: Page) {
-  const gh = { mode: 'ok' as GitHubMode, content: null as string | null, version: 1, tokens: { good: 'igor', fresh: 'igor' } as Record<string, string> };
-  const FILE = 'taskcraft-lager.json';
+  const gh = {
+    mode: 'ok' as GitHubMode,
+    content: null as string | null,
+    sha: 0,
+    gist: null as string | null,
+    tokens: { good: 'igor', fresh: 'igor', old: 'igor' } as Record<string, string>,
+  };
+  const SAVE = '/repos/igor/lager-data/contents/game/save.json';
+  const b64 = (text: string) => Buffer.from(text, 'utf8').toString('base64');
   await page.route('https://api.github.com/**', async (route) => {
     const req = route.request();
     if (gh.mode === 'down') return route.abort('internetdisconnected');
@@ -114,23 +123,23 @@ export async function fakeGitHub(page: Page) {
     if (!login) return json({ message: 'Bad credentials' }, 401);
     const path = new URL(req.url()).pathname;
     const method = req.method();
-    const history = () => [{ version: `v${gh.version}` }, ...(gh.version > 1 ? [{ version: `v${gh.version - 1}` }] : [])];
+    const body = JSON.parse(req.postData() ?? '{}');
     if (path === '/user') return json({ login });
-    if (path === '/gists' && method === 'GET') return json(gh.content ? [{ id: 'g1', updated_at: '2026-10-23T06:00:00Z', files: { [FILE]: {} } }] : []);
-    if (path === '/gists' && method === 'POST') {
-      gh.content = JSON.parse(req.postData() ?? '{}').files[FILE].content;
-      return json({ id: 'g1' }, 201);
+    if (path === '/repos/igor/lager-data') return json({ full_name: 'igor/lager-data', name: 'lager-data', private: true, default_branch: 'main' });
+    if (path === SAVE && method === 'GET') return gh.content === null ? json({ message: 'Not Found' }, 404) : json({ sha: `s${gh.sha}`, content: b64(gh.content), encoding: 'base64' });
+    if (path === SAVE && method === 'PUT') {
+      if (gh.content !== null && body.sha !== `s${gh.sha}`) return json({ message: 'conflict' }, gh.content !== null && !body.sha ? 422 : 409);
+      gh.content = Buffer.from(body.content, 'base64').toString('utf8');
+      gh.sha += 1;
+      return json({ content: { sha: `s${gh.sha}` } });
     }
-    if (path === '/gists/g1' && !gh.content) return json({ message: 'Not Found' }, 404);
-    if (path === '/gists/g1' && method === 'GET') return json({ files: { [FILE]: { content: gh.content, truncated: false } }, history: history() });
-    if (path === '/gists/g1' && method === 'PATCH') {
-      gh.content = JSON.parse(req.postData() ?? '{}').files[FILE].content;
-      gh.version += 1;
-      return json({ id: 'g1', history: history() });
-    }
-    if (path === '/gists/g1' && method === 'DELETE') {
+    if (path === SAVE && method === 'DELETE') {
+      if (gh.content === null) return json({ message: 'Not Found' }, 404);
       gh.content = null;
-      return route.fulfill({ status: 204, headers });
+      return json({ commit: {} });
+    }
+    if (path === '/gists/g1' && method === 'GET') {
+      return gh.gist === null ? json({ message: 'Not Found' }, 404) : json({ files: { 'taskcraft-lager.json': { content: gh.gist, truncated: false } } });
     }
     return json({ message: 'Not Found' }, 404);
   });

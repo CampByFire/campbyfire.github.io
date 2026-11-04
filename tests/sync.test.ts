@@ -4,85 +4,109 @@ import { addRoutine, addTask, complete, findTask, newState, pause, removeQuest, 
 import { mergeGames } from '../src/game/merge';
 import { Store, type Storage } from '../src/game/store';
 import type { State } from '../src/game/types';
-import { SAVE_FILE, type Fetch } from '../src/sync/github';
+import { GIST_FILE, SAVE_PATH, fromBase64, toBase64, type Fetch } from '../src/sync/github';
 import { Sync, type Prefs } from '../src/sync/sync';
 
 // Пятница, 23 октября 2026.
 const at = (h: number, m = 0, d = 23) => new Date(2026, 9, d, h, m).getTime();
 
+interface FakeRepo {
+  private: boolean;
+  files: Map<string, { text: string; sha: string }>;
+  /** Сообщения коммитов, от старого к новому. */
+  commits: string[];
+}
+
 /**
- * Поддельный GitHub: гисты в памяти с историей версий, токены и их владельцы, можно «выключить сеть».
- * Если задан net.expiry, GitHub сообщает срок токена в заголовке, как настоящий.
+ * Поддельный GitHub: репозитории с файлами и sha (Contents API), старые гисты, токены с владельцами
+ * и списком репозиториев, которые токен видит; можно «выключить сеть». Если задан net.expiry,
+ * GitHub сообщает срок токена в заголовке, как настоящий.
  */
 function fakeGitHub() {
-  const gists = new Map<string, { content: string; updated: number; versions: { version: string; content: string }[] }>();
+  const repos = new Map<string, FakeRepo>([['igor/lager-data', { private: true, files: new Map(), commits: [] }]]);
+  const gists = new Map<string, string>();
   const tokens: Record<string, string> = { good: 'igor' };
+  /** Какие репозитории видит токен; кого нет в списке, видит все репозитории владельца. */
+  const scope: Record<string, string[]> = {};
   let n = 0;
-  let v = 0;
-  let clock = 0;
-  const net = { down: false, writes: 0, expiry: null as string | null };
+  const net = { down: false, writes: 0, expiry: null as string | null, big: false, stale: null as null | { text: string; sha: string } };
   const json = (body: unknown, status = 200, extra: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...extra } });
-  const history = (g: { versions: { version: string }[] }) => [...g.versions].reverse().map((x) => ({ version: x.version }));
+  const notFound = () => json({ message: 'Not Found' }, 404);
+  const visible = (token: string, login: string) =>
+    [...repos.keys()].filter((name) => (scope[token] ? scope[token].includes(name) : name.startsWith(`${login}/`)));
   const fetchFn: Fetch = async (url, init) => {
     if (net.down) throw new TypeError('Failed to fetch');
     const headers = (init?.headers ?? {}) as Record<string, string>;
-    const login = tokens[(headers.Authorization ?? '').replace('Bearer ', '')];
+    const token = (headers.Authorization ?? '').replace('Bearer ', '');
+    const login = tokens[token];
     if (!login) return json({ message: 'Bad credentials' }, 401);
     const u = new URL(url);
     const method = init?.method ?? 'GET';
-    const m = u.pathname.match(/^\/gists\/(\w+)$/);
-    const rev = u.pathname.match(/^\/gists\/(\w+)\/(\w+)$/);
     if (u.pathname === '/user') return json({ login }, 200, net.expiry ? { 'GitHub-Authentication-Token-Expiration': net.expiry } : {});
-    if (u.pathname === '/gists' && method === 'GET') {
-      return json([...gists.entries()].map(([id, g]) => ({ id, updated_at: new Date(g.updated).toISOString(), files: { [SAVE_FILE]: {} } })));
+    if (u.pathname === '/user/repos') {
+      return json(visible(token, login).map((name) => ({ full_name: name, name: name.split('/')[1], private: repos.get(name)!.private, default_branch: 'main' })));
     }
-    if (u.pathname === '/gists' && method === 'POST') {
-      const body = JSON.parse(init!.body as string);
-      const id = `g${++n}`;
-      const content = body.files[SAVE_FILE].content;
-      gists.set(id, { content, updated: ++clock, versions: [{ version: `v${++v}`, content }] });
+    const gist = u.pathname.match(/^\/gists\/(\w+)$/);
+    if (gist && method === 'GET') {
+      const content = gists.get(gist[1]);
+      return content === undefined ? notFound() : json({ files: { [GIST_FILE]: { content, truncated: false } } });
+    }
+    if (gist && method === 'DELETE') return gists.delete(gist[1]) ? new Response(null, { status: 204 }) : notFound();
+    const m = u.pathname.match(/^\/repos\/([\w-]+\/[\w-]+)(?:\/contents\/(.+))?$/);
+    if (!m || !repos.has(m[1]) || !visible(token, login).includes(m[1])) return notFound();
+    const repo = repos.get(m[1])!;
+    if (!m[2]) return json({ full_name: m[1], name: m[1].split('/')[1], private: repo.private, default_branch: 'main' });
+    const path = m[2];
+    const file = repo.files.get(path);
+    if (method === 'GET') {
+      // Старый ответ: GitHub один раз отдаёт прошлую версию файла.
+      const f = net.stale ?? file;
+      net.stale = null;
+      if (!f) return notFound();
+      if (headers.Accept === 'application/vnd.github.raw+json') return new Response(f.text, { status: 200 });
+      return json(net.big ? { sha: f.sha, content: '', encoding: 'none' } : { sha: f.sha, content: toBase64(f.text), encoding: 'base64' });
+    }
+    const body = JSON.parse((init?.body as string) ?? '{}');
+    if (method === 'PUT') {
+      if (file && !body.sha) return json({ message: '"sha" wasn\'t supplied.' }, 422);
+      if (file && body.sha !== file.sha) return json({ message: 'does not match' }, 409);
+      if (!file && body.sha) return notFound();
+      const sha = `s${++n}`;
+      repo.files.set(path, { text: fromBase64(body.content), sha });
+      repo.commits.push(body.message);
       net.writes++;
-      return json({ id }, 201);
+      return json({ content: { sha } }, file ? 200 : 201);
     }
-    if (rev && method === 'GET') {
-      const x = gists.get(rev[1])?.versions.find((y) => y.version === rev[2]);
-      return x ? json({ files: { [SAVE_FILE]: { content: x.content, truncated: false } } }) : json({ message: 'Not Found' }, 404);
+    if (method === 'DELETE') {
+      if (!file) return notFound();
+      if (body.sha !== file.sha) return json({ message: 'does not match' }, 409);
+      repo.files.delete(path);
+      repo.commits.push(body.message);
+      return json({ commit: {} });
     }
-    if (m && method === 'GET') {
-      const g = gists.get(m[1]);
-      return g ? json({ files: { [SAVE_FILE]: { content: g.content, truncated: false } }, history: history(g) }) : json({ message: 'Not Found' }, 404);
-    }
-    if (m && method === 'PATCH') {
-      const g = gists.get(m[1]);
-      if (!g) return json({ message: 'Not Found' }, 404);
-      g.content = JSON.parse(init!.body as string).files[SAVE_FILE].content;
-      g.updated = ++clock;
-      g.versions.push({ version: `v${++v}`, content: g.content });
-      net.writes++;
-      return json({ id: m[1], history: history(g) });
-    }
-    if (m && method === 'DELETE') {
-      return gists.delete(m[1]) ? new Response(null, { status: 204 }) : json({ message: 'Not Found' }, 404);
-    }
-    return json({ message: 'Not Found' }, 404);
+    return notFound();
   };
-  const saved = (): State => JSON.parse([...gists.values()][0].content).state;
-  return { fetchFn, gists, net, saved, tokens };
+  const repo = () => repos.get('igor/lager-data')!;
+  const doc = () => JSON.parse(repo().files.get(SAVE_PATH)!.text);
+  const saved = (): State => doc().state;
+  return { fetchFn, repos, repo, gists, net, saved, doc, tokens, scope };
 }
 
+type FakeGitHub = ReturnType<typeof fakeGitHub>;
+
 /** Устройство: своё хранилище, свои часы, свой Sync, общий GitHub. */
-function device(gh: ReturnType<typeof fakeGitHub>, name: string, now: { t: number }, fetchFn: Fetch = gh.fetchFn) {
+function device(gh: FakeGitHub, name: string, now: { t: number }, fetchFn: Fetch = gh.fetchFn, prefs: string | null = null) {
   let raw: string | null = null;
-  let prefs: string | null = null;
   const storage: Storage = { load: () => raw, save: (j) => { raw = j; } };
   const p: Prefs = { load: () => prefs, save: (j) => (prefs = j) };
   const store = new Store(storage, () => now.t);
   const sync = new Sync(store, p, fetchFn, name);
-  return { store, sync };
+  return { store, sync, prefs: () => prefs };
 }
 
 const titles = (s: State) => s.tasks.map((t) => t.title).sort();
+const copy = <T,>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
@@ -92,23 +116,66 @@ afterEach(() => {
 });
 
 describe('сохранение в GitHub', () => {
-  it('первое подключение создаёт гист, второе устройство находит его по токену', async () => {
+  it('первое подключение пишет игру в репозиторий, второе устройство находит её по токену', async () => {
     const gh = fakeGitHub();
+    gh.repo().files.set('diary/2026/2026-11-03.md', { text: '# Мысли', sha: 'd1' });
     const now = { t: at(9) };
     const pc = device(gh, 'компьютер', now);
     pc.store.act((s, t) => addTask(s, t, { title: 'Сдать модуль', questId: s.quests[0].id, day: s.day }));
     await pc.sync.connect('good');
-    expect(gh.gists.size).toBe(1);
     expect(titles(gh.saved())).toEqual(['Сдать модуль']);
     expect(pc.sync.status.login).toBe('igor');
+    expect(pc.sync.repo).toEqual({ repo: 'igor/lager-data', branch: 'main' });
+    expect(gh.repo().commits).toEqual(['Лагерь: сохранение (компьютер)']);
 
     // На телефоне новая пустая игра: она молча заменяется игрой из GitHub.
     const phone = device(gh, 'телефон', now);
     await phone.sync.connect(' good ');
-    expect(gh.gists.size).toBe(1);
     expect(phone.store.state.gameId).toBe(pc.store.state.gameId);
     expect(titles(phone.store.state)).toEqual(['Сдать модуль']);
     expect(phone.sync.status.phase).toBe('ok');
+    expect(gh.net.writes).toBe(1);
+    // Дневник игра не трогает.
+    expect(gh.repo().files.get('diary/2026/2026-11-03.md')?.text).toBe('# Мысли');
+  });
+
+  it('репозиторий ищется по токену: по имени, иначе единственный приватный; публичный не годится', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    gh.repos.set('igor/notes', { private: true, files: new Map(), commits: [] });
+    gh.repos.set('igor/site', { private: false, files: new Map(), commits: [] });
+
+    // Токен выдан только на другой репозиторий: он единственный приватный, его и берём.
+    gh.tokens.only = 'igor';
+    gh.scope.only = ['igor/notes', 'igor/site'];
+    const a = device(gh, 'компьютер', now);
+    await a.sync.connect('only');
+    expect(a.sync.repo?.repo).toBe('igor/notes');
+
+    gh.tokens.none = 'igor';
+    gh.scope.none = ['igor/site'];
+    const b = device(gh, 'компьютер', now);
+    await expect(b.sync.connect('none')).rejects.toThrow('Токен не видит репозиторий lager-data');
+    expect(b.sync.connected).toBe(false);
+
+    gh.repo().private = false;
+    const c = device(gh, 'компьютер', now);
+    await expect(c.sync.connect('good')).rejects.toThrow('публичный');
+    expect(c.sync.connected).toBe(false);
+  });
+
+  it('кириллица доходит целой, большой файл читается отдельно', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    const pc = device(gh, 'компьютер', now);
+    pc.store.act((s, t) => addTask(s, t, { title: 'Ёжик в тумане — «пятница» 🔥', questId: s.quests[0].id }));
+    await pc.sync.connect('good');
+    expect(titles(gh.saved())).toEqual(['Ёжик в тумане — «пятница» 🔥']);
+
+    gh.net.big = true;
+    const phone = device(gh, 'телефон', now);
+    await phone.sync.connect('good');
+    expect(titles(phone.store.state)).toEqual(['Ёжик в тумане — «пятница» 🔥']);
   });
 
   it('сохранение в браузере сломалось: игра возвращается из GitHub целиком', async () => {
@@ -118,7 +185,7 @@ describe('сохранение в GitHub', () => {
     pc.store.act((s, t) => addTask(s, t, { title: 'Сдать модуль', questId: s.quests[0].id, day: s.day }));
     await pc.sync.connect('good');
 
-    // Новая пустая игра после «Взять игру из GitHub» не сливается с гистом и не затирает его.
+    // Новая пустая игра после «Взять игру из GitHub» не сливается с сохранением и не затирает его.
     pc.store.startOver();
     pc.sync.pullFresh();
     await pc.sync.syncNow();
@@ -136,16 +203,15 @@ describe('сохранение в GitHub', () => {
     expect(pc.sync.connected).toBe(false);
   });
 
-  it('в гисте игра из новой версии или испорченная: ошибка говорит, что именно', async () => {
+  it('в GitHub игра из новой версии или испорченная: ошибка говорит, что именно', async () => {
     const gh = fakeGitHub();
     const pc = device(gh, 'компьютер', { t: at(9) });
     await pc.sync.connect('good');
-    const gist = [...gh.gists.values()][0];
     const spoil = (change: (doc: { stamp: string; state: Record<string, unknown> }) => void) => {
-      const doc = JSON.parse(gist.content);
+      const doc = gh.doc();
       doc.stamp = `${doc.stamp}-other`;
       change(doc);
-      gist.content = JSON.stringify(doc);
+      gh.repo().files.set(SAVE_PATH, { text: JSON.stringify(doc), sha: `x${doc.stamp}` });
     };
     spoil((doc) => (doc.state.v = 99));
     await pc.sync.syncNow();
@@ -155,7 +221,7 @@ describe('сохранение в GitHub', () => {
       delete doc.state.tasks;
     });
     await pc.sync.syncNow();
-    expect(pc.sync.status.error).toBe('В гисте повреждённое сохранение');
+    expect(pc.sync.status.error).toBe('В GitHub повреждённое сохранение');
   });
 
   it('действие уходит в GitHub, другое устройство его забирает', async () => {
@@ -170,6 +236,7 @@ describe('сохранение в GitHub', () => {
     phone.store.act((s, t) => addTask(s, t, { title: 'Купить хлеб', questId: s.quests[2].id }));
     await vi.advanceTimersByTimeAsync(5000);
     expect(titles(gh.saved())).toEqual(['Купить хлеб']);
+    expect(gh.repo().commits.at(-1)).toBe('Лагерь: сохранение (телефон)');
 
     const before = gh.net.writes;
     await pc.sync.syncNow();
@@ -216,13 +283,13 @@ describe('сохранение в GitHub', () => {
     }
   });
 
-  it('два устройства пишут одновременно: задачи обеих сторон остаются', async () => {
+  it('два устройства пишут одновременно: GitHub не даёт затереть, задачи обеих сторон остаются', async () => {
     const gh = fakeGitHub();
     const now = { t: at(9) };
-    // Запись компьютера можно придержать: он уже прочитал гист, но ещё не записал.
+    // Запись компьютера можно придержать: он уже прочитал сохранение, но ещё не записал.
     const hold = { on: false, release: null as null | (() => void) };
     const pcFetch: Fetch = async (url, init) => {
-      if (hold.on && init?.method === 'PATCH') {
+      if (hold.on && init?.method === 'PUT') {
         hold.on = false;
         await new Promise<void>((r) => (hold.release = r));
       }
@@ -243,10 +310,10 @@ describe('сохранение в GitHub', () => {
     await vi.advanceTimersByTimeAsync(0);
     await phone.sync.syncNow(); // телефон записал своё, пока компьютер ждал
     hold.release!();
-    await pcRun; // компьютер записал поверх, заметил это по истории гиста и слил
-    await vi.advanceTimersByTimeAsync(10_000);
+    await pcRun; // GitHub не принял запись компьютера: версия уже не та
+    expect(titles(gh.saved())).toEqual(['С телефона']);
+    await vi.advanceTimersByTimeAsync(10_000); // компьютер перечитал, слил и записал
     await phone.sync.syncNow();
-    await pc.sync.syncNow();
 
     expect(titles(gh.saved())).toEqual(['С компьютера', 'С телефона']);
     expect(titles(phone.store.state)).toEqual(['С компьютера', 'С телефона']);
@@ -254,6 +321,53 @@ describe('сохранение в GitHub', () => {
     expect(gh.saved().hero.gold).toBe(15);
     expect(pc.store.state.hero.gold).toBe(15);
     expect(phone.store.state.hero.gold).toBe(15);
+    expect(pc.sync.status.phase).toBe('ok');
+  });
+
+  it('запись после слияния не прошла: прирост с другого устройства не считается дважды', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    // У компьютера можно оборвать только запись: прочитать и слить он успевает.
+    const cut = { put: false };
+    const pc = device(gh, 'компьютер', now, async (url, init) => {
+      if (cut.put && init?.method === 'PUT') throw new TypeError('Failed to fetch');
+      return gh.fetchFn(url, init);
+    });
+    await pc.sync.connect('good');
+    const phone = device(gh, 'телефон', now);
+    await phone.sync.connect('good');
+
+    phone.store.act((s) => (s.hero.gold += 5));
+    await phone.sync.syncNow();
+    pc.store.act((s) => (s.hero.gold += 10));
+    cut.put = true;
+    await pc.sync.syncNow();
+    expect(pc.sync.status.phase).toBe('offline');
+    expect(pc.store.state.hero.gold).toBe(15);
+    cut.put = false;
+    await pc.sync.syncNow();
+    expect(pc.store.state.hero.gold).toBe(15);
+    expect(gh.saved().hero.gold).toBe(15);
+  });
+
+  it('GitHub отдал старую версию: она не сливается поверх новой', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    const pc = device(gh, 'компьютер', now);
+    await pc.sync.connect('good');
+    pc.store.act((s, t) => addTask(s, t, { title: 'Первая', questId: s.quests[0].id }));
+    await vi.advanceTimersByTimeAsync(5000);
+    const old = { ...gh.repo().files.get(SAVE_PATH)! };
+    pc.store.act((s, t) => addTask(s, t, { title: 'Вторая', questId: s.quests[0].id }));
+    pc.store.act((s) => (s.hero.gold += 7));
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(titles(gh.saved())).toEqual(['Вторая', 'Первая']);
+
+    gh.net.stale = old;
+    await pc.sync.syncNow();
+    expect(titles(pc.store.state)).toEqual(['Вторая', 'Первая']);
+    expect(pc.store.state.hero.gold).toBe(7);
+    expect(titles(gh.saved())).toEqual(['Вторая', 'Первая']);
   });
 
   it('таймер с другого устройства досчитывается, а не удваивается', async () => {
@@ -322,6 +436,105 @@ describe('сохранение в GitHub', () => {
   });
 });
 
+describe('переезд из гиста', () => {
+  /**
+   * Устройство, которое сохранялось в гист прошлыми версиями: игра в браузере, в настройках
+   * гист и версия для слияния, а в гисте сохранение.
+   */
+  function gistDevice(gh: FakeGitHub, name: string, now: { t: number }, game: State, stamp: string) {
+    const prefs = JSON.stringify({ token: 'old', login: 'igor', gistId: 'g1', stamp, base: copy(game), dirty: false, replaced: false, syncedAt: now.t });
+    const d = device(gh, name, now, gh.fetchFn, prefs);
+    d.store.replace(copy(game));
+    return d;
+  }
+
+  function oldGist(gh: FakeGitHub, game: State, stamp = 'gist1') {
+    gh.tokens.old = 'igor';
+    gh.gists.set('g1', JSON.stringify({ app: 'taskcraft-lager', format: 1, stamp, savedAt: at(8), device: 'компьютер', state: copy(game) }));
+  }
+
+  it('пока не переехало, в GitHub ничего не пишется; переезд копирует сохранение из гиста как есть', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    const game = newState(at(8));
+    addTask(game, at(8), { title: 'Из гиста', questId: game.quests[0].id });
+    oldGist(gh, game);
+    const pc = gistDevice(gh, 'компьютер', now, game, 'gist1');
+    expect(pc.sync.connected).toBe(true);
+    expect(pc.sync.needsMove).toBe(true);
+    expect(pc.sync.status.phase).toBe('move');
+
+    pc.store.act((s, t) => addTask(s, t, { title: 'До переезда', questId: s.quests[0].id }));
+    await vi.advanceTimersByTimeAsync(5000);
+    await pc.sync.syncNow();
+    expect(gh.net.writes).toBe(0);
+
+    await pc.sync.moveToRepo('good');
+    expect(pc.sync.needsMove).toBe(false);
+    expect(pc.sync.status.phase).toBe('ok');
+    expect(pc.sync.repo?.repo).toBe('igor/lager-data');
+    expect(gh.repo().commits).toEqual(['Лагерь: переезд из гиста', 'Лагерь: сохранение (компьютер)']);
+    expect(titles(gh.saved())).toEqual(['До переезда', 'Из гиста']);
+    // Гист остался запасной копией.
+    expect(gh.gists.has('g1')).toBe(true);
+    expect(pc.sync.oldGist).toBe('g1');
+    pc.sync.forgetOldGist();
+    expect(pc.sync.oldGist).toBeNull();
+  });
+
+  it('второе устройство переезжает следом: игры сливаются без вопроса, золото не удваивается', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    const game = newState(at(8));
+    const id = addTask(game, at(8), { title: 'Отчёт', questId: game.quests[0].id, day: game.day });
+    oldGist(gh, game);
+    const pc = gistDevice(gh, 'компьютер', now, game, 'gist1');
+    const phone = gistDevice(gh, 'телефон', now, game, 'gist1');
+
+    // Оба что-то сделали, пока ждали переезда.
+    pc.store.act((s, t) => complete(s, t, id));
+    phone.store.act((s, t) => addTask(s, t, { title: 'Аптека', questId: s.quests[2].id }));
+    phone.store.act((s) => (s.hero.gold += 3));
+
+    await pc.sync.moveToRepo('good');
+    await phone.sync.moveToRepo('good');
+    expect(phone.sync.status.phase).toBe('ok');
+    await pc.sync.syncNow();
+
+    for (const d of [pc, phone]) {
+      expect(titles(d.store.state)).toEqual(['Аптека', 'Отчёт']);
+      expect(findTask(d.store.state, id)!.status).toBe('done');
+      expect(d.store.state.hero.gold).toBe(28);
+    }
+    expect(gh.saved().hero.gold).toBe(28);
+  });
+
+  it('старый токен истёк: в репозиторий уходит игра отсюда', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    const game = newState(at(8));
+    addTask(game, at(8), { title: 'Своё', questId: game.quests[0].id });
+    oldGist(gh, game);
+    const pc = gistDevice(gh, 'компьютер', now, game, 'gist1');
+    delete gh.tokens.old;
+    await pc.sync.moveToRepo('good');
+    expect(pc.sync.status.phase).toBe('ok');
+    expect(titles(gh.saved())).toEqual(['Своё']);
+  });
+
+  it('без сети переезд не начинается, неверный токен объясняет почему', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    const game = newState(at(8));
+    oldGist(gh, game);
+    const pc = gistDevice(gh, 'компьютер', now, game, 'gist1');
+    await expect(pc.sync.moveToRepo('bad')).rejects.toThrow('GitHub не принял токен');
+    gh.net.down = true;
+    await expect(pc.sync.moveToRepo('good')).rejects.toThrow('Нет связи');
+    expect(pc.sync.needsMove).toBe(true);
+  });
+});
+
 describe('токен', () => {
   it('срок токена: из ответа GitHub, а если его не видно, год от подключения', async () => {
     const gh = fakeGitHub();
@@ -352,6 +565,9 @@ describe('токен', () => {
     gh.tokens.other = 'masha';
     await expect(pc.sync.replaceToken('other')).rejects.toThrow('аккаунта masha');
     await expect(pc.sync.replaceToken('nope')).rejects.toThrow('не принял токен');
+    gh.tokens.blind = 'igor';
+    gh.scope.blind = [];
+    await expect(pc.sync.replaceToken('blind')).rejects.toThrow('Не нашёл репозиторий');
     expect(pc.sync.status.phase).toBe('error');
 
     gh.tokens.fresh = 'igor';
@@ -362,18 +578,20 @@ describe('токен', () => {
     expect(pc.sync.tokenExpiry).toEqual({ day: '2027-10-24', guessed: true });
   });
 
-  it('гист можно удалить; без сети он остаётся, и GitHub остаётся подключён', async () => {
+  it('сохранение можно удалить: уходит только game/save.json, без сети не уходит ничего', async () => {
     const gh = fakeGitHub();
+    gh.repo().files.set('diary/2026/2026-11-03.md', { text: '# Мысли', sha: 'd1' });
     const now = { t: at(9) };
     const pc = device(gh, 'компьютер', now);
     await pc.sync.connect('good');
     gh.net.down = true;
     await expect(pc.sync.removeSave()).rejects.toThrow('Нет связи');
     expect(pc.sync.connected).toBe(true);
-    expect(gh.gists.size).toBe(1);
+    expect(gh.repo().files.has(SAVE_PATH)).toBe(true);
     gh.net.down = false;
     await pc.sync.removeSave();
-    expect(gh.gists.size).toBe(0);
+    expect(gh.repo().files.has(SAVE_PATH)).toBe(false);
+    expect(gh.repo().files.has('diary/2026/2026-11-03.md')).toBe(true);
     expect(pc.sync.connected).toBe(false);
     expect(pc.sync.status.phase).toBe('off');
   });

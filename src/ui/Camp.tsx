@@ -265,10 +265,15 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
 function SyncBadge({ ui }: { ui: Ui }) {
   const trouble = syncTrouble(ui.sync, ui.now);
   if (!trouble) return null;
-  const label = trouble === 'stale' ? 'Нет связи с GitHub: последние действия ещё не сохранены там' : 'Игра не сохраняется в GitHub';
+  const label =
+    trouble === 'stale'
+      ? 'Нет связи с GitHub: последние действия ещё не сохранены там'
+      : trouble === 'move'
+        ? 'Сохранение в GitHub ждёт переезда в репозиторий'
+        : 'Игра не сохраняется в GitHub';
   return (
     <button
-      class={`chip chip-alert${trouble === 'stale' ? ' is-mild' : ''}`}
+      class={`chip chip-alert${trouble === 'error' ? '' : ' is-mild'}`}
       aria-label={label}
       title={label}
       onClick={() => ui.open(ui.sync.status.phase === 'conflict' ? { kind: 'syncConflict' } : { kind: 'sync' })}

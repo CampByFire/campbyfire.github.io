@@ -1,4 +1,4 @@
-// «Стереть всё» в Летописи: игра уходит из браузера, по желанию вместе с гистом.
+// «Стереть всё» в Летописи: игра уходит из браузера, по желанию вместе с сохранением в GitHub.
 import { expect, test } from '@playwright/test';
 import { addTask, connectGitHub, fakeGitHub, openGame, sheet, tab } from './helpers';
 
@@ -17,7 +17,7 @@ test('стёртая игра начинается заново со знако�
   expect(await page.evaluate(() => localStorage.getItem('taskcraft-lager-github'))).toBeNull();
 });
 
-test('вместе с гистом: без связи ничего не стирается, со связью уходят оба', async ({ page }) => {
+test('вместе с сохранением в GitHub: без связи ничего не стирается, со связью уходят оба', async ({ page }) => {
   const gh = await fakeGitHub(page);
   await openGame(page, { intro: true });
   await page.getByRole('button', { name: 'Пропустить' }).click();
@@ -28,12 +28,12 @@ test('вместе с гистом: без связи ничего не стир
   await confirm.getByLabel('Удалить и сохранение в GitHub').check();
 
   gh.mode = 'down';
-  await confirm.getByRole('button', { name: 'Стереть игру и гист' }).click();
-  await expect(confirm).toContainText('Гист не удалился, и игра не стёрта.');
+  await confirm.getByRole('button', { name: 'Стереть игру и сохранение' }).click();
+  await expect(confirm).toContainText('Сохранение в GitHub не удалилось, и игра не стёрта.');
   expect(gh.content).not.toBeNull();
 
   gh.mode = 'ok';
-  await confirm.getByRole('button', { name: 'Стереть игру и гист' }).click();
+  await confirm.getByRole('button', { name: 'Стереть игру и сохранение' }).click();
   await expect(sheet(page, 'Знакомство')).toBeVisible();
   expect(gh.content).toBeNull();
 });
