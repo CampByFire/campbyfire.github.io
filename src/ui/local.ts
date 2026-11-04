@@ -19,6 +19,8 @@ export interface Local {
   risen?: string[];
   /** Раздел Летописи, куда последний раз записали мысль: туда же пойдёт следующая. */
   lastSection?: string;
+  /** Свои цвета текста в заметках, последние сверху (до четырёх). */
+  noteColors?: string[];
 }
 
 export function loadLocal(now: number): Local {

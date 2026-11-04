@@ -5,10 +5,13 @@ import { doneOn } from '../game/state';
 import { addDays, dayKey, formatClock, formatDate, formatDuration } from '../game/time';
 import { W } from '../game/words';
 import type { DiaryDay } from '../notes/diary';
+import { plainText } from '../notes/markdown';
 import type { Note, Section } from '../notes/model';
+import { search, type Hit } from '../notes/search';
 import type { Notes } from '../notes/notes';
 import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
+import { RichText } from './Rich';
 
 export function useNotes(notes: Notes): void {
   const [, setN] = useState(0);
@@ -35,6 +38,8 @@ export function NotesScreen({ ui }: { ui: Ui }) {
 
 function SectionList({ ui }: { ui: Ui }) {
   const sections = ui.notes.sections();
+  const [query, setQuery] = useState('');
+  const searching = query.trim().length >= 2;
   return (
     <div class="page">
       <h1 class="page-title">{W.chronicle}</h1>
@@ -43,6 +48,44 @@ function SectionList({ ui }: { ui: Ui }) {
         <LIcon name="bulb" size={19} />
         Записать мысль
       </button>
+      <input
+        class="input nsearch"
+        type="search"
+        value={query}
+        placeholder="Найти в Летописи"
+        aria-label="Поиск по Летописи"
+        onInput={(e) => setQuery(e.currentTarget.value)}
+      />
+      {searching ? <SearchResults ui={ui} query={query} /> : <Shelves ui={ui} sections={sections} />}
+      <NotesState ui={ui} />
+    </div>
+  );
+}
+
+function SearchResults({ ui, query }: { ui: Ui; query: string }) {
+  const hits = search(ui.notes, query);
+  const open = (h: Hit) => (h.kind === 'note' ? ui.open({ kind: 'note', slug: h.slug, path: h.path }) : ui.open({ kind: 'diary', path: h.path, entry: h.entry }));
+  return (
+    <section class="group nlist" aria-label="Найдено">
+      {hits.length === 0 && <p class="note">Ничего не нашлось.</p>}
+      {hits.map((h) => (
+        <button key={h.kind === 'note' ? h.path : `${h.path}|${h.entry.time}|${h.entry.text}`} class="ncard nhit" onClick={() => open(h)}>
+          <span class="ncard-date">{h.kind === 'note' ? h.where : `Дневник · ${dayName(ui, h.day)}${h.entry.time ? `, ${h.entry.time.replace(/^0/, '')}` : ''}`}</span>
+          {h.kind === 'note' && h.title && <span class="ncard-title">{h.title}</span>}
+          <span class="ncard-line nhit-text">
+            {h.snippet.before}
+            <mark>{h.snippet.match}</mark>
+            {h.snippet.after}
+          </span>
+        </button>
+      ))}
+    </section>
+  );
+}
+
+function Shelves({ ui, sections }: { ui: Ui; sections: Section[] }) {
+  return (
+    <>
       <section class="group">
         <div class="group-head">
           <h2 class="sc">Разделы</h2>
@@ -86,8 +129,7 @@ function SectionList({ ui }: { ui: Ui }) {
           </button>
         </div>
       </section>
-      <NotesState ui={ui} />
-    </div>
+    </>
   );
 }
 
@@ -199,13 +241,13 @@ function FeedCard({ ui, n }: { ui: Ui; n: Note }) {
   return (
     <button class="ncard" onClick={() => ui.open({ kind: 'note', slug: n.slug, path: n.path })}>
       {n.at !== null && <span class="ncard-date">{when(ui, n.at)}</span>}
-      <span class="ncard-text">{n.text.trim() || 'Пустая запись'}</span>
+      {n.text.trim() ? <RichText class="ncard-text" text={n.text} links={false} /> : <span class="ncard-text">Пустая запись</span>}
     </button>
   );
 }
 
 function ArticleCard({ ui, n }: { ui: Ui; n: Note }) {
-  const first = n.body.trim().split('\n')[0] ?? '';
+  const first = plainText(n.body).split('\n')[0] ?? '';
   return (
     <button class="ncard" onClick={() => ui.open({ kind: 'note', slug: n.slug, path: n.path })}>
       <span class="ncard-title">{n.title || 'Без названия'}</span>
@@ -258,7 +300,7 @@ function DiaryDayBlock({ ui, d }: { ui: Ui; d: DiaryDay }) {
       {d.entries.map((e, i) => (
         <button key={`${i}-${e.time}`} class="ncard" onClick={() => ui.open({ kind: 'diary', path: d.path, entry: e })}>
           {e.time && <span class="ncard-date">{e.time.replace(/^0/, '')}</span>}
-          <span class="ncard-text">{e.text || 'Пустая запись'}</span>
+          {e.text ? <RichText class="ncard-text" text={e.text} links={false} /> : <span class="ncard-text">Пустая запись</span>}
         </button>
       ))}
     </section>

@@ -51,7 +51,7 @@ test('раздел статей: новая статья, правка заго�
 
   await page.getByRole('button', { name: 'Новая статья' }).click();
   const art = sheet(page, 'Новая статья');
-  await art.getByLabel('Заголовок').fill('Как я планирую день');
+  await art.getByLabel('Заголовок', { exact: true }).fill('Как я планирую день');
   await art.getByLabel('Текст').fill('Утро начинается с плана.\n\nПотом поход.');
   await art.getByRole('button', { name: 'Сохранить' }).click();
   await expect(page.locator('.ncard-title')).toHaveText('Как я планирую день');
@@ -60,11 +60,14 @@ test('раздел статей: новая статья, правка заго�
   await page.getByRole('button', { name: /Как я планирую день/ }).click();
   const edit = sheet(page, 'Статья');
   await expect(edit.getByText('notes/stati/kak-ya-planiruyu-den.md')).toBeVisible();
-  await edit.getByLabel('Заголовок').fill('Мой день');
+  await expect(edit.locator('.nread p').last()).toHaveText('Потом поход.');
+  await edit.getByRole('button', { name: 'Править' }).click();
+  await edit.getByLabel('Заголовок', { exact: true }).fill('Мой день');
   await edit.getByRole('button', { name: 'Сохранить' }).click();
   await expect(page.locator('.ncard-title')).toHaveText('Мой день');
 
   await page.getByRole('button', { name: /Мой день/ }).click();
+  await sheet(page, 'Статья').getByRole('button', { name: 'Править' }).click();
   page.once('dialog', (d) => void d.accept());
   await sheet(page, 'Статья').getByRole('button', { name: 'Удалить заметку' }).click();
   await expect(page.getByText('Статей пока нет.')).toBeVisible();
@@ -149,4 +152,70 @@ test('дневник: записи за день в одном файле diary/
     .toMatch(/^## 09:0\d\n\nУтром прошёлся пешком до работы\.\n\n## 09:0\d\n\nВспомнил про отчёт\.\n$/);
   await page.getByRole('button', { name: 'Записать мысль' }).click();
   await expect(sheet(page, 'Записать мысль').getByRole('radio', { name: 'Дневник' })).toHaveAttribute('aria-checked', 'true');
+});
+
+test('оформление: жирный и свой цвет в записи ленты ложатся в Markdown; поиск находит запись', async ({ page }) => {
+  const gh = await fakeGitHub(page);
+  await openGame(page);
+  await connectGitHub(page);
+  await tab(page, 'Летопись').click();
+  await page.getByRole('button', { name: 'Записать мысль' }).click();
+  const form = sheet(page, 'Записать мысль');
+  await form.getByLabel('Мысль').fill('Важная идея про костёр');
+  await form.getByRole('button', { name: 'Записать', exact: true }).click();
+  await page.getByRole('button', { name: /^Идеи/ }).click();
+  await page.getByRole('button', { name: /Важная идея про костёр/ }).click();
+
+  const edit = sheet(page, 'Запись');
+  const box = edit.getByRole('textbox', { name: 'Текст' });
+  await expect(box).toHaveText('Важная идея про костёр');
+  // Выделяю «Важная» и делаю жирным.
+  await box.evaluate((el) => {
+    const t = el.querySelector('p')!.firstChild!;
+    const r = document.createRange();
+    r.setStart(t, 0);
+    r.setEnd(t, 6);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(r);
+  });
+  await edit.getByRole('button', { name: 'Жирный' }).click();
+  await expect(edit.getByRole('button', { name: 'Жирный' })).toHaveAttribute('aria-pressed', 'true');
+  // Выделяю «костёр» и красю своим цветом.
+  await box.evaluate((el) => {
+    const p = el.querySelector('p')!;
+    const t = p.lastChild!;
+    const at = t.textContent!.indexOf('костёр');
+    const r = document.createRange();
+    r.setStart(t, at);
+    r.setEnd(t, at + 6);
+    getSelection()!.removeAllRanges();
+    getSelection()!.addRange(r);
+  });
+  await edit.getByRole('button', { name: 'Цвет', exact: true }).click();
+  await edit.getByLabel('Свой цвет').evaluate((el: HTMLInputElement) => {
+    el.value = '#12ab34';
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await edit.getByRole('button', { name: 'Сохранить' }).click();
+
+  const card = page.locator('.ncard-text').first();
+  await expect(card.locator('strong')).toHaveText('Важная');
+  await expect(card.locator('span[style*="color"]')).toHaveText('костёр');
+  await page.clock.runFor(3000);
+  await expect
+    .poll(() => [...gh.notes.entries()].find(([p]) => p.startsWith('notes/idei/2'))?.[1].text)
+    .toBe('**Важная** идея про <span style="color:#12ab34">костёр</span>\n');
+
+  // Свой цвет запомнился в палитре.
+  await page.getByRole('button', { name: /Важная идея/ }).click();
+  await sheet(page, 'Запись').getByRole('button', { name: 'Цвет', exact: true }).click();
+  await expect(sheet(page, 'Запись').getByRole('button', { name: 'свой #12ab34' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  // Поиск без учёта регистра и «ё».
+  await page.goBack();
+  await page.getByLabel('Поиск по Летописи').fill('КОСТЕР');
+  await expect(page.locator('.nhit mark')).toHaveText('костёр');
+  await page.locator('.nhit').click();
+  await expect(sheet(page, 'Запись')).toBeVisible();
 });

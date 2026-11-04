@@ -8,6 +8,7 @@ import { LIcon } from './Icon';
 import { loadLocal, updateLocal } from './local';
 import { DIARY, HERO_NOTED } from './Notes';
 import { Chips } from './parts';
+import { RichEditor, RichText } from './Rich';
 import { Sheet } from './Sheets';
 
 const NEW = '+new';
@@ -86,6 +87,8 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
   const stati = section?.vid === 'stati';
   const [title, setTitle] = useState(note?.title ?? '');
   const [text, setText] = useState(() => (note ? (stati ? note.body : note.text).replace(/\n$/, '') : ''));
+  // Статья открывается для чтения, править её можно кнопкой. Новая статья и запись ленты сразу правятся.
+  const [editing, setEditing] = useState(!path || !stati);
   if (path && !note) {
     // Заметку удалили, пока лист был открыт (например, на другом устройстве).
     return (
@@ -107,6 +110,24 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
     ui.close();
     ui.toast('Заметка удалена');
   };
+  if (!editing && note) {
+    return (
+      <Sheet
+        title="Статья"
+        onClose={ui.close}
+        footer={
+          <button class="btn btn-gold btn-wide" onClick={() => setEditing(true)}>
+            <LIcon name="edit" size={18} />
+            Править
+          </button>
+        }
+      >
+        <h3 class="nread-title">{note.title || 'Без названия'}</h3>
+        <RichText class="nread" text={note.body} />
+        <p class="note nfile">{path}</p>
+      </Sheet>
+    );
+  }
   return (
     <Sheet
       title={stati ? (path ? 'Статья' : 'Новая статья') : 'Запись'}
@@ -123,10 +144,7 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
           <input class="input" value={title} maxLength={80} onInput={(e) => setTitle(e.currentTarget.value)} />
         </label>
       )}
-      <label class="field">
-        <span class="field-label">Текст</span>
-        <textarea class={`input ntext${stati ? ' ntext-long' : ''}`} rows={stati ? 12 : 6} value={text} onInput={(e) => setText(e.currentTarget.value)} />
-      </label>
+      <RichEditor ui={ui} label="Текст" value={text} onChange={setText} long={stati} />
       {path && (
         <>
           <p class="note nfile">{path}</p>
@@ -180,10 +198,7 @@ export function DiarySheet({ ui, path, entry }: { ui: Ui; path: string; entry: D
         {day ? formatDate(day) : ''}
         {entry.time ? `, ${entry.time.replace(/^0/, '')}` : ''}
       </p>
-      <label class="field">
-        <span class="field-label">Текст</span>
-        <textarea class="input ntext" rows={8} value={text} onInput={(e) => setText(e.currentTarget.value)} />
-      </label>
+      <RichEditor ui={ui} label="Текст" value={text} onChange={setText} />
       <p class="note nfile">{path}</p>
       <div class="actions">
         <button class="act act-danger" onClick={remove}>
