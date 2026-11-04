@@ -228,6 +228,11 @@ h2.sc {
   user-select: none;
 }
 
+/* Мышь над фигурой с задачей: фигура нажимается, как номер над ней. */
+.scene.is-over-fig {
+  cursor: pointer;
+}
+
 .scene-bg {
   position: absolute;
   inset: 0;

@@ -1,4 +1,5 @@
 // Сцена лагеря: готовая картинка поляны, фигурки отряда и метки поверх.
+import { useEffect, useState } from 'preact/hooks';
 import { plural } from '../game/time';
 import type { CampView, Tone } from '../game/view';
 import type { Task } from '../game/types';
@@ -6,6 +7,7 @@ import { CLASS_NAME, UNDEAD_NAME } from '../game/words';
 import { SCENE, SCENE_H, SCENE_W, assetUrl, pct, spriteKey, type Sprite } from '../scene/scene';
 import { LIcon } from './Icon';
 import { numLook } from './parts';
+import { pick, preloadMask, type Pickable } from './pick';
 
 interface Figure {
   key: string;
@@ -28,6 +30,8 @@ interface Figure {
 /** Номер над фигурой: 28 px, а нажать можно в круге 44 px, если соседний номер не слишком близко. */
 const BADGE = 28;
 const BADGE_HIT = 8;
+/** Насколько мимо фигуры можно попасть пальцем, в пикселях экрана. */
+const FIG_SLOP = 8;
 
 export function Scene(p: {
   view: CampView;
@@ -106,8 +110,37 @@ export function Scene(p: {
   if (fireLayer) layers.push({ key: 'fire', sprite: { ...fireLayer, lit: true }, feet: fire[1] });
   layers.sort((a, b) => a.feet - b.feet);
 
+  // Сама фигура тоже открывает задачу, как номер над ней. Фигура без номера не открывается, как и раньше.
+  const pickable: Pickable<string>[] = layers.map((l) => ({ sprite: l.sprite, target: l.f && l.f.n > 0 ? l.f.task.id : undefined }));
+  const files = pickable.map((l) => l.sprite.file).join('|');
+  useEffect(() => {
+    for (const l of pickable) preloadMask(l.sprite.file);
+  }, [files]);
+  const [hover, setHover] = useState(false);
+  const figureAt = (e: MouseEvent): string | undefined => {
+    // Номер, письма и другие кнопки сцены нажимаются сами.
+    if ((e.target as Element).closest?.('button')) return undefined;
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    if (!r.width || !r.height) return undefined;
+    const x = ((e.clientX - r.left) / r.width) * SCENE_W;
+    const y = ((e.clientY - r.top) / r.height) * SCENE_H;
+    return pick(pickable, x, y, p.unit ? FIG_SLOP / p.unit : 0);
+  };
+
   return (
-    <div class={`scene light-${v.light}${v.onBreak ? ' is-break' : ''}${v.asleep ? ' is-asleep' : ''}`}>
+    <div
+      class={`scene light-${v.light}${v.onBreak ? ' is-break' : ''}${v.asleep ? ' is-asleep' : ''}${hover ? ' is-over-fig' : ''}`}
+      onClick={(e) => {
+        const id = figureAt(e);
+        if (id) p.onTask(id);
+      }}
+      onPointerMove={(e) => {
+        if (e.pointerType !== 'mouse') return;
+        const over = figureAt(e) !== undefined;
+        if (over !== hover) setHover(over);
+      }}
+      onPointerLeave={() => hover && setHover(false)}
+    >
       {bg ? (
         <img class="scene-bg" src={assetUrl(bg)} alt="" draggable={false} />
       ) : (
