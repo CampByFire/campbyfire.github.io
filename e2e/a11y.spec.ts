@@ -1,6 +1,6 @@
 // Доступность: проверка axe на главных экранах и листах, работа с клавиатуры.
 // Как звучит игра в VoiceOver и TalkBack, проверяется руками: docs/screen-reader-check.md.
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { addTask, axe, openGame, sheet, tab } from './helpers';
 
 test('axe не находит нарушений на экранах и в листах', async ({ page }) => {
@@ -21,6 +21,109 @@ test('axe не находит нарушений на экранах и в ли�
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Правила' }).click();
   expect(await axe(page), 'Правила').toEqual([]);
+});
+
+/** Кнопки и поля на экране и в открытом листе, которые меньше 44×44. Пустой список, если всё в порядке. */
+const tooSmall = (page: Page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll<HTMLElement>('.screen button, .screen input, [role="dialog"] button, [role="dialog"] input')]
+      .filter((el) => !el.closest('[inert]') && !el.classList.contains('link-btn'))
+      .map((el) => ({ el, box: el.getBoundingClientRect() }))
+      .filter(({ box }) => box.width > 0 && (box.width < 43.5 || box.height < 43.5))
+      .map(({ el, box }) => `${el.getAttribute('aria-label') ?? el.textContent ?? el.className}: ${Math.round(box.width)}×${Math.round(box.height)}`),
+  );
+
+test('axe не находит нарушений в Летописи и её листах', async ({ page }) => {
+  await openGame(page);
+  await tab(page, 'Летопись').click();
+  expect(await axe(page), 'Летопись').toEqual([]);
+
+  // Быстрая мысль. Первая заводит раздел ленты «Идеи».
+  await page.getByRole('button', { name: 'Записать мысль' }).click();
+  const thought = sheet(page, 'Записать мысль');
+  expect(await axe(page), 'Записать мысль').toEqual([]);
+  expect(await tooSmall(page), 'Записать мысль').toEqual([]);
+  await thought.getByLabel('Мысль').fill('Искры над костром');
+  await thought.getByRole('button', { name: 'Записать', exact: true }).click();
+  await expect(thought).toBeHidden();
+
+  // Поиск.
+  await page.getByLabel('Поиск по Летописи').fill('искры');
+  await expect(page.locator('.nhit')).toBeVisible();
+  expect(await axe(page), 'Поиск').toEqual([]);
+  await page.getByLabel('Поиск по Летописи').fill('такого нет');
+  await expect(page.getByText('Ничего не нашлось.')).toBeVisible();
+  expect(await axe(page), 'Поиск без результатов').toEqual([]);
+  await page.getByLabel('Поиск по Летописи').fill('');
+
+  // Лента и запись в ней.
+  await page.getByRole('button', { name: /^Идеи/ }).click();
+  expect(await axe(page), 'Лента').toEqual([]);
+  expect(await tooSmall(page), 'Лента').toEqual([]);
+  await page.getByRole('button', { name: /Искры над костром/ }).click();
+  const note = sheet(page, 'Запись');
+  await expect(note.getByRole('toolbar', { name: 'Оформление' })).toBeVisible();
+  expect(await axe(page), 'Запись').toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(note).toBeHidden();
+
+  // Настройки раздела.
+  await page.getByRole('button', { name: 'Настроить раздел' }).click();
+  const conf = sheet(page, 'Раздел');
+  await expect(conf.getByRole('radiogroup', { name: 'Значок' })).toBeVisible();
+  expect(await axe(page), 'Раздел').toEqual([]);
+  expect(await tooSmall(page), 'Раздел').toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(conf).toBeHidden();
+  await page.goBack();
+
+  // Новый раздел статей.
+  await page.getByRole('button', { name: 'Новый раздел' }).click();
+  const make = sheet(page, 'Новый раздел');
+  expect(await axe(page), 'Новый раздел').toEqual([]);
+  await make.getByLabel('Название').fill('Статьи');
+  await make.getByRole('radio', { name: 'Статьи' }).click();
+  await make.getByRole('button', { name: 'Создать' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Статьи' })).toBeVisible();
+  expect(await axe(page), 'Раздел статей').toEqual([]);
+
+  // Новая статья: панель оформления и выбор цвета.
+  await page.getByRole('button', { name: 'Новая статья' }).click();
+  const article = sheet(page, 'Новая статья');
+  await article.getByLabel('Заголовок', { exact: true }).fill('Как я планирую день');
+  await article.getByRole('textbox', { name: 'Текст' }).fill('Утро начинается с плана.');
+  expect(await axe(page), 'Новая статья').toEqual([]);
+  await article.getByRole('button', { name: 'Цвет', exact: true }).click();
+  await expect(article.getByRole('group', { name: 'Цвет' })).toBeVisible();
+  expect(await axe(page), 'Выбор цвета').toEqual([]);
+  expect(await tooSmall(page), 'Выбор цвета').toEqual([]);
+  await article.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(article).toBeHidden();
+
+  // Статья для чтения.
+  await page.getByRole('button', { name: /Как я планирую день/ }).click();
+  const reading = sheet(page, 'Статья');
+  await expect(reading.getByRole('button', { name: 'Править' })).toBeVisible();
+  expect(await axe(page), 'Статья').toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(reading).toBeHidden();
+  await page.goBack();
+
+  // Дневник и запись в нём.
+  await page.getByRole('button', { name: /^Дневник/ }).click();
+  expect(await axe(page), 'Дневник').toEqual([]);
+  await page.getByLabel('Запись в дневник').fill('Утром прошёлся пешком.');
+  await page.getByRole('button', { name: 'Записать', exact: true }).click();
+  await page.getByRole('button', { name: /Утром прошёлся пешком/ }).click();
+  await expect(sheet(page, 'Запись в дневнике').getByRole('toolbar', { name: 'Оформление' })).toBeVisible();
+  expect(await axe(page), 'Запись в дневнике').toEqual([]);
+  await page.keyboard.press('Escape');
+  await page.goBack();
+
+  // Последние дни.
+  await page.getByRole('button', { name: /Последние дни/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Последние дни' })).toBeVisible();
+  expect(await axe(page), 'Последние дни').toEqual([]);
 });
 
 test('с клавиатуры: лист ловит фокус, Escape возвращает его на кнопку', async ({ page }) => {
