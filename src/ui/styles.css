@@ -26,8 +26,8 @@
   --fire: #ff9a4a;
   --chip-bg: rgba(20, 14, 10, 0.68);
   --font-body: 'Alegreya Sans', 'Segoe UI', system-ui, sans-serif;
-  --font-display: 'Alegreya', Georgia, serif;
-  --font-sc: 'Alegreya SC', Georgia, serif;
+  --font-display: 'Philosopher', Georgia, serif;
+  --font-sc: 'Philosopher', Georgia, serif;
   --tabbar-h: 62px;
   color-scheme: dark;
 }
@@ -140,16 +140,18 @@ button:disabled {
   flex-direction: column;
 }
 
+/* В Philosopher нет малых капителей: прописные с разрядкой и чуть мельче. */
 .sc {
   font-family: var(--font-sc);
   font-weight: 700;
-  letter-spacing: 0.05em;
+  font-size: 0.88em;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--gold);
 }
 
 h2.sc {
   margin: 0;
-  font-size: inherit;
 }
 
 .ic-gold {
@@ -191,6 +193,7 @@ h2.sc {
   justify-content: center;
   gap: 2px;
   color: var(--muted);
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 12px;
   min-width: 0;
@@ -198,7 +201,6 @@ h2.sc {
 
 .tab.is-active {
   color: var(--gold);
-  font-weight: 800;
 }
 
 .tab-add {
@@ -794,7 +796,7 @@ h2.sc {
 }
 
 .card-head .sc {
-  font-size: 14px;
+  font-size: 12.5px;
 }
 
 .card-head-right {
@@ -940,7 +942,8 @@ h2.sc {
 .btn {
   min-height: 46px;
   border-radius: 12px;
-  font-weight: 800;
+  font-family: var(--font-display);
+  font-weight: 700;
   font-size: 17px;
   display: flex;
   align-items: center;
@@ -987,6 +990,7 @@ h2.sc {
 }
 
 .btn-cost {
+  font-family: var(--font-body);
   font-size: 12.5px;
   font-weight: 700;
   opacity: 0.75;
@@ -1114,7 +1118,7 @@ h2.sc {
 }
 
 .list-head .sc {
-  font-size: 15px;
+  font-size: 13.5px;
   color: #e9dcc4;
 }
 
@@ -1283,7 +1287,7 @@ h2.sc {
 }
 
 .group-head .sc {
-  font-size: 16px;
+  font-size: 14px;
 }
 
 .group-meta {
@@ -1676,7 +1680,7 @@ h2.sc {
 
 .compare-row .sc {
   color: var(--gold);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 /* ---------- листы ---------- */
@@ -1725,8 +1729,9 @@ h2.sc {
   margin: 0;
   font-family: var(--font-sc);
   font-weight: 700;
-  font-size: 18px;
-  letter-spacing: 0.04em;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--gold);
 }
 
@@ -2480,7 +2485,7 @@ h2.sc {
 .period-nested > summary .sc {
   font-family: var(--font-sc);
   color: var(--gold);
-  font-size: 15px;
+  font-size: 13.5px;
   margin-right: auto;
 }
 .row-done .row-title {

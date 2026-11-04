@@ -34,7 +34,7 @@ const LOCK_STYLE = `    <style>
       .lock form { width: 100%; max-width: 340px; text-align: center; }
       .lock fieldset { border: 0; margin: 0; padding: 0; }
       .lock img { border-radius: 18px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); }
-      .lock h1 { margin: 16px 0 6px; font-family: 'Alegreya', Georgia, serif; font-size: 28px; color: #fbf3e2; }
+      .lock h1 { margin: 16px 0 6px; font-family: 'Philosopher', Georgia, serif; font-size: 28px; color: #fbf3e2; }
       .lock p { margin: 0 0 18px; color: #c9b79a; font-size: 15px; line-height: 1.45; }
       .lock input[type='password'] { width: 100%; min-height: 48px; padding: 0 14px; border-radius: 12px; border: 1.5px solid rgba(255, 236, 200, 0.16);
         background: #17110c; color: #fbf3e2; font: inherit; font-size: 17px; }

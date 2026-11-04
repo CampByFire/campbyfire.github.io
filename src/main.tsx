@@ -1,5 +1,5 @@
-import '@fontsource/alegreya/700.css';
-import '@fontsource/alegreya-sc/700.css';
+import '@fontsource/philosopher/400.css';
+import '@fontsource/philosopher/700.css';
 import '@fontsource/alegreya-sans/400.css';
 import '@fontsource/alegreya-sans/500.css';
 import '@fontsource/alegreya-sans/700.css';

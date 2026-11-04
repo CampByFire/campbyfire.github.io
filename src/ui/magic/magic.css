@@ -529,7 +529,8 @@
   display: block;
   font-family: var(--font-sc);
   font-weight: 700;
-  font-size: 13px;
+  font-size: 12px;
+  text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 

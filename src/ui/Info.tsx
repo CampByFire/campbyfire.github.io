@@ -188,9 +188,8 @@ export function AboutSheet({ ui }: { ui: Ui }) {
           {link('https://creativecommons.org/licenses/by/3.0/', 'CC BY 3.0')}, {link('./licenses/game-icons.txt', 'список со ссылками')}.
         </li>
         <li>
-          Шрифты Alegreya, Alegreya SC и Alegreya Sans: Juan Pablo del Peral, Huerta Tipográfica. Лицензия SIL Open Font License 1.1 (
-          {link('./licenses/alegreya.txt', 'Alegreya')}, {link('./licenses/alegreya-sc.txt', 'Alegreya SC')},{' '}
-          {link('./licenses/alegreya-sans.txt', 'Alegreya Sans')}).
+          Шрифты: Philosopher (Jovanny Lemonad) и Alegreya Sans (Juan Pablo del Peral, Huerta Tipográfica). Лицензия SIL Open Font License 1.1 (
+          {link('./licenses/philosopher.txt', 'Philosopher')}, {link('./licenses/alegreya-sans.txt', 'Alegreya Sans')}).
         </li>
         <li>Интерфейс на {link('./licenses/preact.txt', 'Preact')} (Jason Miller), лицензия MIT.</li>
       </ul>

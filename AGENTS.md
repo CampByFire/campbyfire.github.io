@@ -18,7 +18,7 @@
 - TypeScript 5.9 в строгом режиме: `strict`, `noUnusedLocals`, `noUnusedParameters`.
 - Vite 7, сборка в `dist/` с `base: './'`.
 - Vitest 4 для логики, Playwright 1.63 и axe-core для экранов.
-- Шрифты Alegreya, Alegreya SC, Alegreya Sans из `@fontsource`.
+- Шрифты Philosopher (заголовки, кнопки, нижнее меню) и Alegreya Sans (остальной текст) из `@fontsource`.
 - Других зависимостей на сайте нет. Не добавляй новые библиотеки без явной просьбы: каждая утяжеляет офлайн-кэш и требует строки в лицензиях.
 - Node.js 22.12+ (подойдёт 20.19+). Версии в `package.json` закреплены точно, без `^`.
 
@@ -122,4 +122,4 @@ npm run e2e          # автотесты экранов; проверяют dis
 ## Лицензии
 
 - Сам Лагерь: все права защищены (`LICENSE`).
-- Модели KayKit (CC0), иконки game-icons.net (CC BY 3.0, авторы по каждой иконке в `public/licenses/game-icons.txt`), шрифты Alegreya (OFL 1.1), Preact (MIT). Новая иконка или ресурс добавляется вместе с автором в `public/licenses/` и в Настройках → «О приложении».
+- Модели KayKit (CC0), иконки game-icons.net (CC BY 3.0, авторы по каждой иконке в `public/licenses/game-icons.txt`), шрифты Philosopher и Alegreya Sans (OFL 1.1), Preact (MIT). Новая иконка или ресурс добавляется вместе с автором в `public/licenses/` и в Настройках → «О приложении».
