@@ -10,7 +10,10 @@ import { render } from 'preact';
 import { Store } from './game/store';
 import { Sync } from './sync/sync';
 import { askPersistentStorage, registerServiceWorker } from './ui/pwa';
+import { blockTouchMenu } from './ui/noselect';
 import { Root } from './ui/Root';
+
+blockTouchMenu();
 
 const store = new Store();
 const sync = new Sync(store);
