@@ -34,6 +34,7 @@ import {
 } from '../game/state';
 import { addDays, formatDue, formatDuration, nextRepeat, parseDay } from '../game/time';
 import type { DayKey, Level, QuestColor, QuestKind, Repeat, State, Task } from '../game/types';
+import type { DiaryEntry } from '../notes/diary';
 import {
   CLASS_BY_LEVEL,
   CLASS_NAME,
@@ -59,7 +60,7 @@ import { Chips, LevelMark, QuestDot, TaskMeta, questName } from './parts';
 import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
 import { WipeSheet } from './Settings';
-import { NoteSheet, SectionSheet, ThoughtSheet } from './NoteSheets';
+import { DiarySheet, NoteSheet, SectionSheet, ThoughtSheet } from './NoteSheets';
 import { SyncConflictSheet, SyncSheet } from './SyncPanel';
 import { setSheetBack } from './back';
 
@@ -81,7 +82,8 @@ export type SheetState =
   | { kind: 'wipe' }
   | { kind: 'thought'; slug?: string }
   | { kind: 'note'; slug: string; path?: string }
-  | { kind: 'section'; slug?: string };
+  | { kind: 'section'; slug?: string }
+  | { kind: 'diary'; path: string; entry: DiaryEntry };
 
 export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
   switch (sheet.kind) {
@@ -121,6 +123,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <NoteSheet key={sheet.path ?? sheet.slug} ui={ui} slug={sheet.slug} path={sheet.path} />;
     case 'section':
       return <SectionSheet key={sheet.slug ?? ''} ui={ui} slug={sheet.slug} />;
+    case 'diary':
+      return <DiarySheet key={`${sheet.path}|${sheet.entry.time}|${sheet.entry.text}`} ui={ui} path={sheet.path} entry={sheet.entry} />;
   }
 }
 

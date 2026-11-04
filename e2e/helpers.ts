@@ -108,7 +108,7 @@ export async function fakeGitHub(page: Page) {
     content: null as string | null,
     sha: 0,
     tokens: { good: 'igor', fresh: 'igor' } as Record<string, string>,
-    /** Файлы заметок Летописи в notes/: путь, текст и sha. */
+    /** Файлы Летописи в notes/ и diary/: путь, текст и sha. */
     notes: new Map<string, { text: string; sha: string }>(),
   };
   let blob = 0;
@@ -143,7 +143,7 @@ export async function fakeGitHub(page: Page) {
       const f = [...gh.notes.values()].find((x) => x.sha === blobSha);
       return f ? json({ sha: blobSha, content: b64(f.text), encoding: 'base64' }) : json({ message: 'Not Found' }, 404);
     }
-    const note = path.match(/^\/repos\/igor\/lager-data\/contents\/(notes\/.+)$/)?.[1];
+    const note = path.match(/^\/repos\/igor\/lager-data\/contents\/((?:notes|diary)\/.+)$/)?.[1];
     if (note) {
       const p = note.split('/').map(decodeURIComponent).join('/');
       const f = gh.notes.get(p);

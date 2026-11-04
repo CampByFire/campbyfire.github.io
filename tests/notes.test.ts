@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { diaryDay, diaryPath, diaryText, mergeDiary, parseDiary } from '../src/notes/diary';
 import { conflictPath, parseMeta, parseNote, slugify, stampName, stampTime } from '../src/notes/model';
 import { Notes, type NotesHost, type NotesStorage } from '../src/notes/notes';
 import { SAVE_PATH, fromBase64, toBase64, type Fetch } from '../src/sync/github';
@@ -341,5 +342,172 @@ describe('заметки в GitHub', () => {
     expect(notes.sections()).toMatchObject([{ slug: 'knigi', title: 'knigi', vid: 'lenta' }]);
     expect(notes.notes('knigi').map((n) => n.path)).toEqual(['notes/knigi/spisok.md']);
     expect(gh.net.blobReads).toBe(1);
+  });
+});
+
+describe('дневник: файл дня', () => {
+  it('день лежит в diary/<год>/; файл без папки года тоже читается', () => {
+    expect(diaryPath('2026-11-04')).toBe('diary/2026/2026-11-04.md');
+    expect(diaryDay('diary/2026/2026-11-04.md')).toBe('2026-11-04');
+    expect(diaryDay('diary/2026-11-04.md')).toBe('2026-11-04');
+    expect(diaryDay('diary/README.md')).toBeNull();
+    expect(diaryDay('notes/idei/2026-11-04.md')).toBeNull();
+  });
+
+  it('записи с временем и текст без времени читаются и пишутся обратно', () => {
+    const text = 'Написано руками\n\n## 8:12\n\nУтро.\n\nВторой абзац.\n\n## 21:40\n\nВечер.\n';
+    expect(parseDiary(text)).toEqual([
+      { time: '', text: 'Написано руками' },
+      { time: '08:12', text: 'Утро.\n\nВторой абзац.' },
+      { time: '21:40', text: 'Вечер.' },
+    ]);
+    expect(diaryText(parseDiary(text))).toBe('Написано руками\n\n## 08:12\n\nУтро.\n\nВторой абзац.\n\n## 21:40\n\nВечер.\n');
+    expect(diaryText([])).toBe('');
+  });
+
+  it('слияние: новые записи с обеих сторон остаются, ночная встаёт в конец', () => {
+    const base = '## 08:12\n\nУтро.\n';
+    const local = '## 08:12\n\nУтро.\n\n## 01:10\n\nНочью с телефона.\n';
+    const remote = '## 08:12\n\nУтро.\n\n## 19:00\n\nВечер с компьютера.\n';
+    expect(parseDiary(mergeDiary(base, local, remote)).map((e) => e.time)).toEqual(['08:12', '19:00', '01:10']);
+  });
+
+  it('слияние: удалённая и поправленная на одной стороне запись не возвращается', () => {
+    const base = '## 08:12\n\nУтро.\n\n## 09:00\n\nОпечтка.\n';
+    const local = '## 08:12\n\nУтро.\n\n## 09:00\n\nОпечатка.\n';
+    const remote = '## 09:00\n\nОпечтка.\n\n## 12:00\n\nОбед.\n';
+    expect(parseDiary(mergeDiary(base, local, remote))).toEqual([
+      { time: '09:00', text: 'Опечатка.' },
+      { time: '12:00', text: 'Обед.' },
+    ]);
+  });
+});
+
+describe('дневник в Летописи', () => {
+  const clock = (t: number) => {
+    const c = { t };
+    return { c, now: () => c.t };
+  };
+
+  it('записи за день ложатся в один файл; ночью до четырёх это ещё вчерашний день', () => {
+    const { c, now } = clock(T);
+    const notes = new Notes(host(false), { storage: memory(), now, delay: 1e9 });
+    notes.addDiary('Утро.');
+    c.t = new Date(2026, 10, 4, 21, 40).getTime();
+    notes.addDiary('Вечер.');
+    c.t = new Date(2026, 10, 5, 1, 10).getTime();
+    notes.addDiary('Не спится.');
+    c.t = new Date(2026, 10, 5, 9, 0).getTime();
+    notes.addDiary('Новый день.');
+    expect(notes.diary().map((d) => [d.path, d.entries.map((e) => e.time)])).toEqual([
+      ['diary/2026/2026-11-05.md', ['09:00']],
+      ['diary/2026/2026-11-04.md', ['08:12', '21:40', '01:10']],
+    ]);
+    expect(notes.sections()).toEqual([]);
+  });
+
+  it('запись правится и удаляется; без записей уходит и файл дня', () => {
+    const notes = make(fakeGitHub(), { host: host(false) });
+    const path = notes.addDiary('Опечтка');
+    const [entry] = notes.diary()[0].entries;
+    notes.saveDiaryEntry(path, entry, 'Опечатка');
+    expect(notes.diary()[0].entries).toEqual([{ time: '08:12', text: 'Опечатка' }]);
+    notes.saveDiaryEntry(path, notes.diary()[0].entries[0], '');
+    expect(notes.diary()).toEqual([]);
+    expect(notes.pending).toBe(0);
+  });
+
+  it('день уходит в GitHub файлом diary/2026/…, рядом с заметками; сохранение игры не трогается', async () => {
+    const gh = fakeGitHub();
+    gh.write(SAVE_PATH, '{"app":"taskcraft-lager"}');
+    const notes = make(gh);
+    notes.addDiary('Первая запись.');
+    await notes.syncNow();
+    expect(gh.files.get('diary/2026/2026-11-04.md')?.text).toBe('## 08:12\n\nПервая запись.\n');
+    expect(gh.commits).toEqual(['Лагерь: дневник, 2026-11-04 (телефон)']);
+    expect(gh.files.get(SAVE_PATH)!.text).toBe('{"app":"taskcraft-lager"}');
+  });
+
+  it('в один день писали с телефона без сети и с компьютера: в GitHub обе записи', async () => {
+    const gh = fakeGitHub();
+    const phoneClock = clock(T);
+    const phone = new Notes(host(true, 'телефон'), { fetchFn: gh.fetchFn, storage: memory(), now: phoneClock.now, delay: 1e9 });
+    phone.addDiary('Утро.');
+    await phone.syncNow();
+    const pcClock = clock(new Date(2026, 10, 4, 12, 0).getTime());
+    const pc = new Notes(host(true, 'компьютер'), { fetchFn: gh.fetchFn, storage: memory(), now: pcClock.now, delay: 1e9 });
+    await pc.syncNow();
+
+    gh.net.down = true;
+    phoneClock.c.t = new Date(2026, 10, 4, 19, 0).getTime();
+    phone.addDiary('Вечер в метро.');
+    await phone.syncNow();
+    gh.net.down = false;
+    pc.addDiary('Обед за компьютером.');
+    await pc.syncNow();
+    await phone.syncNow();
+    await pc.syncNow();
+
+    const want = [
+      { time: '08:12', text: 'Утро.' },
+      { time: '12:00', text: 'Обед за компьютером.' },
+      { time: '19:00', text: 'Вечер в метро.' },
+    ];
+    expect(parseDiary(gh.files.get('diary/2026/2026-11-04.md')!.text)).toEqual(want);
+    expect(phone.diary()[0].entries).toEqual(want);
+    expect(pc.diary()[0].entries).toEqual(want);
+    expect(phone.pending).toBe(0);
+    expect([...gh.files.keys()].filter((p) => p.includes('s-telefona'))).toEqual([]);
+  });
+
+  it('запись удалили на компьютере, а телефон в тот же день дописал свою: удалённая не возвращается', async () => {
+    const gh = fakeGitHub();
+    const phoneClock = clock(T);
+    const phone = new Notes(host(true, 'телефон'), { fetchFn: gh.fetchFn, storage: memory(), now: phoneClock.now, delay: 1e9 });
+    const path = phone.addDiary('Лишнее.');
+    await phone.syncNow();
+    const pc = make(gh, { host: host(true, 'компьютер') });
+    await pc.syncNow();
+    pc.saveDiaryEntry(path, pc.diary()[0].entries[0], '');
+    await pc.syncNow();
+    expect(gh.files.has(path)).toBe(false);
+
+    phoneClock.c.t = new Date(2026, 10, 4, 10, 0).getTime();
+    phone.addDiary('Нужное.');
+    await phone.syncNow();
+    expect(parseDiary(gh.files.get(path)!.text)).toEqual([{ time: '10:00', text: 'Нужное.' }]);
+    expect(phone.diary()[0].entries).toEqual([{ time: '10:00', text: 'Нужное.' }]);
+  });
+
+  it('день, записанный руками на GitHub, виден в дневнике, и запись дописывается в тот же файл', async () => {
+    const gh = fakeGitHub();
+    gh.write('diary/2026-11-04.md', 'Написал в Obsidian.\n');
+    gh.write('diary/README.md', 'не день');
+    const notes = make(gh);
+    await notes.syncNow();
+    expect(notes.diary().map((d) => d.path)).toEqual(['diary/2026-11-04.md']);
+    notes.addDiary('А это из Лагеря.');
+    await notes.syncNow();
+    expect(gh.files.get('diary/2026-11-04.md')!.text).toBe('Написал в Obsidian.\n\n## 08:12\n\nА это из Лагеря.\n');
+    expect(gh.net.blobReads).toBe(1);
+  });
+
+  it('GitHub не принял запись дня (его как раз записал компьютер): записи сливаются и уходят второй раз', async () => {
+    const gh = fakeGitHub();
+    const path = 'diary/2026/2026-11-04.md';
+    let raced = false;
+    const fetchFn: Fetch = async (url, init) => {
+      if (!raced && init?.method === 'PUT' && url.includes('2026-11-04')) {
+        raced = true;
+        gh.write(path, '## 07:30\n\nС компьютера.\n');
+      }
+      return gh.fetchFn(url, init);
+    };
+    const phone = new Notes(host(), { fetchFn, storage: memory(), now: () => T, delay: 1e9 });
+    phone.addDiary('С телефона.');
+    await phone.syncNow();
+    expect(gh.files.get(path)!.text).toBe('## 07:30\n\nС компьютера.\n\n## 08:12\n\nС телефона.\n');
+    expect(phone.pending).toBe(0);
+    expect(phone.status.phase).toBe('ok');
   });
 });

@@ -1,9 +1,10 @@
-// Летопись: свои разделы заметок (лента мыслей или статьи) и «Последние дни» из игры.
-// Заметки хранятся отдельными файлами в lager-data/notes/ (src/notes), а не в сохранении игры.
+// Летопись: дневник, свои разделы заметок (лента мыслей или статьи) и «Последние дни» из игры.
+// Заметки и дневник хранятся отдельными файлами в lager-data (src/notes), а не в сохранении игры.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { doneOn } from '../game/state';
 import { addDays, dayKey, formatClock, formatDate, formatDuration } from '../game/time';
 import { W } from '../game/words';
+import type { DiaryDay } from '../notes/diary';
 import type { Note, Section } from '../notes/model';
 import type { Notes } from '../notes/notes';
 import type { Ui } from './App';
@@ -19,9 +20,14 @@ export const HERO_NOTED = 'Записал, не потеряется';
 
 const KIND_NAME = { lenta: 'лента', stati: 'статьи' } as const;
 
+// Встроенные разделы. Двоеточия в имени папки раздела не бывает, поэтому свой раздел их не перекроет.
+export const DIARY = ':diary';
+export const DAYS = ':days';
+
 export function NotesScreen({ ui }: { ui: Ui }) {
   const slug = ui.section;
-  if (slug === 'days') return <DaysView ui={ui} />;
+  if (slug === DAYS) return <DaysView ui={ui} />;
+  if (slug === DIARY) return <DiaryView ui={ui} />;
   const section = slug ? ui.notes.section(slug) : null;
   if (section) return <SectionView ui={ui} section={section} />;
   return <SectionList ui={ui} />;
@@ -32,7 +38,7 @@ function SectionList({ ui }: { ui: Ui }) {
   return (
     <div class="page">
       <h1 class="page-title">{W.chronicle}</h1>
-      <p class="page-sub">Мысли, идеи и статьи. Каждая заметка лежит отдельным файлом в твоём репозитории.</p>
+      <p class="page-sub">Дневник, мысли, идеи и статьи. Каждая заметка лежит отдельным файлом в твоём репозитории.</p>
       <button class="btn btn-gold btn-wide" onClick={() => ui.open({ kind: 'thought' })}>
         <LIcon name="bulb" size={19} />
         Записать мысль
@@ -42,6 +48,12 @@ function SectionList({ ui }: { ui: Ui }) {
           <h2 class="sc">Разделы</h2>
         </div>
         <div class="nsec-list">
+          <button class="row nsec" onClick={() => ui.openSection(DIARY)}>
+            <LIcon name="feather" size={20} class="nsec-ic" />
+            <span class="row-title">Дневник</span>
+            <span class="nsec-meta">дни · {ui.notes.diary().length}</span>
+            <LIcon name="chevron" size={16} class="nsec-go" />
+          </button>
           {sections.map((s) => {
             const n = ui.notes.notes(s.slug).length;
             return (
@@ -66,7 +78,7 @@ function SectionList({ ui }: { ui: Ui }) {
           <h2 class="sc">Из игры</h2>
         </div>
         <div class="nsec-list">
-          <button class="row nsec" onClick={() => ui.openSection('days')}>
+          <button class="row nsec" onClick={() => ui.openSection(DAYS)}>
             <GIcon name="scroll" size={20} class="nsec-ic" />
             <span class="row-title">Последние дни</span>
             <span class="nsec-meta">что сделано</span>
@@ -87,7 +99,7 @@ function NotesState({ ui }: { ui: Ui }) {
   if (phase === 'local') {
     return (
       <p class="note nstate">
-        Заметки пока только в этом браузере. Подключи GitHub в Настройках, и они будут лежать в репозитории, в папке notes.{' '}
+        Заметки пока только в этом браузере. Подключи GitHub в Настройках, и они будут лежать в репозитории, в папках notes и diary.{' '}
         <button class="link-btn" onClick={() => ui.go('settings')}>
           Открыть Настройки
         </button>
@@ -96,7 +108,7 @@ function NotesState({ ui }: { ui: Ui }) {
   }
   if (phase === 'error') return <p class="note note-error nstate">Заметки не сохраняются в GitHub: {notes.status.error}</p>;
   if (pending > 0) return <p class="note nstate">{phase === 'offline' ? 'Нет связи с GitHub' : 'Сохраняю в GitHub'}: ещё не там {pending}. Здесь ничего не потеряется.</p>;
-  return <p class="note nstate">Всё сохранено в GitHub, в папке notes репозитория.</p>;
+  return <p class="note nstate">Всё сохранено в GitHub, в папках notes и diary репозитория.</p>;
 }
 
 function Back({ ui }: { ui: Ui }) {
@@ -141,11 +153,15 @@ function SectionView({ ui, section }: { ui: Ui; section: Section }) {
 
 /** Поле ленты: пишешь и жмёшь «Записать», запись встаёт сверху. */
 function FeedInput({ ui, slug }: { ui: Ui; slug: string }) {
+  return <WriteBox ui={ui} label="Новая запись" placeholder="Что пришло в голову?" onSave={(text) => ui.notes.addNote(slug, { text })} />;
+}
+
+function WriteBox({ ui, label, placeholder, onSave }: { ui: Ui; label: string; placeholder: string; onSave: (text: string) => void }) {
   const [text, setText] = useState('');
   const box = useRef<HTMLTextAreaElement>(null);
   const save = () => {
     if (!text.trim()) return;
-    ui.notes.addNote(slug, { text });
+    onSave(text);
     setText('');
     ui.toast(HERO_NOTED);
     box.current?.focus();
@@ -157,8 +173,8 @@ function FeedInput({ ui, slug }: { ui: Ui; slug: string }) {
         class="input ntext"
         rows={2}
         value={text}
-        placeholder="Что пришло в голову?"
-        aria-label="Новая запись"
+        placeholder={placeholder}
+        aria-label={label}
         onInput={(e) => setText(e.currentTarget.value)}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save();
@@ -195,6 +211,57 @@ function ArticleCard({ ui, n }: { ui: Ui; n: Note }) {
       <span class="ncard-title">{n.title || 'Без названия'}</span>
       {first && <span class="ncard-line">{first}</span>}
     </button>
+  );
+}
+
+/** «Сегодня», «Вчера» или «Вт, 2 ноя». */
+function dayName(ui: Ui, day: string): string {
+  const today = dayKey(ui.now);
+  return day === today ? 'Сегодня' : day === addDays(today, -1) ? 'Вчера' : formatDate(day);
+}
+
+/** Дневник: поле на сегодня, ниже дни, новые сверху. В каждом дне записи по времени. */
+function DiaryView({ ui }: { ui: Ui }) {
+  const days = ui.notes.diary();
+  return (
+    <div class="page">
+      <div class="page-top">
+        <Back ui={ui} />
+      </div>
+      <h1 class="page-title ntitle">
+        <LIcon name="feather" size={26} class="nsec-ic" />
+        Дневник
+      </h1>
+      <WriteBox ui={ui} label="Запись в дневник" placeholder="Как прошёл день?" onSave={(text) => ui.notes.addDiary(text)} />
+      <div class="nlist">
+        {days.length === 0 && <p class="note">Здесь пока пусто. Каждый день ляжет в репозиторий отдельным файлом, записи в нём по времени.</p>}
+        {days.map((d) => (
+          <DiaryDayBlock key={d.path} ui={ui} d={d} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DiaryDayBlock({ ui, d }: { ui: Ui; d: DiaryDay }) {
+  const log = ui.store.state.log[d.day];
+  return (
+    <section class="nday">
+      <h2 class="nday-head">
+        <span class="nday-date">{dayName(ui, d.day)}</span>
+        {log && log.done > 0 && (
+          <span class="nday-game">
+            в игре: {log.done} сделано · +{log.gold}
+          </span>
+        )}
+      </h2>
+      {d.entries.map((e, i) => (
+        <button key={`${i}-${e.time}`} class="ncard" onClick={() => ui.open({ kind: 'diary', path: d.path, entry: e })}>
+          {e.time && <span class="ncard-date">{e.time.replace(/^0/, '')}</span>}
+          <span class="ncard-text">{e.text || 'Пустая запись'}</span>
+        </button>
+      ))}
+    </section>
   );
 }
 

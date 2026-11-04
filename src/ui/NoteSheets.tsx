@@ -1,10 +1,12 @@
-// Листы Летописи: быстрая мысль, заметка или статья, новый раздел и его настройки.
+// Листы Летописи: быстрая мысль, заметка или статья, запись дневника, новый раздел и его настройки.
 import { useState } from 'preact/hooks';
+import { formatDate } from '../game/time';
+import { diaryDay, type DiaryEntry } from '../notes/diary';
 import { SECTION_ICONS, type SectionIcon, type SectionKind } from '../notes/model';
 import type { Ui } from './App';
 import { LIcon } from './Icon';
 import { loadLocal, updateLocal } from './local';
-import { HERO_NOTED } from './Notes';
+import { DIARY, HERO_NOTED } from './Notes';
 import { Chips } from './parts';
 import { Sheet } from './Sheets';
 
@@ -16,13 +18,14 @@ const KIND_HINT: Record<SectionKind, string> = {
 };
 
 /**
- * Быстрая мысль: поле и выбор раздела (по умолчанию тот, куда писали в прошлый раз). Здесь же можно
- * завести новый раздел, тогда раздел и первая заметка в нём появятся за один раз.
+ * Быстрая мысль: поле и выбор раздела (по умолчанию тот, куда писали в прошлый раз). Дневник тоже
+ * здесь. Можно завести новый раздел, тогда раздел и первая заметка в нём появятся за один раз.
  */
 export function ThoughtSheet({ ui, slug }: { ui: Ui; slug?: string }) {
   const sections = ui.notes.sections();
   const last = slug ?? loadLocal(ui.now).lastSection;
-  const [target, setTarget] = useState<string>(() => (last && sections.some((s) => s.slug === last) ? last : sections[0]?.slug ?? NEW));
+  const known = (t: string | undefined): t is string => !!t && (t === DIARY || sections.some((s) => s.slug === t));
+  const [target, setTarget] = useState<string>(() => (known(last) ? last : sections[0]?.slug ?? NEW));
   const [newName, setNewName] = useState(sections.length ? '' : 'Идеи');
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
@@ -32,7 +35,8 @@ export function ThoughtSheet({ ui, slug }: { ui: Ui; slug?: string }) {
   const save = () => {
     if (!ready) return;
     const where = target === NEW ? ui.notes.createSection({ title: newName, icon: 'bulb', vid: 'lenta' }) : target;
-    ui.notes.addNote(where, { title, text });
+    if (where === DIARY) ui.notes.addDiary(text);
+    else ui.notes.addNote(where, { title, text });
     updateLocal(ui.now, (l) => {
       l.lastSection = where;
     });
@@ -52,7 +56,7 @@ export function ThoughtSheet({ ui, slug }: { ui: Ui; slug?: string }) {
       <Chips
         label="Куда"
         value={target}
-        options={[...sections.map((s) => ({ value: s.slug, label: s.title })), { value: NEW, label: '+ Новый раздел' }]}
+        options={[{ value: DIARY, label: 'Дневник' }, ...sections.map((s) => ({ value: s.slug, label: s.title })), { value: NEW, label: '+ Новый раздел' }]}
         onChange={setTarget}
       />
       {target === NEW && (
@@ -134,6 +138,59 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
           </div>
         </>
       )}
+    </Sheet>
+  );
+}
+
+/** Запись дневника: поправить или удалить. Время записи остаётся прежним. */
+export function DiarySheet({ ui, path, entry }: { ui: Ui; path: string; entry: DiaryEntry }) {
+  const [text, setText] = useState(entry.text);
+  const day = diaryDay(path);
+  const still = ui.notes.diary().some((d) => d.path === path && d.entries.some((e) => e.time === entry.time && e.text === entry.text));
+  if (!still) {
+    // Запись поправили или удалили, пока лист был открыт (например, на другом устройстве).
+    return (
+      <Sheet title="Запись в дневнике" onClose={ui.close}>
+        <p class="note">Этой записи в таком виде больше нет.</p>
+      </Sheet>
+    );
+  }
+  const save = () => {
+    if (!text.trim()) return;
+    ui.notes.saveDiaryEntry(path, entry, text);
+    ui.close();
+  };
+  const remove = () => {
+    if (!confirm('Удалить эту запись из дневника? В истории репозитория она останется.')) return;
+    ui.notes.saveDiaryEntry(path, entry, '');
+    ui.close();
+    ui.toast('Запись удалена');
+  };
+  return (
+    <Sheet
+      title="Запись в дневнике"
+      onClose={ui.close}
+      footer={
+        <button class="btn btn-gold btn-wide" disabled={!text.trim()} onClick={save}>
+          Сохранить
+        </button>
+      }
+    >
+      <p class="note">
+        {day ? formatDate(day) : ''}
+        {entry.time ? `, ${entry.time.replace(/^0/, '')}` : ''}
+      </p>
+      <label class="field">
+        <span class="field-label">Текст</span>
+        <textarea class="input ntext" rows={8} value={text} onInput={(e) => setText(e.currentTarget.value)} />
+      </label>
+      <p class="note nfile">{path}</p>
+      <div class="actions">
+        <button class="act act-danger" onClick={remove}>
+          <LIcon name="trash" size={16} />
+          Удалить запись
+        </button>
+      </div>
     </Sheet>
   );
 }

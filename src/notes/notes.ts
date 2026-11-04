@@ -9,7 +9,12 @@
 // Новая заметка всегда новый файл, поэтому с другим устройством она не сталкивается. Если одну и ту же
 // заметку поменяли на двух устройствах, GitHub не примет запись со старым sha: тогда своя версия
 // ложится рядом отдельным файлом «…-s-telefona.md», а заметка берётся из GitHub. Ничего не затирается.
-import { GitHub, GitHubError, NOTES_DIR, type Fetch } from '../sync/github';
+//
+// Дневник (diary/, раскладка в diary.ts) лежит здесь же, но в его день пишут с обоих устройств, поэтому
+// столкновение там обычное дело: записи дня сливаются (mergeDiary), а не ложатся копией рядом.
+import type { DayKey } from '../game/types';
+import { DIARY_DIR, GitHub, GitHubError, NOTES_DIR, type Fetch } from '../sync/github';
+import { diaryDay, diaryPath, diaryText, entryDay, entryTime, mergeDiary, parseDiary, sortEntries, type DiaryDay, type DiaryEntry } from './diary';
 import {
   META_FILE,
   articleText,
@@ -45,6 +50,8 @@ interface FileRec {
   deleted?: boolean;
   /** Растёт при каждой правке: правка во время записи не теряется. */
   rev: number;
+  /** Для дня дневника со своими правками: версия из GitHub, от которой они шли (для слияния). */
+  base?: string;
 }
 
 interface Saved {
@@ -108,6 +115,10 @@ export interface NotesOptions {
 
 const isNoteFile = (path: string) => /\.md$/i.test(path);
 const isMetaFile = (path: string) => path.endsWith(`/${META_FILE}`);
+const isDiary = (path: string) => diaryDay(path) !== null;
+/** Какие файлы репозитория Летопись держит у себя: заметки, _razdel.json и дни дневника. */
+const isOurs = (path: string) => (path.startsWith(`${NOTES_DIR}/`) ? isNoteFile(path) || isMetaFile(path) : isDiary(path));
+const sameEntry = (a: DiaryEntry, b: DiaryEntry) => a.time === b.time && a.text.trim() === b.text.trim();
 
 export class Notes {
   status: NotesStatus;
@@ -183,6 +194,16 @@ export class Notes {
     return f && !f.deleted ? parseNote(path, f.text) : null;
   }
 
+  /** Дни дневника, новые сверху. */
+  diary(): DiaryDay[] {
+    return this.paths()
+      .flatMap((path) => {
+        const day = diaryDay(path);
+        return day ? [{ day, path, entries: parseDiary(this.files[path].text) }] : [];
+      })
+      .sort((a, b) => (a.day < b.day ? 1 : a.day > b.day ? -1 : a.path.localeCompare(b.path)));
+  }
+
   /** Сколько изменений ещё не в GitHub. */
   get pending(): number {
     return Object.values(this.files).filter((f) => f.dirty).length;
@@ -233,6 +254,36 @@ export class Notes {
   deleteNote(path: string): void {
     this.drop(path);
     this.changed();
+  }
+
+  /** Запись в дневник за сегодняшний (игровой) день: дописывается в файл дня. Вернёт путь файла. */
+  addDiary(text: string): string {
+    const t = this.now();
+    const day: DayKey = entryDay(t);
+    const path = this.paths().find((p) => diaryDay(p) === day) ?? diaryPath(day);
+    const rec = this.files[path];
+    const entries = rec && !rec.deleted ? parseDiary(rec.text) : [];
+    entries.push({ time: entryTime(t), text: text.trim() });
+    this.put(path, diaryText(sortEntries(entries)));
+    return path;
+  }
+
+  /** Правит запись дня; пустой текст удаляет её, а с последней записью уходит и файл дня. */
+  saveDiaryEntry(path: string, entry: DiaryEntry, text: string): void {
+    const rec = this.files[path];
+    if (!rec || rec.deleted) return;
+    const entries = parseDiary(rec.text);
+    const i = entries.findIndex((e) => sameEntry(e, entry));
+    if (i < 0) return;
+    if (text.trim()) entries[i] = { time: entry.time, text: text.trim() };
+    else entries.splice(i, 1);
+    if (entries.length) {
+      const next = diaryText(entries);
+      if (next !== rec.text) this.put(path, next);
+    } else {
+      this.drop(path);
+      this.changed();
+    }
   }
 
   // ---------- GitHub ----------
@@ -307,9 +358,13 @@ export class Notes {
 
   /** Забирает новое и изменённое из GitHub; то, что удалили там, удаляется и здесь. */
   private async pull(gh: GitHub, repo: string, branch: string): Promise<void> {
-    const remote = new Map((await gh.files(repo, branch, NOTES_DIR)).filter((f) => isNoteFile(f.path) || isMetaFile(f.path)).map((f) => [f.path, f.sha]));
+    const remote = new Map((await gh.files(repo, branch, [NOTES_DIR, DIARY_DIR])).filter((f) => isOurs(f.path)).map((f) => [f.path, f.sha]));
     for (const [path, sha] of remote) {
       const rec = this.files[path];
+      if (rec?.dirty && rec.sha !== sha && isDiary(path)) {
+        await this.mergeDay(gh, repo, path, sha);
+        continue;
+      }
       if (rec && (rec.sha === sha || rec.dirty)) continue;
       const text = await gh.blob(repo, sha);
       // Пока качали, заметку поправили здесь: правку не трогаем, разницу решит запись.
@@ -320,10 +375,27 @@ export class Notes {
     for (const [path, rec] of Object.entries(this.files)) {
       if (remote.has(path) || !rec.sha) continue;
       // В GitHub файла больше нет: его удалили на другом устройстве или руками.
-      if (rec.dirty && !rec.deleted) rec.sha = null;
-      else delete this.files[path];
+      if (!rec.dirty || rec.deleted) delete this.files[path];
+      else if (isDiary(path) && rec.base !== undefined) {
+        // День дневника удалили там, а здесь дописали: остаются только свои новые записи.
+        const left = mergeDiary(rec.base, rec.text, '');
+        if (left) Object.assign(rec, { text: left, sha: null, base: undefined, rev: rec.rev + 1 });
+        else delete this.files[path];
+      } else Object.assign(rec, { sha: null, base: undefined });
     }
     this.changed(false);
+  }
+
+  /** День дневника поменяли и здесь, и на другом устройстве: записи сливаются, итог уйдёт записью. */
+  private async mergeDay(gh: GitHub, repo: string, path: string, sha: string): Promise<void> {
+    const rec = this.files[path];
+    const rev = rec.rev;
+    const remote = await gh.blob(repo, sha);
+    if (this.files[path] !== rec || rec.rev !== rev) return; // правка пришла, пока качали: сольём в следующий раз
+    const merged = mergeDiary(rec.base ?? '', rec.deleted ? '' : rec.text, remote);
+    if (merged === diaryText(parseDiary(remote))) this.files[path] = { text: remote, sha, dirty: false, rev: rev + 1 };
+    else if (!merged) this.files[path] = { text: remote, sha, dirty: true, deleted: true, rev: rev + 1, base: remote };
+    else this.files[path] = { text: merged, sha, dirty: true, rev: rev + 1, base: remote };
   }
 
   /** Записывает свои изменения. Вернёт true, если чью-то правку пришлось обойти копией. */
@@ -336,18 +408,25 @@ export class Notes {
       const rev = rec.rev;
       try {
         if (rec.deleted) {
-          if (rec.sha) await gh.deleteFile(repo, path, rec.sha, `Лагерь: ${isMetaFile(path) ? 'раздел удалён' : 'заметка удалена'} (${device})`);
+          if (rec.sha) await gh.deleteFile(repo, path, rec.sha, `Лагерь: ${isDiary(path) ? `день дневника ${diaryDay(path)} удалён` : isMetaFile(path) ? 'раздел удалён' : 'заметка удалена'} (${device})`);
           if (this.files[path] === rec && rec.rev === rev) delete this.files[path];
         } else {
-          const sha = await gh.putFile(repo, path, rec.text, rec.sha, this.message(path, rec, device));
+          const text = rec.text;
+          const sha = await gh.putFile(repo, path, text, rec.sha, this.message(path, rec, device));
           if (this.files[path] === rec) {
             rec.sha = sha;
-            if (rec.rev === rev) rec.dirty = false;
+            if (rec.rev === rev) Object.assign(rec, { dirty: false, base: undefined });
+            else if (isDiary(path)) rec.base = text;
           }
         }
       } catch (e) {
         if (!(e instanceof GitHubError && e.kind === 'stale') || this.files[path] !== rec) throw e;
         conflict = true;
+        // День дневника: правка остаётся как есть, при следующем чтении записи сольются с версией из GitHub.
+        if (isDiary(path)) {
+          this.changed(false);
+          continue;
+        }
         if (isNoteFile(path) && !rec.deleted) {
           // Заметку успели поменять на другом устройстве: своя версия ложится рядом.
           const copy = conflictPath(path, device, (p) => p in this.files);
@@ -363,6 +442,7 @@ export class Notes {
   }
 
   private message(path: string, rec: FileRec, device: string): string {
+    if (isDiary(path)) return `Лагерь: дневник, ${diaryDay(path)} (${device})`;
     if (isMetaFile(path)) {
       const title = parseMeta('', rec.text).title;
       return rec.sha ? `Лагерь: раздел «${title}» (${device})` : `Лагерь: новый раздел «${title}» (${device})`;
@@ -387,8 +467,14 @@ export class Notes {
 
   private put(path: string, text: string): void {
     const rec = this.files[path];
-    this.files[path] = { text, sha: rec?.sha ?? null, dirty: true, rev: (rec?.rev ?? 0) + 1 };
+    this.files[path] = { text, sha: rec?.sha ?? null, dirty: true, rev: (rec?.rev ?? 0) + 1, base: this.baseOf(path, rec) };
     this.changed();
+  }
+
+  /** От какой версии из GitHub идут правки дня дневника; у заметок не нужно. */
+  private baseOf(path: string, rec: FileRec | undefined): string | undefined {
+    if (!rec || !isDiary(path)) return undefined;
+    return rec.dirty ? rec.base : rec.sha ? rec.text : undefined;
   }
 
   private drop(path: string): void {
@@ -396,7 +482,7 @@ export class Notes {
     if (!rec) return;
     // Файла ещё нет в GitHub: удалять там нечего.
     if (!rec.sha) delete this.files[path];
-    else Object.assign(rec, { deleted: true, dirty: true, rev: rec.rev + 1 });
+    else Object.assign(rec, { deleted: true, dirty: true, rev: rec.rev + 1, base: this.baseOf(path, rec) });
   }
 
   /** После правки: сохранить, показать и, если GitHub подключён, записать через паузу. */

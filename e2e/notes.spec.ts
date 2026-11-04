@@ -1,5 +1,5 @@
-// Летопись: свои разделы и заметки. Быстрая мысль из лагеря, лента, статьи, «Назад» внутри Летописи,
-// заметки в GitHub отдельными файлами в notes/.
+// Летопись: дневник, свои разделы и заметки. Быстрая мысль из лагеря, лента, статьи, «Назад» внутри
+// Летописи, заметки и дни дневника в GitHub отдельными файлами в notes/ и diary/.
 import { expect, test, type Page } from '@playwright/test';
 import { connectGitHub, expectNoSideScroll, fakeGitHub, openGame, sheet, tab, toast } from './helpers';
 
@@ -114,4 +114,39 @@ test('с GitHub заметка ложится в notes/ отдельным фа�
   await other.getByRole('button', { name: /^Идеи/ }).click();
   await expect(other.getByRole('button', { name: /Идея для статьи о СДВГ/ })).toBeVisible();
   await other.close();
+});
+
+test('дневник: записи за день в одном файле diary/2026/…, правка записи; мысль из лагеря тоже идёт в дневник', async ({ page }) => {
+  const gh = await fakeGitHub(page);
+  await openGame(page);
+  await connectGitHub(page);
+  await tab(page, 'Летопись').click();
+  await page.getByRole('button', { name: /^Дневник/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Дневник' })).toBeVisible();
+  await page.getByLabel('Запись в дневник').fill('Утром прошёлся пешком.');
+  await page.getByRole('button', { name: 'Записать', exact: true }).click();
+  await expect(page.locator('.nday-date').first()).toHaveText('Сегодня');
+  await expect(page.locator('.ncard-text').first()).toHaveText('Утром прошёлся пешком.');
+
+  await page.getByRole('button', { name: /Утром прошёлся пешком/ }).click();
+  const edit = sheet(page, 'Запись в дневнике');
+  await expect(edit.getByText('diary/2026/2026-10-23.md')).toBeVisible();
+  await edit.getByLabel('Текст').fill('Утром прошёлся пешком до работы.');
+  await edit.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(page.locator('.ncard-text').first()).toHaveText('Утром прошёлся пешком до работы.');
+  await expectNoSideScroll(page);
+
+  // Из лагеря: выбираю «Дневник», и в следующий раз он уже выбран.
+  await tab(page, 'Лагерь').click();
+  await page.getByRole('button', { name: 'Записать мысль' }).click();
+  const form = sheet(page, 'Записать мысль');
+  await form.getByRole('radio', { name: 'Дневник' }).click();
+  await form.getByLabel('Мысль').fill('Вспомнил про отчёт.');
+  await form.getByRole('button', { name: 'Записать', exact: true }).click();
+  await page.clock.runFor(3000);
+  await expect
+    .poll(() => gh.notes.get('diary/2026/2026-10-23.md')?.text)
+    .toMatch(/^## 09:0\d\n\nУтром прошёлся пешком до работы\.\n\n## 09:0\d\n\nВспомнил про отчёт\.\n$/);
+  await page.getByRole('button', { name: 'Записать мысль' }).click();
+  await expect(sheet(page, 'Записать мысль').getByRole('radio', { name: 'Дневник' })).toHaveAttribute('aria-checked', 'true');
 });

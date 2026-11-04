@@ -194,3 +194,30 @@
   padding: 0;
   justify-content: center;
 }
+
+/* ---------- дневник ---------- */
+
+.nday {
+  margin-top: 6px;
+}
+
+.nday-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin: 16px 0 2px;
+  font-size: 15px;
+}
+
+.nday-date {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--text-hi);
+}
+
+.nday-game {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
