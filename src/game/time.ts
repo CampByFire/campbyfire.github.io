@@ -44,19 +44,27 @@ export function isWorkDay(day: DayKey, s: Settings): boolean {
 }
 
 /** Приходит ли повторяющаяся задача в этот день. */
-export function repeatsOn(r: Repeat, day: DayKey, s: Settings): boolean {
+export function repeatsOn(r: Repeat, day: DayKey): boolean {
   if (r.every === 'day') return true;
-  if (r.every === 'workday') return isWorkDay(day, s);
-  return parseDay(day).getDay() === r.weekday;
+  const weekday = parseDay(day).getDay();
+  return r.every === 'week' ? weekday === r.weekday : r.days.includes(weekday);
 }
 
-/** Ближайший день, начиная с from, когда задача придёт; null, если таких дней нет (нет рабочих дней). */
-export function nextRepeat(r: Repeat, from: DayKey, s: Settings): DayKey | null {
+/** Ближайший день, начиная с from, когда задача придёт; null, если таких дней нет (не выбран ни один день). */
+export function nextRepeat(r: Repeat, from: DayKey): DayKey | null {
   for (let i = 0; i < 7; i++) {
     const day = addDays(from, i);
-    if (repeatsOn(r, day, s)) return day;
+    if (repeatsOn(r, day)) return day;
   }
   return null;
+}
+
+/** Повтор по выбранным дням недели. Все семь это «каждый день», один это «раз в неделю». */
+export function repeatOnDays(days: number[]): Repeat {
+  const set = [...new Set(days)].sort();
+  if (set.length === 7) return { every: 'day' };
+  if (set.length === 1) return { every: 'week', weekday: set[0] };
+  return { every: 'days', days: set };
 }
 
 /** Что не так с распорядком, если смены в нём путаются; null, если всё в порядке. */

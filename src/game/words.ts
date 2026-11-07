@@ -89,11 +89,14 @@ const ON_WEEKDAY = ['по воскресеньям', 'по понедельни�
 /** «в среду»: когда задача придёт в следующий раз. */
 export const IN_WEEKDAY = ['в воскресенье', 'в понедельник', 'во вторник', 'в среду', 'в четверг', 'в пятницу', 'в субботу'];
 
-/** «каждый день», «по рабочим дням», «по средам». */
+/** «каждый день», «по средам», «по будням», «по понедельникам, средам и пятницам». */
 export function repeatName(r: Repeat): string {
   if (r.every === 'day') return 'каждый день';
-  if (r.every === 'workday') return 'по рабочим дням';
-  return ON_WEEKDAY[r.weekday];
+  if (r.every === 'week') return ON_WEEKDAY[r.weekday];
+  const days = [...r.days].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7));
+  if (days.join() === '1,2,3,4,5') return 'по будням';
+  if (days.join() === '6,0') return 'по выходным';
+  return `по ${days.map((d) => ON_WEEKDAY[d].slice(3)).join(', ').replace(/, ([^,]*)$/, ' и $1')}`;
 }
 
 /** Повторы встречи в том порядке, в каком их предлагает лист встречи. */

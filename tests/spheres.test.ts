@@ -23,7 +23,7 @@ import {
   updateQuest,
   winQuest,
 } from '../src/game/state';
-import { checkSave } from '../src/game/store';
+import { SAVE_VERSION, checkSave } from '../src/game/store';
 import { campView } from '../src/game/view';
 import type { State } from '../src/game/types';
 
@@ -185,7 +185,7 @@ describe('проекты', () => {
 describe('переход старого сохранения к сферам', () => {
   it('бесконечные походы становятся сферами на месте, остальные проектами', () => {
     const s = checkSave(oldSave())!;
-    expect(s.v).toBe(3);
+    expect(s.v).toBe(SAVE_VERSION);
     const byName = (n: string) => s.quests.find((q) => q.name === n)!;
     for (const n of ['Работа', 'Личное', 'Дом и быт']) expect(byName(n).sphere).toBe(true);
     expect(byName('Работа').id).toBe('q1');

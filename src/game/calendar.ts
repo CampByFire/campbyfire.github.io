@@ -189,7 +189,7 @@ export function agendaOf(s: State, day: DayKey): AgendaItem[] {
   }
   if (day > s.day) {
     for (const r of s.routines) {
-      if (shown.has(`r:${r.id}`) || !repeatsOn(r.repeat, day, s.settings)) continue;
+      if (shown.has(`r:${r.id}`) || !repeatsOn(r.repeat, day)) continue;
       // Ждущая задача повтора уже позвана на какой-то день: она и есть этот повтор, второй раз не показываем.
       const w = waitingOf(s, r.id);
       if (w && w.day === day) continue;

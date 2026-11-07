@@ -1,5 +1,6 @@
 // Хранилище: держит State, сохраняет его в localStorage и оповещает экраны.
 import { DEFAULT_SETTINGS, migrateToSpheres, newState, randomId, settle, touch } from './state';
+import { repeatOnDays } from './time';
 import type { State } from './types';
 
 const KEY = 'taskcraft-lager-v1';
@@ -8,7 +9,7 @@ const SAVE_EVERY_MS = 15_000;
 type Listener = () => void;
 
 /** Версия формата сохранения. Растёт, когда меняется устройство State. */
-export const SAVE_VERSION = 3;
+export const SAVE_VERSION = 4;
 
 /**
  * Переходы между версиями: MIGRATIONS[n] переводит сохранение версии n в версию n + 1.
@@ -25,6 +26,14 @@ const MIGRATIONS: Record<number, (s: Record<string, unknown>) => void> = {
     st.ratings = [];
     if (st.settings) st.settings.rateEvery = DEFAULT_SETTINGS.rateEvery;
     migrateToSpheres(st);
+  },
+  // 0.9.4: повтор «по рабочим дням» стал выбором дней. Дни берутся из распорядка, чтобы задача приходила как раньше.
+  3: (s) => {
+    const st = s as unknown as State;
+    const workDays = st.settings?.workDays?.length ? st.settings.workDays : [1, 2, 3, 4, 5];
+    for (const r of st.routines ?? []) {
+      if ((r.repeat as { every: string }).every === 'workday') r.repeat = repeatOnDays(workDays);
+    }
   },
 };
 

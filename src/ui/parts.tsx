@@ -5,7 +5,7 @@ import { daysOverdue, findQuest, findRoutine, isUndead } from '../game/state';
 import { formatDue, formatDuration, plural } from '../game/time';
 import type { Level, Quest, State, Task } from '../game/types';
 import type { Tone } from '../game/view';
-import { LEVEL_ROMAN, periodShort } from '../game/words';
+import { LEVEL_ROMAN, WEEKDAY_CHIPS, periodShort } from '../game/words';
 import { GIcon, LIcon } from './Icon';
 
 /**
@@ -123,6 +123,25 @@ export function Chips<T extends string | number | null>(p: {
             {o.mark && <small aria-hidden="true">{o.mark}</small>}
           </button>
         ))}
+      </div>
+    </div>
+  );
+}
+
+/** Выбор любых дней недели: каждый день включается и выключается своей кнопкой. */
+export function WeekdayPicker({ label, days, onChange }: { label: string; days: number[]; onChange: (days: number[]) => void }) {
+  return (
+    <div class="field">
+      <div class="field-label">{label}</div>
+      <div class="chips" role="group" aria-label={label}>
+        {WEEKDAY_CHIPS.map(({ value: d, label: name, sr }) => {
+          const on = days.includes(d);
+          return (
+            <button key={d} type="button" class={`chipbtn${on ? ' is-on' : ''}`} aria-pressed={on} onClick={() => onChange(on ? days.filter((x) => x !== d) : [...days, d])}>
+              <ChipText label={name} sr={sr} />
+            </button>
+          );
+        })}
       </div>
     </div>
   );

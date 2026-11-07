@@ -18,7 +18,7 @@ import {
   unrelease,
   updateTask,
 } from '../src/game/state';
-import { checkSave } from '../src/game/store';
+import { SAVE_VERSION, checkSave } from '../src/game/store';
 import type { State } from '../src/game/types';
 import { periodName, periodShort, periodTo, weekRange } from '../src/game/words';
 
@@ -168,7 +168,7 @@ describe('задачи с горизонтом', () => {
     const s = newState(at(9));
     addTask(s, at(9), { title: 'Неделя', questId: null, period: '2026-W45' });
     const back = checkSave(JSON.parse(JSON.stringify(s)))!;
-    expect(back.v).toBe(3);
+    expect(back.v).toBe(SAVE_VERSION);
     expect(back.tasks.find((t) => t.title === 'Неделя')?.period).toBe('2026-W45');
   });
 

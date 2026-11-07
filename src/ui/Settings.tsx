@@ -6,7 +6,7 @@ import { buildIcs, calendarEvents, type IcsOptions } from '../game/ics';
 import { isNewerSave, parseSave } from '../game/store';
 import { formatClock, formatDate, formatMinutes, plural, scheduleError } from '../game/time';
 import type { RateEvery, Settings as Schedule } from '../game/types';
-import { RATE_EVERY_NAME, W, WEEKDAY_CHIPS } from '../game/words';
+import { RATE_EVERY_NAME, W } from '../game/words';
 import { GitHubError } from '../sync/github';
 import { BUILD, VERSION } from '../version';
 import type { Ui } from './App';
@@ -15,7 +15,7 @@ import { GIcon, LIcon } from './Icon';
 import { clearDrafts } from '../notes/drafts';
 import { clearLocal, loadLocal, updateLocal } from './local';
 import type { Motion } from './magic/mode';
-import { ChipText, Chips } from './parts';
+import { Chips, WeekdayPicker } from './parts';
 import { Sheet } from './Sheets';
 import { SyncPanel, useSync } from './SyncPanel';
 
@@ -97,24 +97,7 @@ export function Settings({ ui }: { ui: Ui }) {
           <TimeField label="Отбой" value={s.settings.bedtime} onChange={(v) => setTime({ bedtime: v })} />
         </div>
         {timeError && <p class="note note-error">{timeError}</p>}
-        <div class="field">
-          <div class="field-label">Рабочие дни</div>
-          <div class="chips" role="group" aria-label="Рабочие дни">
-            {WEEKDAY_CHIPS.map(({ value: d, label, sr }) => {
-              const on = s.settings.workDays.includes(d);
-              return (
-                <button
-                  key={d}
-                  class={`chipbtn${on ? ' is-on' : ''}`}
-                  aria-pressed={on}
-                  onClick={() => setSetting({ workDays: on ? s.settings.workDays.filter((x) => x !== d) : [...s.settings.workDays, d] })}
-                >
-                  <ChipText label={label} sr={sr} />
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        <WeekdayPicker label="Рабочие дни" days={s.settings.workDays} onChange={(workDays) => setSetting({ workDays })} />
         <Chips
           label="Напоминать оценить сферы"
           value={s.settings.rateEvery}

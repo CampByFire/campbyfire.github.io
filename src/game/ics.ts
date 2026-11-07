@@ -4,7 +4,7 @@
 import { ALL_DAY_REMIND_HOURS, EVENT_MIN, MEETING_MIN, MEETING_REMIND_MIN, REMIND_BEFORE_MIN, estimateOf } from './rules';
 import { meetingsOf, nextMeetingDay } from './calendar';
 import { nextRepeat, parseDay } from './time';
-import type { DayKey, Meeting, Repeat, Settings, State, Task } from './types';
+import type { DayKey, Meeting, Repeat, State, Task } from './types';
 
 export interface IcsOptions {
   /** Утренний костёр, минуты от полуночи; null: без него. */
@@ -57,10 +57,10 @@ function minutesOf(at: string): number | null {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
-function rrule(r: Repeat, st: Settings): string {
+function rrule(r: Repeat): string {
   if (r.every === 'day') return 'FREQ=DAILY';
   if (r.every === 'week') return `FREQ=WEEKLY;BYDAY=${BYDAY[r.weekday]}`;
-  return `FREQ=WEEKLY;BYDAY=${[...st.workDays].sort().map((d) => BYDAY[d]).join(',')}`;
+  return `FREQ=WEEKLY;BYDAY=${[...r.days].sort().map((d) => BYDAY[d]).join(',')}`;
 }
 
 /** Правило повтора встречи. Даты 29–31 в коротком месяце встают на его последний день, как и в самом Лагере. */
@@ -103,7 +103,7 @@ interface Ev {
 export function calendarEvents(s: State, o: IcsOptions): { morning: boolean; tasks: Task[]; routines: number; meetings: Meeting[] } {
   const meetings = meetingsOf(s).filter((m) => nextMeetingDay(m, s.day));
   const tasks = s.tasks.filter((t) => t.status === 'open' && t.at && t.day && t.day >= s.day && !t.routineId && minutesOf(t.at) !== null);
-  const routines = s.routines.filter((r) => r.at && minutesOf(r.at) !== null && nextRepeat(r.repeat, s.day, s.settings)).length;
+  const routines = s.routines.filter((r) => r.at && minutesOf(r.at) !== null && nextRepeat(r.repeat, s.day)).length;
   const morning = o.morning !== null && (o.morningDays === 'all' || s.settings.workDays.length > 0);
   return { morning, tasks, routines, meetings };
 }
@@ -112,8 +112,8 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
   const evs: Ev[] = [];
   const link = `Открыть Лагерь: ${o.url}`;
   if (o.morning !== null) {
-    const rule: Repeat = o.morningDays === 'all' ? { every: 'day' } : { every: 'workday' };
-    const first = nextRepeat(rule, s.day, s.settings);
+    const rule: Repeat = o.morningDays === 'all' ? { every: 'day' } : { every: 'days', days: s.settings.workDays };
+    const first = nextRepeat(rule, s.day);
     if (first) {
       evs.push({
         uid: `morning@${s.gameId}.lager`,
@@ -121,7 +121,7 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
         min: 15,
         title: 'Разжечь костёр',
         note: `Утро в Лагере: позови к огню первую задачу дня. Сбор отряда по желанию.\n${link}`,
-        rule: rrule(rule, s.settings),
+        rule: rrule(rule),
         alarm: 0,
       });
     }
@@ -138,7 +138,7 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
   }
   for (const r of s.routines) {
     const at = r.at ? minutesOf(r.at) : null;
-    const first = at !== null ? nextRepeat(r.repeat, s.day, s.settings) : null;
+    const first = at !== null ? nextRepeat(r.repeat, s.day) : null;
     if (at === null || !first) continue;
     evs.push({
       uid: `routine-${r.id}@${s.gameId}.lager`,
@@ -146,7 +146,7 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
       min: r.estimateMin ?? EVENT_MIN,
       title: r.title,
       note: r.cue ? `${r.cue}\n${link}` : link,
-      rule: rrule(r.repeat, s.settings),
+      rule: rrule(r.repeat),
       alarm: REMIND_BEFORE_MIN,
     });
   }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { NO_COLOR_HEX, PRESET_HEX, colorName, contrast, hexToHsl, hslToHex, inkOn, isDark, parseHex, questHex, toQuestColor } from '../src/game/color';
 import { mergeGames } from '../src/game/merge';
 import { addQuest, addTask, newState, updateQuest } from '../src/game/state';
-import { checkSave } from '../src/game/store';
+import { SAVE_VERSION, checkSave } from '../src/game/store';
 import type { QuestColor, State } from '../src/game/types';
 import { campView } from '../src/game/view';
 
@@ -75,12 +75,12 @@ describe('цвет знамени', () => {
 });
 
 describe('свой цвет в игре', () => {
-  it('поход хранит свой цвет, а сохранение остаётся формата 3', () => {
+  it('поход хранит свой цвет, а сохранение остаётся нынешнего формата', () => {
     const s = newState(at(8));
     const id = addQuest(s, at(8), { name: 'Сертификат', kind: 'work', color: '#2bb3a3' });
     updateQuest(s, s.quests[0].id, { color: '#1a237e' });
     const back = checkSave(JSON.parse(JSON.stringify(s)))!;
-    expect(back.v).toBe(3);
+    expect(back.v).toBe(SAVE_VERSION);
     expect(back.quests.find((q) => q.id === id)?.color).toBe('#2bb3a3');
     expect(back.quests[0].color).toBe('#1a237e');
   });

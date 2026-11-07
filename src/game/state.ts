@@ -67,7 +67,7 @@ export function randomId(len = 8): string {
 
 export function newState(now: number): State {
   const s: State = {
-    v: 3,
+    v: 4,
     gameId: randomId(12),
     createdAt: now,
     touchedAt: null,
@@ -589,7 +589,7 @@ export function planRoutines(s: State, only?: string): void {
   if (s.closedDay === s.day) return;
   const dayStart = parseDay(s.day).getTime() + DAY_STARTS_AT_HOUR * HOUR;
   for (const r of s.routines) {
-    if ((only && r.id !== only) || !repeatsOn(r.repeat, s.day, s.settings)) continue;
+    if ((only && r.id !== only) || !repeatsOn(r.repeat, s.day)) continue;
     const waiting = waitingOf(s, r.id);
     if (waiting) {
       if (waiting.day !== s.day) planTask(s, waiting.id, s.day);

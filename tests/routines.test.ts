@@ -20,8 +20,10 @@ import {
   winQuest,
   type RoutineInput,
 } from '../src/game/state';
-import { Store, type Storage } from '../src/game/store';
+import { SAVE_VERSION, Store, checkSave, type Storage } from '../src/game/store';
+import { nextRepeat, repeatOnDays } from '../src/game/time';
 import type { Repeat, State } from '../src/game/types';
+import { repeatName } from '../src/game/words';
 
 // Пятница, 23 октября 2026.
 const at = (h: number, m = 0, d = 23) => new Date(2026, 9, d, h, m).getTime();
@@ -78,20 +80,70 @@ describe('повторяющиеся задачи', () => {
     expect(sent(s, r)).toHaveLength(1);
   });
 
-  it('по рабочим дням берёт дни из распорядка', () => {
+  it('в свои дни приходит только в выбранные, распорядок на это не влияет', () => {
     const { s } = fresh();
-    s.settings.workDays = [2, 3, 4, 5, 6];
-    const r = addRoutine(s, at(8), routine('Планёрка', { every: 'workday' }));
-    expect(waitingOf(s, r)?.day).toBe('2026-10-23');
+    s.settings.workDays = [1];
+    const r = addRoutine(s, at(8), routine('Планёрка', { every: 'days', days: [2, 5, 6] }));
+    expect(waitingOf(s, r)?.day).toBe('2026-10-23'); // пятница
     complete(s, at(9), waitingOf(s, r)!.id);
-    settle(s, at(8, 0, 24)); // суббота в этом распорядке рабочая
+    settle(s, at(8, 0, 24)); // суббота
     expect(waitingOf(s, r)?.day).toBe('2026-10-24');
     complete(s, at(9, 0, 24), waitingOf(s, r)!.id);
     settle(s, at(8, 0, 25)); // воскресенье
     settle(s, at(8, 0, 26)); // понедельник
     expect(waitingOf(s, r)).toBeUndefined();
-    settle(s, at(8, 0, 27));
+    settle(s, at(8, 0, 27)); // вторник
     expect(waitingOf(s, r)?.day).toBe('2026-10-27');
+  });
+
+  it('один выбранный день это раз в неделю, все семь это каждый день', () => {
+    expect(repeatOnDays([3])).toEqual({ every: 'week', weekday: 3 });
+    expect(repeatOnDays([0, 1, 2, 3, 4, 5, 6])).toEqual({ every: 'day' });
+    expect(repeatOnDays([5, 1, 3, 1])).toEqual({ every: 'days', days: [1, 3, 5] });
+    expect(nextRepeat({ every: 'days', days: [] }, '2026-10-23')).toBeNull();
+  });
+
+  it('название повтора называет дни словами, с понедельника', () => {
+    expect(repeatName({ every: 'days', days: [1, 2, 3, 4, 5] })).toBe('по будням');
+    expect(repeatName({ every: 'days', days: [0, 6] })).toBe('по выходным');
+    expect(repeatName({ every: 'days', days: [0, 1] })).toBe('по понедельникам и воскресеньям');
+    expect(repeatName({ every: 'days', days: [5, 1, 3] })).toBe('по понедельникам, средам и пятницам');
+  });
+
+  it('«по рабочим дням» из старого сохранения становится выбором дней из распорядка', () => {
+    const old = (workDays: number[]) => {
+      const { s } = fresh();
+      s.settings.workDays = workDays;
+      addRoutine(s, at(8), routine('Почта', { every: 'day' }));
+      addRoutine(s, at(8), routine('Цветы', { every: 'week', weekday: 3 }));
+      s.routines[0].repeat = { every: 'workday' } as unknown as Repeat;
+      (s as { v: number }).v = 3;
+      return checkSave(JSON.parse(JSON.stringify(s)))!;
+    };
+    const s = old([1, 2, 3, 4, 5]);
+    expect(s.v).toBe(SAVE_VERSION);
+    expect(s.routines.map((r) => r.repeat)).toEqual([
+      { every: 'days', days: [1, 2, 3, 4, 5] },
+      { every: 'week', weekday: 3 },
+    ]);
+    expect(old([2, 3, 4, 5, 6]).routines[0].repeat).toEqual({ every: 'days', days: [2, 3, 4, 5, 6] });
+    expect(old([]).routines[0].repeat).toEqual({ every: 'days', days: [1, 2, 3, 4, 5] });
+  });
+
+  it('свои дни, изменённые на двух устройствах, сливаются целиком: берётся более поздняя правка', () => {
+    const { s: base } = fresh();
+    const r = addRoutine(base, at(8), routine('Почта', { every: 'days', days: [1, 3] }));
+    const local = JSON.parse(JSON.stringify(base)) as State;
+    const remote = JSON.parse(JSON.stringify(base)) as State;
+    updateRoutine(local, r, routine('Почта', { every: 'days', days: [1, 3, 5] }));
+    local.touchedAt = at(9);
+    updateRoutine(remote, r, routine('Почта', { every: 'days', days: [2, 4] }));
+    remote.touchedAt = at(10);
+    expect(mergeGames(base, local, remote, at(11)).routines[0].repeat).toEqual({ every: 'days', days: [2, 4] });
+    // Если дни меняли только с одной стороны, они берутся оттуда.
+    const untouched = JSON.parse(JSON.stringify(base)) as State;
+    untouched.touchedAt = at(10);
+    expect(mergeGames(base, local, untouched, at(11)).routines[0].repeat).toEqual({ every: 'days', days: [1, 3, 5] });
   });
 
   it('раз в неделю приходит только в свой день', () => {
@@ -109,7 +161,7 @@ describe('повторяющиеся задачи', () => {
     const { s } = fresh();
     const r = addRoutine(s, at(8), routine('Почта', { every: 'day' }));
     release(s, at(9), waitingOf(s, r)!.id);
-    updateRoutine(s, r, routine('Почта', { every: 'workday' }));
+    updateRoutine(s, r, routine('Почта', { every: 'days', days: [1, 2, 3, 4, 5] }));
     expect(waitingOf(s, r)).toBeUndefined();
     settle(s, at(8, 0, 26));
     expect(waitingOf(s, r)?.day).toBe('2026-10-26');
@@ -249,9 +301,9 @@ describe('сохранение прошлой версии', () => {
     const storage: Storage = { load: () => raw, save: (j) => { raw = j; } };
     const st = new Store(storage, () => at(9));
     expect(st.problem).toBeNull();
-    expect(st.state.v).toBe(3);
+    expect(st.state.v).toBe(SAVE_VERSION);
     expect(st.state.routines).toEqual([]);
     expect(st.state.tasks.map((t) => t.title)).toEqual(['Отчёт']);
-    expect(JSON.parse(raw!).v).toBe(3);
+    expect(JSON.parse(raw!).v).toBe(SAVE_VERSION);
   });
 });

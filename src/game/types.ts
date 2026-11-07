@@ -147,7 +147,7 @@ export interface Meeting {
 export type MeetingRepeat = 'day' | 'workday' | 'week' | 'week2' | 'month' | 'year';
 
 /** Как часто приходит повторяющаяся задача. Рабочие дни берутся из распорядка, weekday: 0 воскресенье. */
-export type Repeat = { every: 'day' } | { every: 'workday' } | { every: 'week'; weekday: number };
+export type Repeat = { every: 'day' } | { every: 'week'; weekday: number } | { every: 'days'; days: number[] };
 
 /**
  * Повторяющаяся задача: в свои дни она сама встаёт в план дня обычной задачей (Task с routineId).
@@ -203,7 +203,7 @@ export interface Hero {
 }
 
 export interface State {
-  v: 3;
+  v: 4;
   /** Своя у каждой игры: по ней сохранение в GitHub узнаёт, та же это игра или другая. */
   gameId: string;
   createdAt: number;

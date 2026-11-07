@@ -46,7 +46,7 @@ import {
   waitingOf,
   winQuest,
 } from '../game/state';
-import { addDays, formatDue, formatDuration, nextRepeat, parseDay, plural } from '../game/time';
+import { addDays, formatDue, formatDuration, nextRepeat, parseDay, plural, repeatOnDays } from '../game/time';
 import type { DayKey, Level, Quest, QuestColor, QuestKind, Repeat, State, Task } from '../game/types';
 import type { DiaryEntry } from '../notes/diary';
 import {
@@ -72,7 +72,7 @@ import { heroLevel } from '../game/rules';
 import { GIcon, LIcon } from './Icon';
 import { comeBack, ignite, letGo } from './magic/spells';
 import { bedtime, expectJoin, expectLetter, lairFall } from './magic/world';
-import { Chips, LevelMark, QuestDot, TaskMeta, questName } from './parts';
+import { Chips, LevelMark, QuestDot, TaskMeta, WeekdayPicker, questName } from './parts';
 import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
 import { WipeSheet } from './Settings';
@@ -226,8 +226,8 @@ type RepeatKind = 'none' | Repeat['every'];
 const REPEATS: { value: RepeatKind; label: string }[] = [
   { value: 'none', label: 'Не повторять' },
   { value: 'day', label: 'Каждый день' },
-  { value: 'workday', label: 'По рабочим дням' },
   { value: 'week', label: 'Раз в неделю' },
+  { value: 'days', label: 'Свои дни' },
 ];
 
 /**
@@ -253,6 +253,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const [period, setPeriodKey] = useState<PeriodKey | null>(editing ? editing.period ?? null : preset?.period ?? null);
   const [repeatKind, setRepeatKind] = useState<RepeatKind>(routine?.repeat.every ?? 'none');
   const [weekday, setWeekday] = useState<number>(routine?.repeat.every === 'week' ? routine.repeat.weekday : parseDay(s.day).getDay());
+  const [days, setDays] = useState<number[]>(routine?.repeat.every === 'days' ? routine.repeat.days : [weekday]);
   // Что игрок выбрал руками: это сильнее слов во фразе.
   const [touched, setTouched] = useState<Partial<Record<Field, true>>>({});
   const touch = (f: Field) => setTouched((x) => (x[f] ? x : { ...x, [f]: true }));
@@ -266,7 +267,8 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const v = effective(parsed, touched, { questId, estimate, lvl, day, due, at, period }, preset?.day !== undefined);
 
   const tomorrow = addDays(s.day, 1);
-  const repeat: Repeat | null = repeatKind === 'none' ? null : repeatKind === 'week' ? { every: 'week', weekday } : { every: repeatKind };
+  const repeat: Repeat | null = repeatKind === 'none' ? null : repeatKind === 'day' ? { every: 'day' } : repeatKind === 'week' ? { every: 'week', weekday } : repeatOnDays(days);
+  const noDays = repeat?.every === 'days' && repeat.days.length === 0;
   const willBeLetter = !repeat && !v.questId && !v.day && !v.period;
   const name = parsed ? parsed.title : title.trim();
 
@@ -274,6 +276,10 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
     e?.preventDefault();
     if (!name) {
       input.current?.focus();
+      return;
+    }
+    if (noDays) {
+      ui.toast('Выбери хотя бы один день');
       return;
     }
     const fields = { title: name, questId: v.questId, level: v.lvl, estimateMin: v.estimate === ESTIMATE_BY_LEVEL[v.lvl] ? null : v.estimate, at: v.at || null, cue: cue.trim() || null };
@@ -359,6 +365,8 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       />
       <Chips label="Повторять" value={repeatKind} options={routine && !editing ? REPEATS.slice(1) : REPEATS} onChange={setRepeatKind} />
       {repeatKind === 'week' && <Chips label="В какой день недели" value={weekday} options={WEEKDAY_CHIPS} onChange={setWeekday} />}
+      {repeatKind === 'days' && <WeekdayPicker label="В какие дни" days={days} onChange={setDays} />}
+      {noDays && <p class="note note-error">Выбери хотя бы один день.</p>}
       {!repeat && (
         <Chips
           label="Горизонт"
@@ -518,8 +526,8 @@ function PhraseHint({ s, parsed, raw }: { s: State; parsed: Parsed; raw: string 
 function routineNews(s: State, routineId: string, repeat: Repeat): string {
   const name = repeatName(repeat);
   if (waitingOf(s, routineId)?.day === s.day) return `Повторяется ${name}. Сегодня уже у костра`;
-  const next = nextRepeat(repeat, addDays(s.day, 1), s.settings);
-  if (!next) return `Повторяется ${name}, но в распорядке нет рабочих дней`;
+  const next = nextRepeat(repeat, addDays(s.day, 1));
+  if (!next) return `Повторяется ${name}`;
   const when = next === addDays(s.day, 1) ? 'завтра' : IN_WEEKDAY[parseDay(next).getDay()];
   return repeat.every === 'week' ? `Придёт ${when}, а дальше каждую неделю` : `Повторяется ${name}. Придёт ${when}`;
 }
