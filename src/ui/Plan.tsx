@@ -150,7 +150,7 @@ function DayPlan({ ui }: { ui: Ui }) {
           <ul class="cal-list">
             {meetings.map((m) => (
               <li key={m.id}>
-                <AgendaRow ui={ui} s={s} x={{ kind: 'meeting', at: m.at, meeting: m }} />
+                <AgendaRow ui={ui} s={s} x={{ kind: 'meeting', at: m.at, meeting: m, day: s.day }} />
               </li>
             ))}
           </ul>

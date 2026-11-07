@@ -4,9 +4,7 @@ import { PRESETS, PRESET_HEX, colorName, hexToHsl, hslToHex, hueName, isHex, isP
 import type { QuestColor, QuestPreset } from '../game/types';
 import { QUEST_COLOR_NAME } from '../game/words';
 
-type Choice = QuestPreset | 'own';
-
-const CHOICES: Choice[] = [...PRESETS, 'own'];
+type Choice = QuestPreset | 'none' | 'own';
 
 const css = ({ h, s, l }: Hsl) => `hsl(${h}, ${s}%, ${l}%)`;
 
@@ -14,12 +12,26 @@ const css = ({ h, s, l }: Hsl) => `hsl(${h}, ${s}%, ${l}%)`;
  * Выбор знамени, как у радиокнопок: Tab попадает на выбранное, стрелки выбирают соседнее. Свой цвет
  * помнится, пока игрок пробует готовые, и возвращается, если снова выбрать «Свой цвет».
  * onChange получает null, пока в поле кода стоит не цвет: с таким знаменем поход не сохраняется.
+ * label это подпись группы. С noneLabel появляется вариант без цвета, о нём сообщает onNone: так выбирается цвет встречи.
  */
-export function QuestColorPicker({ initial, onChange }: { initial: QuestColor; onChange: (c: QuestColor | null) => void }) {
+export function QuestColorPicker({
+  initial,
+  onChange,
+  label = 'Знамя',
+  noneLabel,
+  onNone,
+}: {
+  initial: QuestColor | undefined;
+  onChange: (c: QuestColor | null) => void;
+  label?: string;
+  noneLabel?: string;
+  onNone?: () => void;
+}) {
+  const choices: Choice[] = [...PRESETS, ...(noneLabel ? (['none'] as const) : []), 'own'];
   // Цвет, которого эта версия не знает, остаётся как был, пока игрок не выберет другой.
-  const [pick, setPick] = useState<Choice | null>(isPreset(initial) ? initial : isHex(initial) ? 'own' : null);
+  const [pick, setPick] = useState<Choice | null>(isPreset(initial) ? initial : isHex(initial) ? 'own' : noneLabel && !initial ? 'none' : null);
   const [own, setOwn] = useState<string | null>(isHex(initial) ? initial.toLowerCase() : null);
-  const [hsl, setHsl] = useState<Hsl>(() => hexToHsl(questHex(initial)));
+  const [hsl, setHsl] = useState<Hsl>(() => hexToHsl(questHex(initial ?? 'blue')));
   const [code, setCode] = useState(own?.toUpperCase() ?? '');
   const [bad, setBad] = useState(false);
   const edit = useRef<HTMLDivElement>(null);
@@ -32,12 +44,17 @@ export function QuestColorPicker({ initial, onChange }: { initial: QuestColor; o
   };
   const choose = (c: Choice) => {
     setPick(c);
+    if (c === 'none') {
+      setBad(false);
+      onNone?.();
+      return;
+    }
     if (c !== 'own') {
       onChange(c);
       return;
     }
     // Свой цвет начинается с того, что выбрано сейчас: так проще взять синее и сделать его темнее.
-    const hex = own ?? (isPreset(pick) ? PRESET_HEX[pick] : questHex(initial));
+    const hex = own ?? (isPreset(pick) ? PRESET_HEX[pick] : questHex(initial ?? 'blue'));
     setCode(hex.toUpperCase());
     applyOwn(hex, own ? hsl : hexToHsl(hex));
     // На низком телефоне ползунки открываются под краем листа: лист прокручивается ровно настолько, чтобы их было видно.
@@ -74,21 +91,21 @@ export function QuestColorPicker({ initial, onChange }: { initial: QuestColor; o
     takeCode(hex);
   };
 
-  const at = pick ? CHOICES.indexOf(pick) : -1;
+  const at = pick ? choices.indexOf(pick) : -1;
   const onKey = (e: KeyboardEvent) => {
     const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
     if (!step) return;
     e.preventDefault();
-    const n = CHOICES.length;
+    const n = choices.length;
     const i = ((at < 0 ? 0 : at + step) + n) % n;
-    choose(CHOICES[i]);
+    choose(choices[i]);
     const group = (e.currentTarget as HTMLElement).closest('[role="radiogroup"]');
     requestAnimationFrame(() => group?.querySelectorAll<HTMLElement>('[role="radio"]')[i]?.focus());
   };
   const radio = (c: Choice) => ({
     role: 'radio' as const,
     'aria-checked': c === pick,
-    tabIndex: CHOICES.indexOf(c) === (at < 0 ? 0 : at) ? 0 : -1,
+    tabIndex: choices.indexOf(c) === (at < 0 ? 0 : at) ? 0 : -1,
     onClick: () => choose(c),
     onKeyDown: onKey,
     type: 'button' as const,
@@ -96,25 +113,33 @@ export function QuestColorPicker({ initial, onChange }: { initial: QuestColor; o
 
   return (
     <div class="field">
-      <div class="field-label">Знамя</div>
-      <div role="radiogroup" aria-label="Знамя">
+      <div class="field-label">{label}</div>
+      <div role="radiogroup" aria-label={label}>
         <div class="chips">
           {PRESETS.map((p) => (
             <button key={p} {...radio(p)} class={`swatch${p === pick ? ' is-on' : ''}`} style={{ background: PRESET_HEX[p] }} aria-label={QUEST_COLOR_NAME[p]} />
           ))}
         </div>
-        <button {...radio('own')} class={`qcolor-own${pick === 'own' ? ' is-on' : ''}`}>
-          <span class="qcolor-own-dot" style={own ? { background: own } : undefined} aria-hidden="true" />
-          Свой цвет
-          {own && (
-            <>
-              <span class="qcolor-own-code" aria-hidden="true">
-                {own.toUpperCase()}
-              </span>
-              <span class="sr-only">, {colorName(own)}</span>
-            </>
+        <div class="qcolor-more">
+          {noneLabel && (
+            <button {...radio('none')} class={`qcolor-own${pick === 'none' ? ' is-on' : ''}`}>
+              <span class="qcolor-own-dot qcolor-none-dot" aria-hidden="true" />
+              {noneLabel}
+            </button>
           )}
-        </button>
+          <button {...radio('own')} class={`qcolor-own${pick === 'own' ? ' is-on' : ''}`}>
+            <span class="qcolor-own-dot" style={own ? { background: own } : undefined} aria-hidden="true" />
+            Свой цвет
+            {own && (
+              <>
+                <span class="qcolor-own-code" aria-hidden="true">
+                  {own.toUpperCase()}
+                </span>
+                <span class="sr-only">, {colorName(own)}</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
       {pick === 'own' && own && (
         <div class="qcolor-edit" ref={edit}>

@@ -129,8 +129,22 @@ export interface Meeting {
   until?: string;
   /** Где: адрес, кабинет, ссылка на созвон. */
   place?: string;
+  /** Цвет, как у сфер и проектов. Нет поля: обычный цвет встречи. */
+  color?: QuestColor;
+  /**
+   * Как часто встреча повторяется. Нет поля: один раз, в day. С повтором day это первый день серии,
+   * а остальные дни считаются на лету (см. calendar.ts), записи не копируются.
+   */
+  repeat?: MeetingRepeat;
+  /** Последний день повтора включительно. Нет поля: без конца. */
+  repeatUntil?: DayKey;
+  /** Дни серии, которые пропущены. */
+  skip?: DayKey[];
   createdAt: number;
 }
+
+/** Повтор встречи. workday: с понедельника по пятницу, week2: каждые 2 недели. */
+export type MeetingRepeat = 'day' | 'workday' | 'week' | 'week2' | 'month' | 'year';
 
 /** Как часто приходит повторяющаяся задача. Рабочие дни берутся из распорядка, weekday: 0 воскресенье. */
 export type Repeat = { every: 'day' } | { every: 'workday' } | { every: 'week'; weekday: number };

@@ -3,8 +3,8 @@
 import { parsePhrase } from './phrase';
 import { EVENT_MIN, MEETING_MIN, estimateOf } from './rules';
 import { nextId, waitingOf } from './state';
-import { addDays, parseDay, repeatsOn } from './time';
-import type { DayKey, Meeting, Routine, State, Task } from './types';
+import { addDays, daysBetween, parseDay, repeatsOn } from './time';
+import type { DayKey, Meeting, MeetingRepeat, QuestColor, Routine, State, Task } from './types';
 
 export interface MeetingInput {
   title: string;
@@ -12,6 +12,9 @@ export interface MeetingInput {
   at?: string | null;
   until?: string | null;
   place?: string | null;
+  color?: QuestColor | null;
+  repeat?: MeetingRepeat | null;
+  repeatUntil?: DayKey | null;
 }
 
 const TIME = /^([01]?\d|2[0-3]):([0-5]\d)$/;
@@ -32,6 +35,83 @@ function fill(m: Meeting, input: MeetingInput): void {
   const place = input.place?.trim();
   if (place) m.place = place;
   else delete m.place;
+  if (input.color) m.color = input.color;
+  else delete m.color;
+  if (input.repeat) m.repeat = input.repeat;
+  else delete m.repeat;
+  if (m.repeat && input.repeatUntil && input.repeatUntil >= m.day) m.repeatUntil = input.repeatUntil;
+  else delete m.repeatUntil;
+  // Пропуск имеет смысл только для дня серии: иначе, вернув прежний повтор, игрок нашёл бы день пропущенным.
+  const skip = m.repeat ? m.skip?.filter((d) => onRule(m, d)) : undefined;
+  if (skip?.length) m.skip = skip;
+  else delete m.skip;
+}
+
+/** В коротком месяце встреча с 31 числа стоит в его последний день, 29 февраля вне високосного года 28-го. */
+function sameDayOfMonth(first: Date, d: Date): boolean {
+  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  return d.getDate() === Math.min(first.getDate(), last);
+}
+
+/** Попадает ли день в расписание встречи, пропуски здесь не в счёт. Повтор, которого эта версия не знает, считается одним разом. */
+function onRule(m: Meeting, day: DayKey): boolean {
+  if (day < m.day) return false;
+  if (day === m.day && m.repeat !== 'workday') return true;
+  if (m.repeatUntil && day > m.repeatUntil) return false;
+  const first = parseDay(m.day);
+  const d = parseDay(day);
+  switch (m.repeat) {
+    case 'day':
+      return true;
+    case 'workday':
+      return d.getDay() >= 1 && d.getDay() <= 5;
+    case 'week':
+      return daysBetween(m.day, day) % 7 === 0;
+    case 'week2':
+      return daysBetween(m.day, day) % 14 === 0;
+    case 'month':
+      return sameDayOfMonth(first, d);
+    case 'year':
+      return d.getMonth() === first.getMonth() && sameDayOfMonth(first, d);
+    default:
+      return false;
+  }
+}
+
+/** Стоит ли встреча в этот день: один раз или как день серии, если он не пропущен. */
+export function meetingOccursOn(m: Meeting, day: DayKey): boolean {
+  return onRule(m, day) && !m.skip?.includes(day);
+}
+
+/** Самое долгое, сколько ищется следующий день серии: годовой повтор, пропущенный несколько лет подряд, всё равно найдётся. */
+const SEARCH_DAYS = 366 * 8;
+
+/** Ближайший день встречи, начиная с from; null, если больше не будет. */
+export function nextMeetingDay(m: Meeting, from: DayKey): DayKey | null {
+  const start = from > m.day ? from : m.day;
+  for (let i = 0; i < SEARCH_DAYS; i++) {
+    const day = addDays(start, i);
+    if (m.repeatUntil && day > m.repeatUntil) return null;
+    if (meetingOccursOn(m, day)) return day;
+    if (!m.repeat) return null;
+  }
+  return null;
+}
+
+/** Пропустить один день серии: остальные остаются как были. */
+export function skipMeetingDay(s: State, id: string, day: DayKey): void {
+  const m = findMeeting(s, id);
+  if (!m || !m.repeat || !onRule(m, day) || m.skip?.includes(day)) return;
+  (m.skip ??= []).push(day);
+  m.skip.sort();
+}
+
+/** Вернуть пропущенный день серии. */
+export function unskipMeetingDay(s: State, id: string, day: DayKey): void {
+  const m = findMeeting(s, id);
+  if (!m?.skip) return;
+  m.skip = m.skip.filter((d) => d !== day);
+  if (!m.skip.length) delete m.skip;
 }
 
 export function meetingsOf(s: State): Meeting[] {
@@ -72,18 +152,18 @@ export function restoreMeeting(s: State, m: Meeting): void {
 /** Встречи дня: сначала на весь день, потом по времени. */
 export function meetingsOn(s: State, day: DayKey): Meeting[] {
   return meetingsOf(s)
-    .filter((m) => m.day === day)
+    .filter((m) => meetingOccursOn(m, day))
     .sort((a, b) => (a.at ?? '').localeCompare(b.at ?? '') || a.createdAt - b.createdAt);
 }
 
 /**
  * Одна строка дня в календаре.
- * meeting: встреча. task: задача позвана к костру на этот день (или сделана в этот день).
+ * meeting: встреча или день её серии (day). task: задача позвана к костру на этот день (или сделана в этот день).
  * due: у задачи в этот день срок, а к костру она позвана на другой день или ещё никуда.
  * routine: повторяющаяся задача придёт в этот день сама (только для дней после сегодняшнего).
  */
 export type AgendaItem =
-  | { kind: 'meeting'; at: string | null; meeting: Meeting }
+  | { kind: 'meeting'; at: string | null; meeting: Meeting; day: DayKey }
   | { kind: 'task'; at: string | null; task: Task; done: boolean }
   | { kind: 'due'; at: string | null; task: Task }
   | { kind: 'routine'; at: string | null; routine: Routine };
@@ -92,7 +172,7 @@ const rank = (x: AgendaItem) => (x.kind === 'meeting' && !x.at ? 0 : x.at ? 1 : 
 
 /** Что стоит на этот день: встречи, дела, сроки и повторы. Сначала встречи на весь день, потом всё со временем по часам, потом дела без времени. */
 export function agendaOf(s: State, day: DayKey): AgendaItem[] {
-  const out: AgendaItem[] = meetingsOn(s, day).map((m) => ({ kind: 'meeting', at: m.at, meeting: m }));
+  const out: AgendaItem[] = meetingsOn(s, day).map((m) => ({ kind: 'meeting', at: m.at, meeting: m, day }));
   const shown = new Set<string>();
   for (const t of s.tasks) {
     const planned = t.status === 'open' && t.day === day;

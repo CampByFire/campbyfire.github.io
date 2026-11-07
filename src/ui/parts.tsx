@@ -71,7 +71,10 @@ export function numLook(tone: Tone, color: string | undefined, more = ''): { cla
 }
 
 export function QuestDot({ q }: { q: Quest | undefined }) {
-  const hex = questHex(q?.color);
+  return <ColorDot hex={questHex(q?.color)} />;
+}
+
+export function ColorDot({ hex }: { hex: string }) {
   return <span class={`qdot${isDark(hex) ? ' qdot-dark' : ''}`} style={{ background: hex }} aria-hidden="true" />;
 }
 

@@ -1,15 +1,15 @@
 // Календарь: месяц сеткой и что стоит на выбранный день. Встречи живут только здесь,
 // а задачи берутся из игры: на какой день позваны к костру, какой у них срок, когда придут повторы.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { SLOT_MIN_SHOWN, agendaOf, dayCount, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
-import { questHex } from '../game/color';
+import { SLOT_MIN_SHOWN, agendaOf, dayCount, meetingsOn, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
+import { colorName, isDark, meetingTint, questHex } from '../game/color';
 import { findQuest } from '../game/state';
 import { addDays, formatClock, formatDate, minutesOfDay, parseDay } from '../game/time';
-import type { DayKey, State } from '../game/types';
-import { MONTH_NAME, MONTH_OF, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
+import type { DayKey, Meeting, State } from '../game/types';
+import { MEETING_REPEAT_NAME, MONTH_NAME, MONTH_OF, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
 import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
-import { QuestDot } from './parts';
+import { ColorDot, QuestDot } from './parts';
 
 /** Какой день был выбран: вернувшись в календарь, игрок видит тот же. Сбрасывается на сегодня с новым днём. */
 let picked: { day: DayKey; on: DayKey } | null = null;
@@ -172,7 +172,9 @@ function MonthGrid({ s, month, day, onPick, onOpen }: { s: State; month: MonthKe
                       {date.getDate()}
                     </span>
                     <span class="cal-marks" aria-hidden="true">
-                      {c.meetings > 0 && <span class="cal-mark cal-mark-meet" />}
+                      {[...new Set(meetingsOn(s, d).map((m) => (m.color ? questHex(m.color) : '')))].slice(0, 3).map((hex) => (
+                        <span key={hex} class={`cal-mark cal-mark-meet${hex && isDark(hex) ? ' cal-mark-dark' : ''}`} style={hex ? { background: hex } : undefined} />
+                      ))}
                       {c.tasks > 0 && <span class="cal-mark cal-mark-task" />}
                     </span>
                   </button>
@@ -385,11 +387,17 @@ function TimelineEvent({ ui, s, slot }: { ui: Ui; s: State; slot: Slot }) {
   let cls = 'tl-ev';
   let open: () => void;
   let color: string | undefined;
+  let tint: string | undefined;
   if (x.kind === 'meeting') {
     title = x.meeting.title;
-    kind = ['встреча', x.meeting.place].filter(Boolean).join(' · ');
+    kind = ['встреча', repeatOf(x.meeting), x.meeting.place].filter(Boolean).join(' · ');
     cls += ' tl-ev-meet';
-    open = () => ui.open({ kind: 'meeting', meetingId: x.meeting.id });
+    open = () => ui.open({ kind: 'meeting', meetingId: x.meeting.id, day: x.day });
+    if (x.meeting.color) {
+      color = questHex(x.meeting.color);
+      tint = meetingTint(color);
+      kind += `, цвет ${colorName(color)}`;
+    }
   } else if (x.kind === 'routine') {
     title = x.routine.title;
     kind = 'повторяется';
@@ -405,7 +413,7 @@ function TimelineEvent({ ui, s, slot }: { ui: Ui; s: State; slot: Slot }) {
   }
   const short = slot.end - slot.start <= 30;
   return (
-    <button class={`${cls}${short ? ' is-short' : ''}`} style={color ? { borderLeftColor: color } : undefined} aria-label={`${range}, ${title}, ${kind}`} onClick={open}>
+    <button class={`${cls}${short ? ' is-short' : ''}`} style={color ? { borderLeftColor: color, ...(tint ? { background: tint } : {}) } : undefined} aria-label={`${range}, ${title}, ${kind}`} onClick={open}>
       <span class="tl-ev-title" aria-hidden="true">
         {title}
       </span>
@@ -419,6 +427,9 @@ function TimelineEvent({ ui, s, slot }: { ui: Ui; s: State; slot: Slot }) {
 
 const key = (x: AgendaItem) => (x.kind === 'meeting' ? `m-${x.meeting.id}` : x.kind === 'routine' ? `r-${x.routine.id}` : `${x.kind}-${x.task.id}`);
 
+/** Повтор встречи словами для подписи строки: «каждую неделю». */
+const repeatOf = (m: Meeting) => (m.repeat && MEETING_REPEAT_NAME[m.repeat]?.toLowerCase()) || null;
+
 /** Строка дня: время, название и что это такое. */
 export function AgendaRow({ ui, s, x }: { ui: Ui; s: State; x: AgendaItem }) {
   const time = x.at ? x.at.replace(/^0/, '') : x.kind === 'meeting' ? 'весь день' : '';
@@ -429,9 +440,9 @@ export function AgendaRow({ ui, s, x }: { ui: Ui; s: State; x: AgendaItem }) {
   if (x.kind === 'meeting') {
     const m = x.meeting;
     title = m.title;
-    sub = ['встреча', m.until && `до ${m.until.replace(/^0/, '')}`, m.place].filter(Boolean).join(' · ');
-    open = () => ui.open({ kind: 'meeting', meetingId: m.id });
-    dot = <LIcon name="calendar" size={15} class="cal-ic-meet" />;
+    sub = ['встреча', repeatOf(m), m.until && `до ${m.until.replace(/^0/, '')}`, m.place].filter(Boolean).join(' · ');
+    open = () => ui.open({ kind: 'meeting', meetingId: m.id, day: x.day });
+    dot = m.color ? <ColorDot hex={questHex(m.color)} /> : <LIcon name="calendar" size={15} class="cal-ic-meet" />;
   } else if (x.kind === 'routine') {
     const r = x.routine;
     title = r.title;
@@ -454,6 +465,7 @@ export function AgendaRow({ ui, s, x }: { ui: Ui; s: State; x: AgendaItem }) {
       <span class="cal-text">
         <span class="row-title">{title}</span>
         <span class="cal-sub">{sub}</span>
+        {x.kind === 'meeting' && x.meeting.color && <span class="sr-only">, цвет {colorName(questHex(x.meeting.color))}</span>}
       </span>
     </button>
   );

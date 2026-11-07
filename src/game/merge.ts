@@ -87,6 +87,21 @@ const TASK_GROUPS = [
   ['status', 'doneAt', 'doneDay', 'reward', 'releasedAt', 'releasedFrom', 'releasedXp'],
   ['day', 'order', 'leftDay'],
 ];
+/** Повтор и его конец задаются вместе: конец от прежнего повтора к новому не подходит. */
+const MEETING_GROUPS = [['repeat', 'repeatUntil']];
+
+/** Пропущенные дни сливаются поштучно: пропуск с любой стороны остаётся, возвращённый день уходит из списка. */
+function mergeMeeting(b: Meeting, l: Meeting, r: Meeting, localWins: boolean): Meeting {
+  const out = mergeFields(b, l, r, localWins, [], MEETING_GROUPS);
+  const was = b.skip ?? [];
+  const here = l.skip ?? [];
+  const there = r.skip ?? [];
+  const skip = [...new Set([...here, ...there])].filter((d) => !was.includes(d) || (here.includes(d) && there.includes(d))).sort();
+  if (skip.length) out.skip = skip;
+  else delete out.skip;
+  return out;
+}
+
 const LOG_COUNTERS = ['gold', 'xp', 'done', 'workedMs', 'restMs', 'undeadSlain'];
 const EMPTY_LOG: DayLog = { gold: 0, xp: 0, done: 0, workedMs: 0, restMs: 0, undeadSlain: 0 };
 
@@ -176,7 +191,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   out.quests = mergeById<Quest>(b.quests, l.quests, r.quests, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
   out.tasks = mergeById<Task>(b.tasks, l.tasks, r.tasks, (x, y, z) => mergeFields(x, y, z, localWins, TASK_COUNTERS, TASK_GROUPS), localWins);
   out.routines = mergeById<Routine>(b.routines, l.routines, r.routines, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
-  setMeetings(out, mergeById<Meeting>(b.meetings ?? [], l.meetings ?? [], r.meetings ?? [], (x, y, z) => mergeFields(x, y, z, localWins, []), localWins));
+  setMeetings(out, mergeById<Meeting>(b.meetings ?? [], l.meetings ?? [], r.meetings ?? [], (x, y, z) => mergeMeeting(x, y, z, localWins), localWins));
   out.ratings = mergeRatings(l.ratings, r.ratings);
   out.log = mergeLog(b.log, l.log, r.log, localWins);
   out.settings = mergeFields(b.settings, l.settings, r.settings, localWins, []);

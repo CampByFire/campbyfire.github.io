@@ -2,7 +2,7 @@
 import { periodEnd, periodKind, periodOf, periodStart, shiftPeriod, type PeriodKey, type PeriodKind } from './period';
 import type { UndeadRank } from './rules';
 import { parseDay, plural, type Shift } from './time';
-import type { Level, QuestKind, QuestPreset, RateEvery, Repeat } from './types';
+import type { Level, MeetingRepeat, QuestKind, QuestPreset, RateEvery, Repeat } from './types';
 
 export type ClassId = 'rogue' | 'barbarian' | 'mage' | 'knight';
 
@@ -95,6 +95,18 @@ export function repeatName(r: Repeat): string {
   if (r.every === 'workday') return 'по рабочим дням';
   return ON_WEEKDAY[r.weekday];
 }
+
+/** Повторы встречи в том порядке, в каком их предлагает лист встречи. */
+export const MEETING_REPEATS: MeetingRepeat[] = ['day', 'workday', 'week', 'week2', 'month', 'year'];
+
+export const MEETING_REPEAT_NAME: Record<MeetingRepeat, string> = {
+  day: 'Каждый день',
+  workday: 'По будням',
+  week: 'Каждую неделю',
+  week2: 'Каждые 2 недели',
+  month: 'Каждый месяц',
+  year: 'Каждый год',
+};
 
 export const PERIOD_KIND_NAME: Record<PeriodKind, string> = {
   week: 'Неделя',

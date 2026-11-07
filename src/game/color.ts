@@ -110,6 +110,16 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/**
+ * Фон встречи на шкале дня: её цвет, сильно приглушённый тёмным. Светлые буквы читаются на нём
+ * с контрастом не ниже 4,5:1, какой бы цвет ни выбрал игрок.
+ */
+export function meetingTint(hex: string): string {
+  const base = channels('#241b12');
+  const mixed = channels(hex).map((c, i) => Math.round(c * 0.28 + base[i] * 0.72));
+  return `#${mixed.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+}
+
 /** Цвета цифр по очереди: тёмный, как на золотом номере, светлый, белый, чёрный. */
 const INKS = ['#2a1d10', '#fbf3e2', '#ffffff', '#000000'];
 

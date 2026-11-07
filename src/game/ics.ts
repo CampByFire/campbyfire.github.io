@@ -2,8 +2,8 @@
 // календарь звонит сам, а Лагерь только один раз отдаёт ему события. Время «плавающее», без пояса:
 // календарь ставит его в поясе телефона, как и показывает Лагерь.
 import { ALL_DAY_REMIND_HOURS, EVENT_MIN, MEETING_MIN, MEETING_REMIND_MIN, REMIND_BEFORE_MIN, estimateOf } from './rules';
-import { meetingsOf } from './calendar';
-import { nextRepeat } from './time';
+import { meetingsOf, nextMeetingDay } from './calendar';
+import { nextRepeat, parseDay } from './time';
 import type { DayKey, Meeting, Repeat, Settings, State, Task } from './types';
 
 export interface IcsOptions {
@@ -63,6 +63,25 @@ function rrule(r: Repeat, st: Settings): string {
   return `FREQ=WEEKLY;BYDAY=${[...st.workDays].sort().map((d) => BYDAY[d]).join(',')}`;
 }
 
+/** Правило повтора встречи. Даты 29–31 в коротком месяце встают на его последний день, как и в самом Лагере. */
+function meetingRule(m: Meeting): string | undefined {
+  if (!m.repeat) return undefined;
+  const d = parseDay(m.day);
+  const date = d.getDate();
+  const days = date > 28 ? `BYMONTHDAY=${Array.from({ length: date - 27 }, (_, i) => 28 + i).join(',')};BYSETPOS=-1` : `BYMONTHDAY=${date}`;
+  const rule = {
+    day: 'FREQ=DAILY',
+    workday: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
+    week: 'FREQ=WEEKLY',
+    week2: 'FREQ=WEEKLY;INTERVAL=2',
+    month: `FREQ=MONTHLY;${days}`,
+    year: `FREQ=YEARLY;BYMONTH=${d.getMonth() + 1};${days}`,
+  }[m.repeat];
+  if (!rule) return undefined;
+  if (!m.repeatUntil) return rule;
+  return `${rule};UNTIL=${m.repeatUntil.replace(/-/g, '')}${m.at ? 'T235959' : ''}`;
+}
+
 interface Ev {
   uid: string;
   /** Начало «20261105T093000» или, для события на весь день, «20261105». */
@@ -74,13 +93,15 @@ interface Ev {
   note: string;
   place?: string;
   rule?: string;
+  /** Пропущенные дни серии, в том же виде, что и start. */
+  except?: string[];
   /** За сколько минут до начала звонит будильник. */
   alarm: number;
 }
 
-/** Что попадёт в календарь: утренний костёр, задачи со временем на сегодня и дальше, повторяющиеся со временем, встречи с сегодняшней. */
+/** Что попадёт в календарь: утренний костёр, задачи со временем на сегодня и дальше, повторяющиеся со временем, встречи и серии, у которых с сегодняшнего дня ещё что-то будет. */
 export function calendarEvents(s: State, o: IcsOptions): { morning: boolean; tasks: Task[]; routines: number; meetings: Meeting[] } {
-  const meetings = meetingsOf(s).filter((m) => m.day >= s.day);
+  const meetings = meetingsOf(s).filter((m) => nextMeetingDay(m, s.day));
   const tasks = s.tasks.filter((t) => t.status === 'open' && t.at && t.day && t.day >= s.day && !t.routineId && minutesOf(t.at) !== null);
   const routines = s.routines.filter((r) => r.at && minutesOf(r.at) !== null && nextRepeat(r.repeat, s.day, s.settings)).length;
   const morning = o.morning !== null && (o.morningDays === 'all' || s.settings.workDays.length > 0);
@@ -132,14 +153,18 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
   for (const m of calendarEvents(s, o).meetings) {
     const at = m.at ? minutesOf(m.at) : null;
     const end = m.until ? minutesOf(m.until) : null;
+    const dayStamp = (day: DayKey) => (at === null ? day.replace(/-/g, '') : local(day, at));
+    const first = nextMeetingDay(m, s.day)!;
     evs.push({
       uid: `meeting-${m.id}@${s.gameId}.lager`,
-      start: at === null ? m.day.replace(/-/g, '') : local(m.day, at),
+      start: dayStamp(first),
       min: at !== null && end !== null && end > at ? end - at : MEETING_MIN,
       allDay: at === null,
       title: m.title,
       note: link,
       place: m.place,
+      rule: meetingRule(m),
+      except: m.skip?.filter((d) => d > first).map(dayStamp),
       alarm: at === null ? ALL_DAY_REMIND_HOURS * 60 : MEETING_REMIND_MIN,
     });
   }
@@ -153,6 +178,7 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
       `SEQUENCE:${Math.floor(now / 1000)}`,
       ...(e.allDay ? [`DTSTART;VALUE=DATE:${e.start}`, 'DURATION:P1D'] : [`DTSTART:${e.start}`, `DURATION:PT${Math.max(5, Math.round(e.min))}M`]),
       ...(e.rule ? [`RRULE:${e.rule}`] : []),
+      ...(e.except ?? []).map((x) => (e.allDay ? `EXDATE;VALUE=DATE:${x}` : `EXDATE:${x}`)),
       `SUMMARY:${text(e.title)}`,
       `DESCRIPTION:${text(e.note)}`,
       ...(e.place ? [`LOCATION:${text(e.place)}`] : []),
