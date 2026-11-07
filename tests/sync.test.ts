@@ -575,6 +575,17 @@ describe('слияние версий', () => {
     expect(m.hero.gold).toBe(25);
   });
 
+  it('строка «когда начну» с одного устройства и время с другого не теряются', () => {
+    const { base, local, remote, id } = pair();
+    local.touchedAt = at(9);
+    updateTask(local, id, { cue: 'Когда налью кофе, открою документ' });
+    remote.touchedAt = at(10);
+    updateTask(remote, id, { at: '15:00' });
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(findTask(m, id)!.cue).toBe('Когда налью кофе, открою документ');
+    expect(findTask(m, id)!.at).toBe('15:00');
+  });
+
   it('удалённый поход уходит, если его с тех пор не меняли', () => {
     const { base, local, remote } = pair();
     const q = base.quests[2].id;

@@ -176,3 +176,15 @@ export async function connectGitHub(page: Page) {
   await page.getByRole('button', { name: 'Подключить' }).click();
   await expect(toast(page)).toHaveText('GitHub подключён');
 }
+
+/**
+ * Положить готовую игру в браузер до первого запуска страницы: так можно начать с просроченными задачами
+ * или с давним последним действием. Только один раз, перезагрузка открывает то, что игра сохранила сама.
+ */
+export async function seedGame(page: Page, state: unknown) {
+  await page.addInitScript((json) => {
+    if (sessionStorage.getItem('e2e-seeded')) return;
+    sessionStorage.setItem('e2e-seeded', '1');
+    localStorage.setItem('taskcraft-lager-v1', json);
+  }, JSON.stringify(state));
+}

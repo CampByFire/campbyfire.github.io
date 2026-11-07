@@ -161,6 +161,8 @@ export function Scene(p: {
       {layers.map((l) => (
         <SpriteImg key={l.key} s={l.sprite} undead={l.f?.tone === 'undead'} f={l.f} />
       ))}
+      {/* Больше нежити, чем мест на дороге: дальний конец дороги тонет в тумане, без счёта. */}
+      {v.extraRoad > 0 && <div class="road-fog" aria-hidden="true" style={{ left: pct(ROAD_FOG[0], SCENE_W), top: pct(ROAD_FOG[1], SCENE_H) }} />}
       {/* Воздух для магии: копии фигур тают поверх новых мест. Потом угли над костром и светлячки ночью. */}
       <div class="scene-fx" aria-hidden="true" />
       <Embers />
@@ -185,6 +187,9 @@ export function Scene(p: {
     </div>
   );
 }
+
+/** Середина тумана на дороге, в точках картинки: за дальним скелетом. */
+const ROAD_FOG: [number, number] = [470, 214];
 
 function feetOf(f: Figure): number {
   return SCENE.spots[f.spot]?.[1] ?? (f.sprite ? f.sprite.y + f.sprite.h : 0);

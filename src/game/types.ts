@@ -60,6 +60,10 @@ export interface Reward {
   undead?: boolean;
   /** Урон логову похода, равен уровню задачи. */
   damage: number;
+  /** Опыт сверху за упокоенную нежить (уже внутри xp). */
+  undeadXp?: number;
+  /** Опыт сверху отдохнувшему герою (уже внутри xp): при отмене «Готово» дело с бонусом возвращается. */
+  restedXp?: number;
 }
 
 export interface Task {
@@ -78,6 +82,11 @@ export interface Task {
   due: DayKey | null;
   /** Время на часах, если задача привязана ко времени, например «20:30». */
   at: string | null;
+  /**
+   * План «если — то»: когда начать и с какого маленького шага, например «Когда налью кофе, открою документ».
+   * Нет поля, значит плана нет. Прежние версии поле не знают и просто не показывают.
+   */
+  cue?: string;
   spentMs: number;
   createdAt: number;
   doneAt?: number;
@@ -86,6 +95,15 @@ export interface Task {
   /** Когда отпустили и откуда: по этому задачу можно вернуть. */
   releasedAt?: number;
   releasedFrom?: 'open' | 'inbox';
+  /** Опыт за то, что отпустили нежить: «Вернуть» его забирает. */
+  releasedXp?: number;
+  /**
+   * Отбой этого дня вернул задачу из плана в отряд. По нему «Быстрый сбор» зовёт вчерашние дела обратно.
+   * Снимается, как только задачу снова зовут на день.
+   */
+  leftDay?: DayKey;
+  /** День, когда за задачу уже дали искру (опыт за старт). Искра бывает раз в день. */
+  sparkDay?: DayKey;
   /** Задача пришла сама от повторяющейся задачи с этим id. */
   routineId?: string;
   /**
@@ -110,6 +128,8 @@ export interface Routine {
   level: Level;
   estimateMin: number | null;
   at: string | null;
+  /** План «если — то», он переходит в каждую пришедшую задачу. */
+  cue?: string;
   repeat: Repeat;
   createdAt: number;
 }
@@ -174,6 +194,11 @@ export interface State {
   /** День, когда прозвучал отбой. */
   closedDay: DayKey | null;
   secondWindDay: DayKey | null;
+  /**
+   * Герой вернулся после перерыва: в этот день первые дела дают опыт сверху. left: сколько дел
+   * с бонусом осталось. Нет поля, значит бонуса нет. 0.6.0 поле не знает и просто не даёт бонуса.
+   */
+  rested?: { day: DayKey; left: number };
   settledAt: number;
   log: Record<DayKey, DayLog>;
   settings: Settings;

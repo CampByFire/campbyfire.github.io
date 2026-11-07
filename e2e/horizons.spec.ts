@@ -90,8 +90,9 @@ test('хвосты прошлой недели разбираются в сбо�
   await tab(page, 'План').click();
   await expect(page.getByRole('button', { name: /остал/ })).toHaveCount(0);
 
-  // Понедельник, 26 октября.
+  // Понедельник, 26 октября. В выходные в игру не заглядывали, поэтому сначала встречает «Костёр ждал».
   await setTime(page, at(9, 0, 26));
+  await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
   const banner = page.getByRole('button', { name: /С прошлой недели остались 2 задачи: разобрать/ });
   await expect(banner).toBeVisible();
   await banner.click();

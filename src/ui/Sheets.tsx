@@ -3,10 +3,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/ho
 import { PRESETS, questHex } from '../game/color';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { parsePhrase, type Parsed } from '../game/phrase';
-import { ESTIMATE_BY_LEVEL, SCORE_MAX, SCORE_MIN, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
+import { ESTIMATE_BY_LEVEL, MERCY_XP, RESTED_XP_BONUS, SCORE_MAX, SCORE_MIN, UNDEAD_XP_BONUS, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
 import {
   addQuest,
   addRoutine,
+  amnesty,
   addTask,
   daysOverdue,
   endDay,
@@ -18,6 +19,7 @@ import {
   lairOf,
   lastRating,
   pickableQuests,
+  lightFire,
   planOf,
   projectsOf,
   rateSpheres,
@@ -26,13 +28,17 @@ import {
   spheresOf,
   switchCostOf,
   planTask,
+  postpone,
   release,
   removeQuest,
+  restedLeft,
+  restoreDues,
   setPeriod,
   spentNow,
   tailTargets,
   tailsOf,
   stopRoutine,
+  undeadOf,
   unrelease,
   updateQuest,
   updateRoutine,
@@ -62,8 +68,9 @@ import {
 } from '../game/words';
 import type { Ui } from './App';
 import { CallLabel, callToFire, finish } from './Camp';
+import { heroLevel } from '../game/rules';
 import { GIcon, LIcon } from './Icon';
-import { comeBack, letGo } from './magic/spells';
+import { comeBack, ignite, letGo } from './magic/spells';
 import { bedtime, expectJoin, expectLetter, lairFall } from './magic/world';
 import { Chips, LevelMark, QuestDot, TaskMeta, questName } from './parts';
 import { QuestColorPicker } from './QuestColorPicker';
@@ -93,7 +100,8 @@ export type SheetState =
   | { kind: 'thought'; slug?: string }
   | { kind: 'note'; slug: string; path?: string }
   | { kind: 'section'; slug?: string }
-  | { kind: 'diary'; path: string; entry: DiaryEntry };
+  | { kind: 'diary'; path: string; entry: DiaryEntry }
+  | { kind: 'welcome' };
 
 export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
   switch (sheet.kind) {
@@ -137,6 +145,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <SectionSheet key={sheet.slug ?? ''} ui={ui} slug={sheet.slug} />;
     case 'diary':
       return <DiarySheet key={`${sheet.path}|${sheet.entry.time}|${sheet.entry.title ?? ''}|${sheet.entry.text}`} ui={ui} path={sheet.path} entry={sheet.entry} />;
+    case 'welcome':
+      return <WelcomeSheet ui={ui} />;
   }
 }
 
@@ -234,6 +244,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const [day, setDay] = useState<DayKey | null>(editing ? editing.day : preset?.day !== undefined ? preset.day : s.day);
   const [due, setDue] = useState<DayKey | null>(editing?.due ?? null);
   const [at, setAt] = useState<string>(from?.at ?? '');
+  const [cue, setCue] = useState<string>(from?.cue ?? '');
   const [period, setPeriodKey] = useState<PeriodKey | null>(editing ? editing.period ?? null : preset?.period ?? null);
   const [repeatKind, setRepeatKind] = useState<RepeatKind>(routine?.repeat.every ?? 'none');
   const [weekday, setWeekday] = useState<number>(routine?.repeat.every === 'week' ? routine.repeat.weekday : parseDay(s.day).getDay());
@@ -260,7 +271,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       input.current?.focus();
       return;
     }
-    const fields = { title: name, questId: v.questId, level: v.lvl, estimateMin: v.estimate === ESTIMATE_BY_LEVEL[v.lvl] ? null : v.estimate, at: v.at || null };
+    const fields = { title: name, questId: v.questId, level: v.lvl, estimateMin: v.estimate === ESTIMATE_BY_LEVEL[v.lvl] ? null : v.estimate, at: v.at || null, cue: cue.trim() || null };
     if (repeat) {
       const rid = ui.store.act((st, now) => {
         if (routine) {
@@ -384,6 +395,20 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
           <input class="input" type="time" value={v.at} onInput={(e) => { touch('at'); setAt(e.currentTarget.value); }} />
         </label>
       </div>
+      <label class="field">
+        <span class="field-label">Когда начну</span>
+        <input
+          class="input"
+          value={cue}
+          onInput={(e) => setCue(e.currentTarget.value)}
+          placeholder="Например, когда налью кофе, открою документ"
+          maxLength={140}
+          aria-describedby="cue-hint"
+        />
+      </label>
+      <p class="note" id="cue-hint">
+        Необязательно. Момент, после которого начнёшь, и первый крошечный шаг. Лагерь покажет их, когда задача ждёт у огня.
+      </p>
       {repeat && <p class="note">В свои дни задача сама встаёт в план дня. Пока прошлая не сделана, новая не приходит. В прогресс проекта повторяющиеся задачи не идут: они не кончаются.</p>}
       {!repeat && v.period && !v.day && <p class="note">Задача ждёт в отряде и видна в сборе отряда на вкладке «{PERIOD_KIND_NAME[kind!]}». К костру её можно позвать в любой день периода.</p>}
       {willBeLetter && <p class="note">Без сферы, без дня и без горизонта задача уходит письмом к вестнику. Разобрать письма можно в сборе отряда.</p>}
@@ -500,6 +525,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
   const s = ui.store.state;
   const t = findTask(s, taskId);
   const [level, setLevel] = useState<Level | null>(null);
+  const [moving, setMoving] = useState(false);
   if (!t) return null;
   const q = findQuest(s, t.questId);
   const cls = CLASS_BY_LEVEL[t.level];
@@ -528,6 +554,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
           {t.due && <span class={undead ? 'meta-undead' : ''}>Срок: {formatDue(t.due, s.day)}</span>}
           {t.at && <span>В {t.at}</span>}
           {t.period && <span>Горизонт: {periodName(t.period, s.day).toLowerCase()}</span>}
+          {t.cue && <span class="fact-cue">{t.cue}</span>}
           {routine && (
             <span class="fact-repeat">
               <LIcon name="repeat" size={14} />
@@ -538,8 +565,13 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
         </div>
       </div>
 
+      {!done && t.status !== 'released' && undead && !isCurrent && (
+        <UndeadChoice ui={ui} t={t} moving={moving} setMoving={setMoving} switchCost={switchCost} />
+      )}
+
       {!done && t.status !== 'released' && (
         <>
+          {!(undead && !isCurrent) && (
           <div class="btns">
             {!isCurrent && (
               <button class="btn btn-gold" onClick={() => { close(); callToFire(ui, t); }}>
@@ -553,6 +585,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
               {undead ? W.slay : W.done}
             </button>
           </div>
+          )}
           <Chips
             label="Уровень при сдаче"
             value={level ?? t.level}
@@ -575,10 +608,10 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
               <LIcon name="calendar" size={16} />
               На завтра
             </button>
-            {undead && (
-              <button class="act" onClick={() => ui.store.act((st) => updateTask(st, t.id, { due: addDays(st.day, 1) }))}>
-                <LIcon name="calendar" size={16} />
-                Перенести срок на завтра
+            {undead && !isCurrent && (
+              <button class="act" onClick={() => { close(); finish(ui, t, level ?? undefined); }}>
+                <GIcon name="check" size={16} />
+                Уже сделано: упокоить сразу
               </button>
             )}
             <button class="act" onClick={() => ui.open({ kind: 'edit', taskId: t.id })}>
@@ -597,16 +630,18 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
                 Больше не повторять
               </button>
             )}
-            <button
-              class="act act-danger"
-              onClick={() => {
-                releaseWithUndo(ui, t.id, routine ? 'Спутник отпущен до следующего раза' : 'Спутник отпущен');
-                close();
-              }}
-            >
-              <LIcon name="trash" size={16} />
-              {W.release}
-            </button>
+            {!(undead && !isCurrent) && (
+              <button
+                class="act act-danger"
+                onClick={() => {
+                  releaseWithUndo(ui, t.id, routine ? 'Спутник отпущен до следующего раза' : 'Спутник отпущен');
+                  close();
+                }}
+              >
+                <LIcon name="trash" size={16} />
+                {W.release}
+              </button>
+            )}
           </div>
         </>
       )}
@@ -614,11 +649,135 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
   );
 }
 
+/**
+ * Нежить: три равных решения, и каждое приносит опыт. Упокоить значит позвать к огню и начать,
+ * перенести значит дать новый срок, отпустить значит честно решить, что делать не будем.
+ */
+function UndeadChoice(p: { ui: Ui; t: Task; moving: boolean; setMoving: (v: boolean) => void; switchCost: number }) {
+  const { ui, t } = p;
+  const s = ui.store.state;
+  const rank = undeadRank(daysOverdue(t, s.day));
+  const bonus = Math.round(UNDEAD_XP_BONUS[rank] * 100);
+  const move = (due: DayKey | null, text: string) => {
+    const xp = ui.store.act((st, now) => postpone(st, now, t.id, due));
+    ui.close();
+    ui.toast(xp ? `${text}: +${xp} опыта` : text);
+  };
+  return (
+    <>
+      <p class="note undead-note">
+        {rank === 'rogue' ? 'Старая нежить страшнее не становится, а упокоить её выгоднее: опыта вдвое.' : `Нежить ждёт решения. Любое из трёх приносит опыт, а упокоенная даёт его на ${bonus}% больше.`}
+      </p>
+      <div class="btns btns-three" role="group" aria-label="Что сделать с нежитью">
+        <button class="btn btn-gold btn-choice" onClick={() => { ui.close(); callToFire(ui, t); }}>
+          <GIcon name="campfire" size={18} />
+          {W.slay}
+          <small class="btn-cost">{p.switchCost > 0 ? `к огню, −${p.switchCost} маны` : 'к огню'}</small>
+        </button>
+        <button class="btn btn-ghost btn-choice" aria-expanded={p.moving} onClick={() => p.setMoving(!p.moving)}>
+          <LIcon name="calendar" size={17} />
+          {W.postpone}
+          <small class="btn-cost">+{MERCY_XP} опыта</small>
+        </button>
+        <button
+          class="btn btn-ghost btn-choice"
+          onClick={() => {
+            releaseWithUndo(ui, t.id, 'Нежить отпущена на покой');
+            ui.close();
+          }}
+        >
+          <LIcon name="trash" size={16} />
+          {W.release}
+          <small class="btn-cost">+{MERCY_XP} опыта</small>
+        </button>
+      </div>
+      {p.moving && (
+        <div class="chips postpone" role="group" aria-label="Новый срок">
+          <button class="chipbtn" onClick={() => move(addDays(s.day, 1), 'Срок на завтра')}>
+            На завтра
+          </button>
+          <button class="chipbtn" onClick={() => move(addDays(s.day, 7), 'Срок через неделю')}>
+            Через неделю
+          </button>
+          <button class="chipbtn" onClick={() => move(null, 'Срок снят, задача ждёт в отряде')}>
+            Без срока
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ---------- возвращение ----------
+
+/**
+ * Возвращение после перерыва. Пропуски не считаются, нежить можно отпустить на покой разом,
+ * первые дела дня дают опыт сверху, а утренний сбор сегодня по желанию.
+ */
+function WelcomeSheet({ ui }: { ui: Ui }) {
+  const s = ui.store.state;
+  const left = restedLeft(s);
+  const undead = undeadOf(s).length > 0;
+  const toFire = () => {
+    const before = heroLevel(ui.store.state.hero.xp).level;
+    const xp = ui.store.state.litDay === ui.store.state.day ? 0 : ui.store.act((st, n) => lightFire(st, n));
+    ui.go('camp');
+    if (xp > 0) ignite(xp, before, heroLevel(ui.store.state.hero.xp).level);
+  };
+  const calm = () => {
+    const was = ui.store.act((st, n) => amnesty(st, n));
+    ui.toast('Нежить ушла на покой, задачи ждут в отряде без сроков', {
+      label: 'Вернуть',
+      run: () => ui.store.act((st) => restoreDues(st, was)),
+    });
+  };
+  return (
+    <Sheet
+      title="Костёр ждал"
+      onClose={ui.close}
+      footer={
+        <div class="btns">
+          <button class="btn btn-gold" onClick={toFire}>
+            <GIcon name="campfire" size={18} />
+            Сразу к огню
+          </button>
+          <button class="btn btn-ghost" onClick={() => ui.go('plan')}>
+            <GIcon name="sunrise" size={18} />
+            Собрать отряд
+          </button>
+        </div>
+      }
+    >
+      <p class="welcome-lead">Хорошо, что ты здесь. Пропуски тут не считают: начнём с того, что есть.</p>
+      {left > 0 && (
+        <div class="rested">
+          <GIcon name="heart" size={15} />
+          <span>
+            Отдохнувший герой: первые {left} {left === 1 ? 'дело' : left < 5 ? 'дела' : 'дел'} сегодня {RESTED_XP_BONUS === 1 ? 'дают вдвое больше опыта' : 'дают опыт сверху'}.
+          </span>
+        </div>
+      )}
+      {undead && (
+        <>
+          <p class="note">На дороге стоит нежить. Её можно разобрать по одной, а можно отпустить на покой всю разом: сроки снимутся, задачи подождут в отряде.</p>
+          <div class="actions">
+            <button class="act" onClick={calm}>
+              <GIcon name="skull" size={16} />
+              Дать нежити покой
+            </button>
+          </div>
+        </>
+      )}
+      <p class="note">Утренний сбор сегодня по желанию. «Сразу к огню» разжигает костёр с тем, что уже в плане.</p>
+    </Sheet>
+  );
+}
+
 /** Отпустить задачу; несколько секунд её можно вернуть одной кнопкой, потом из Королевства. */
 function releaseWithUndo(ui: Ui, id: string, text: string): void {
-  ui.store.act((st, now) => release(st, now, id));
+  const xp = ui.store.act((st, now) => release(st, now, id));
   letGo(id);
-  ui.toast(text, {
+  ui.toast(xp ? `${text}: +${xp} опыта` : text, {
     label: 'Вернуть',
     run: () => {
       ui.store.act((st) => unrelease(st, id));

@@ -264,11 +264,11 @@ describe('дни', () => {
     expect(s.tasks.find((t) => t.id === b)!.day).toBeNull();
   });
 
-  it('просрочка становится нежитью по рангам', () => {
+  it('нежить бывает двух видов: свежая и старая с седьмого дня', () => {
     expect(undeadRank(1)).toBe('minion');
-    expect(undeadRank(3)).toBe('rogue');
-    expect(undeadRank(7)).toBe('warrior');
-    expect(undeadRank(20)).toBe('mage');
+    expect(undeadRank(6)).toBe('minion');
+    expect(undeadRank(7)).toBe('rogue');
+    expect(undeadRank(40)).toBe('rogue');
   });
 });
 

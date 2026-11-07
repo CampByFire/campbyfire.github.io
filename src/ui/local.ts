@@ -21,6 +21,10 @@ export interface Local {
   lastSection?: string;
   /** Свои цвета текста в заметках, последние сверху (до четырёх). */
   noteColors?: string[];
+  /** Напоминания в календаре: во сколько утренний костёр (минуты от полуночи, null: без него) и в какие дни. */
+  remind?: { morning: number | null; days: 'work' | 'all' };
+  /** День возвращения, когда это устройство уже показало «Костёр ждал». */
+  welcomed?: string;
 }
 
 export function loadLocal(now: number): Local {

@@ -32,7 +32,8 @@ test('день от знакомства до отбоя', async ({ page }) => {
   await day.getByRole('button', { name: 'Позвать к огню' }).click();
   await expect(day.getByRole('heading', { name: 'Сейчас у огня' })).toBeVisible();
   await expect(day.getByRole('button', { name: 'Сдать отчёт' })).toBeVisible();
-  await setTime(page, at(9, 30));
+  // Ровно полчаса от того, как позвали: на медленной машине до этого шага проходит несколько секунд.
+  await setTime(page, new Date((await page.evaluate(() => Date.now())) + 30 * 60_000));
   await expect(day.locator('.timer')).toContainText('0:30');
 
   // Привал и обратно.

@@ -23,6 +23,13 @@ export const GOLD_PER_LEVEL = 25;
 export const XP_BY_LEVEL: Record<Level, number> = { 1: 25, 2: 40, 3: 60, 4: 85 };
 /** Опыт за каждую задачу в плане, когда разжигаешь костёр. */
 export const PLAN_XP_PER_TASK = 3;
+/** Опыт за план дают только за столько задач: большой план не выгоднее реалистичного. */
+export const PLAN_XP_MAX_TASKS = 5;
+
+/** Опыт за план из n задач. */
+export function planXp(n: number): number {
+  return Math.min(n, PLAN_XP_MAX_TASKS) * PLAN_XP_PER_TASK;
+}
 
 /** Оценка по умолчанию, если у задачи нет своей. У IV уровня оценки нет. */
 export const ESTIMATE_BY_LEVEL: Record<Level, number | null> = { 1: 30, 2: 120, 3: 360, 4: null };
@@ -66,12 +73,38 @@ export function heroLevel(xp: number): { level: number; into: number; need: numb
   return { level, into: xp - base, need: xpForLevel(level + 1) - base };
 }
 
-export type UndeadRank = 'minion' | 'rogue' | 'warrior' | 'mage';
+export type UndeadRank = 'minion' | 'rogue';
 
-/** Чем дольше просрочка, тем страшнее нежить. */
+/** С этой просрочки нежить старая: страшнее она не становится, но упокоить её выгоднее. */
+export const OLD_UNDEAD_DAYS = 7;
+
+/** Нежить бывает только двух видов: свежая и старая. Чем дольше она ждёт, тем больше за неё опыта, а не страха. */
 export function undeadRank(daysOverdue: number): UndeadRank {
-  if (daysOverdue >= 14) return 'mage';
-  if (daysOverdue >= 7) return 'warrior';
-  if (daysOverdue >= 3) return 'rogue';
-  return 'minion';
+  return daysOverdue >= OLD_UNDEAD_DAYS ? 'rogue' : 'minion';
 }
+
+/** Сколько опыта сверху за упокоенную нежить, долей от обычного: свежая +50%, старая вдвое. */
+export const UNDEAD_XP_BONUS: Record<UndeadRank, number> = { minion: 0.5, rogue: 1 };
+
+/** Перенести срок нежити или отпустить её тоже дело: за это немного опыта. */
+export const MERCY_XP = 5;
+
+/** Искра: столько минут таймера подряд, и старт засчитан. */
+export const SPARK_AFTER = 2 * MINUTE;
+/** Опыт за искру, раз в день за задачу. */
+export const SPARK_XP = 5;
+/** Угольки: каждые столько минут работы у огня приносят опыт, не дожидаясь «Готово». */
+export const EMBER_EVERY = 15 * MINUTE;
+export const EMBER_XP = 2;
+
+/** Напоминание о задаче со временем приходит за столько минут. */
+export const REMIND_BEFORE_MIN = 10;
+/** Длина события в календаре, если у задачи нет оценки. */
+export const EVENT_MIN = 30;
+
+/** Перерыв не меньше стольких игровых дней, и герой возвращается отдохнувшим. */
+export const RESTED_AFTER_DAYS = 2;
+/** Столько первых дел в день возвращения дают опыт сверху. */
+export const RESTED_TASKS = 3;
+/** Опыт сверху за дело отдохнувшего героя, долей от обычного: вдвое. */
+export const RESTED_XP_BONUS = 1;

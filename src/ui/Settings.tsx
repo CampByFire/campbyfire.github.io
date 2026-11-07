@@ -1,17 +1,18 @@
 // Настройки: герой, распорядок, магия, сохранение в GitHub, копия в файл, справка и «Стереть всё».
 // Раньше этот раздел назывался Летописью; теперь Летопись это заметки (Notes.tsx).
 import { useRef, useState } from 'preact/hooks';
-import { heroLevel } from '../game/rules';
+import { REMIND_BEFORE_MIN, heroLevel } from '../game/rules';
+import { buildIcs, calendarEvents, type IcsOptions } from '../game/ics';
 import { isNewerSave, parseSave } from '../game/store';
-import { formatMinutes, scheduleError } from '../game/time';
+import { formatMinutes, plural, scheduleError } from '../game/time';
 import type { RateEvery, Settings as Schedule } from '../game/types';
 import { RATE_EVERY_NAME, W, WEEKDAY_CHIPS } from '../game/words';
 import { GitHubError } from '../sync/github';
 import { BUILD, VERSION } from '../version';
 import type { Ui } from './App';
-import { downloadGame } from './files';
+import { downloadGame, saveFile } from './files';
 import { GIcon, LIcon } from './Icon';
-import { clearLocal } from './local';
+import { clearLocal, loadLocal, updateLocal } from './local';
 import type { Motion } from './magic/mode';
 import { ChipText, Chips } from './parts';
 import { Sheet } from './Sheets';
@@ -110,6 +111,8 @@ export function Settings({ ui }: { ui: Ui }) {
           onChange={(v) => setSetting({ rateEvery: v })}
         />
       </section>
+
+      <Reminders ui={ui} />
 
       <section class="group">
         <div class="group-head">
@@ -262,6 +265,64 @@ export function WipeSheet({ ui }: { ui: Ui }) {
       )}
       {error && <p class="note note-error">{error}</p>}
     </Sheet>
+  );
+}
+
+/**
+ * Напоминания без сервера: файл для календаря телефона. Будильник ставит сам календарь, поэтому
+ * звонит и когда Лагерь закрыт. Что выбрано, помнит устройство: в сохранение игры это не идёт.
+ */
+function Reminders({ ui }: { ui: Ui }) {
+  const s = ui.store.state;
+  const [opt, setOpt] = useState(() => loadLocal(ui.now).remind ?? { morning: s.settings.workStart, days: 'work' as const });
+  const change = (next: typeof opt) => {
+    setOpt(next);
+    updateLocal(ui.store.now(), (l) => {
+      l.remind = next;
+    });
+  };
+  const url = `${location.origin}${location.pathname}`;
+  const o: IcsOptions = { morning: opt.morning, morningDays: opt.days, url };
+  const what = calendarEvents(s, o);
+  const parts: string[] = [];
+  if (what.morning) parts.push(`утренний костёр в ${formatMinutes(opt.morning!).padStart(5, '0')}`);
+  if (what.tasks.length) parts.push(`${what.tasks.length} ${plural(what.tasks.length, 'задача', 'задачи', 'задач')} со временем`);
+  if (what.routines) parts.push(`${what.routines} ${plural(what.routines, 'повторяющаяся', 'повторяющиеся', 'повторяющихся')}`);
+  const download = () => {
+    saveFile('lager.ics', buildIcs(ui.store.state, ui.store.now(), o), 'text/calendar');
+    ui.toast('Файл готов: открой его, и календарь добавит напоминания');
+  };
+  return (
+    <section class="group">
+      <div class="group-head">
+        <h2 class="sc">Напоминания</h2>
+      </div>
+      <p class="note">
+        Лагерь сам не звонит: у него нет своего сервера. Зато звонит календарь телефона. Файл добавит в него утренний костёр и задачи со временем с будильником за {REMIND_BEFORE_MIN} минут. Если задачи со временем поменялись, скачай файл заново.
+      </p>
+      <Chips
+        label="Утренний костёр"
+        value={opt.morning === null ? 'off' : opt.days}
+        options={[
+          { value: 'work', label: 'По рабочим дням' },
+          { value: 'all', label: 'Каждый день' },
+          { value: 'off', label: 'Не нужен' },
+        ]}
+        onChange={(v) => change(v === 'off' ? { ...opt, morning: null } : { morning: opt.morning ?? s.settings.workStart, days: v })}
+      />
+      {opt.morning !== null && (
+        <div class="field-row">
+          <TimeField label="Во сколько" value={opt.morning} onChange={(v) => change({ ...opt, morning: v })} />
+        </div>
+      )}
+      <div class="btns btns-one">
+        <button class="btn btn-ghost" disabled={parts.length === 0} onClick={download}>
+          <LIcon name="calendar" size={16} />
+          Добавить в календарь
+        </button>
+      </div>
+      <p class="note">{parts.length ? `В файле: ${parts.join(', ')}.` : 'Пока добавлять нечего: включи утренний костёр или поставь задаче время.'}</p>
+    </section>
   );
 }
 

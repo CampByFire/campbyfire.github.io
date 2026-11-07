@@ -34,9 +34,7 @@ export const LEVEL_HINT: Record<Level, string> = {
 
 export const UNDEAD_NAME: Record<UndeadRank, string> = {
   minion: 'Скелет-миньон',
-  rogue: 'Скелет-разбойник',
-  warrior: 'Скелет-воин',
-  mage: 'Скелет-маг',
+  rogue: 'Старый скелет',
 };
 
 export const QUEST_KIND_NAME: Record<QuestKind, string> = {
@@ -211,6 +209,7 @@ export const W = {
   rate: 'Оценить сферы',
   undead: 'Нежить на дороге',
   slay: 'Упокоить',
+  postpone: 'Перенести',
   stillWorking: 'Да, работаю',
   notWorking: 'Нет, был перерыв',
   later: 'позже',

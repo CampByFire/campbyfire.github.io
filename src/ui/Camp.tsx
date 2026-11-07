@@ -1,13 +1,15 @@
 // Экран дня: сцена лагеря сверху, лист с текущей задачей и планом снизу. Всё на одном экране.
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { HOUR, MANA_LOW, MANA_MAX, MANA_REST_PER_HOUR, estimateOf, heroLevel } from '../game/rules';
+import { EMBER_EVERY, EMBER_XP, HOUR, MANA_LOW, MANA_MAX, MANA_REST_PER_HOUR, RESTED_XP_BONUS, SPARK_AFTER, SPARK_XP, estimateOf, heroLevel } from '../game/rules';
 import {
   canSecondWind,
   complete,
   confirmWorking,
   dismissIdle,
+  embersOf,
   findQuest,
   reopenDay,
+  restedLeft,
   resume,
   secondWind,
   spentNow,
@@ -24,7 +26,7 @@ import type { Ui } from './App';
 import { useSize } from './hooks';
 import { GIcon, LIcon } from './Icon';
 import { interrupt } from './magic/engine';
-import { done, rest, summon, wind } from './magic/spells';
+import { done, kindle, rest, summon, wind } from './magic/spells';
 import { campShown, dusk, lightNow } from './magic/world';
 import { LevelMark, TaskMeta, numLook } from './parts';
 import { Scene } from './Scene';
@@ -50,6 +52,22 @@ export function Camp({ ui }: { ui: Ui }) {
     const f = Math.round(sh - rh);
     if (Math.abs(f - fixedH) > 1) setFixedH(f);
   });
+
+  // Искра и угольки приходят сами, пока идёт таймер: о них говорят сообщением, а магия несёт опыт к уровню.
+  const seen = useRef(new Map<string, string>());
+  const fireKey = current ? `${current.sparkDay === s.day ? 's' : '-'}${embersOf(current, spent)}` : '';
+  useEffect(() => {
+    if (!current) return;
+    const was = seen.current.get(current.id);
+    seen.current.set(current.id, fireKey);
+    if (was === undefined || was === fireKey) return;
+    if (was[0] !== 's' && fireKey[0] === 's') {
+      ui.toast(`Искра зажглась: +${SPARK_XP} опыта за старт`);
+      kindle(SPARK_XP);
+    } else if (Number(fireKey.slice(1)) > Number(was.slice(1))) {
+      kindle(EMBER_XP);
+    }
+  }, [current?.id, fireKey]);
 
   // Магия жизни лагеря: новая нежить, письмо и спутники показываются, когда лагерь видно без листа.
   useLayoutEffect(() => campShown(v, ui.covered));
@@ -111,7 +129,7 @@ export function Camp({ ui }: { ui: Ui }) {
           <button class="scene-more" onClick={() => ui.go('plan')}>
             {v.extraSeated > 0 && `ещё ${v.extraSeated} у костра`}
             {v.extraSeated > 0 && v.extraRoad > 0 && ' · '}
-            {v.extraRoad > 0 && `ещё ${v.extraRoad} на дороге`}
+            {v.extraRoad > 0 && 'на дороге туман'}
           </button>
         )}
       </div>
@@ -125,6 +143,7 @@ export function Camp({ ui }: { ui: Ui }) {
             <LIcon name="chevron" size={16} />
           </button>
         )}
+        {!v.asleep && restedLeft(s) > 0 && <RestedHint left={restedLeft(s)} />}
         <MainCard ui={ui} v={v} timer={timer} seconds={current ? formatTimerSeconds(spent) : ''} />
 
         {!v.asleep && (list.length > 0 || v.doneToday > 0) && (
@@ -363,7 +382,8 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
               </span>
             </span>
           )}
-          {r.undead && <span class="rw rw-lair">нежить упокоена</span>}
+          {r.undead && <span class="rw rw-lair">нежить упокоена{r.reward.undeadXp ? `, +${r.reward.undeadXp} опыта сверху` : ''}</span>}
+          {r.reward.restedXp ? <span class="rw rw-lair">отдохнувший герой: +{r.reward.restedXp} опыта</span> : null}
         </div>
         {next ? (
           <>
@@ -416,7 +436,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
         </div>
         <SecondWind ui={ui} />
         <div class="btns btns-one">
-          <button class="btn btn-gold" onClick={() => toggleRest(ui)}>
+          <button class="btn btn-gold" data-rest onClick={() => toggleRest(ui)}>
             {W.backOnRoad}
           </button>
         </div>
@@ -467,6 +487,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
         <div class="card-sub">
           {q ? q.name : W.noSphere} · <LevelMark level={cur.level} /> · {CLASS_AT[cls]}
         </div>
+        {cur.cue && !cur.sparkDay && <Cue text={cur.cue} />}
         <div class="timer">
           <GIcon name="hourglass" size={16} class="ic-gold" />
           <span class="timer-val">
@@ -480,6 +501,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             </span>
           )}
         </div>
+        <FireLine s={s} t={cur} now={now} spent={spent} running={v.running} />
         {v.running && s.hero.mana < MANA_LOW && <div class="hint">Силы на исходе: самое время для привала.</div>}
         <SecondWind ui={ui} />
         <div class="btns">
@@ -488,7 +510,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             {W.done}
           </button>
           {v.running ? (
-            <button class="btn btn-ghost" onClick={() => toggleRest(ui)}>
+            <button class="btn btn-ghost" data-rest onClick={() => toggleRest(ui)}>
               <GIcon name="campfire" size={19} class="ic-fire" />
               {W.rest}
             </button>
@@ -518,6 +540,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           <span class="next-title">{next.title}</span>
           <TaskMeta s={s} t={next} />
         </div>
+        {next.cue && <Cue text={next.cue} />}
         <SecondWind ui={ui} />
         <div class="btns">
           <button class="btn btn-gold" onClick={() => callToFire(ui, next)}>
@@ -553,6 +576,54 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           Задача
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Что уже принёс огонь, не дожидаясь «Готово»: искра за первые две минуты подряд (раз в день за задачу)
+ * и уголёк за каждые 15 минут работы.
+ */
+function FireLine({ s, t, now, spent, running }: { s: State; t: Task; now: number; spent: number; running: boolean }) {
+  const lit = t.sparkDay === s.day;
+  const embers = embersOf(t, spent);
+  const since = s.current?.runningSince ?? null;
+  let spark: string;
+  if (lit) spark = `Искра горит: +${SPARK_XP} опыта за старт`;
+  else if (running && since !== null) {
+    const sec = Math.ceil(Math.max(0, SPARK_AFTER - (now - since)) / 1000);
+    spark = `Через ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} зажжётся искра: +${SPARK_XP} опыта`;
+  } else spark = `Две минуты у огня, и зажжётся искра: +${SPARK_XP} опыта`;
+  const nextEmber = Math.ceil((EMBER_EVERY - (spent % EMBER_EVERY)) / 60_000);
+  return (
+    <div class={`fire-line${lit ? ' is-lit' : ''}`}>
+      <span class="fire-spark" aria-hidden="true" />
+      <span>
+        {spark}
+        {lit && (embers > 0 ? `. Угольков: ${embers}, +${embers * EMBER_XP} опыта` : `. Первый уголёк через ${nextEmber} мин`)}
+      </span>
+    </div>
+  );
+}
+
+/** План «если — то»: когда начать и с какого шага. */
+function Cue({ text }: { text: string }) {
+  return (
+    <div class="cue">
+      <span class="sr-only">Когда начать: </span>
+      {text}
+    </div>
+  );
+}
+
+/** Герой вернулся после перерыва: первые дела дня дают опыт сверху. */
+function RestedHint({ left }: { left: number }) {
+  return (
+    <div class="rested">
+      <GIcon name="heart" size={15} />
+      <span>
+        Отдохнувший герой: ещё {left} {left === 1 ? 'дело' : left < 5 ? 'дела' : 'дел'} сегодня {RESTED_XP_BONUS === 1 ? 'с двойным опытом' : 'с опытом сверху'}
+      </span>
     </div>
   );
 }
@@ -608,9 +679,12 @@ export function finish(ui: Ui, t: Task, level?: 1 | 2 | 3 | 4): void {
 
 /** Привал или «Снова в путь». */
 function toggleRest(ui: Ui): void {
+  // Кнопка сменилась другой карточкой: фокус переходит на парную кнопку, а не теряется.
+  const hadFocus = (document.activeElement as HTMLElement | null)?.hasAttribute('data-rest') ?? false;
   ui.setCheer(null);
   ui.store.act((st, n) => toggleBreak(st, n));
   rest(ui.store.state.breakSince !== null);
+  if (hadFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>('.card [data-rest]')?.focus());
 }
 
 /** Таймер снова идёт: спутник у огня встаёт за работу. */

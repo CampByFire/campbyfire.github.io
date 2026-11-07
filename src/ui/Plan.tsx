@@ -1,8 +1,8 @@
 // Сбор отряда: утренний план дня. Кого позвать к костру, хватит ли сил.
-import { MANA_DRAIN_PER_HOUR, MANA_MAX, PLAN_XP_PER_TASK, estimateOf, heroLevel } from '../game/rules';
+import { MANA_DRAIN_PER_HOUR, MANA_MAX, estimateOf, heroLevel, planXp } from '../game/rules';
 import { useState } from 'preact/hooks';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
-import { backlogOf, findQuest, inboxOf, isUndead, kindOf as kindOfQuest, lightFire, nestedTasks, periodTasks, planOf, planTask, swapInPlan, tailsOf, waitingOf } from '../game/state';
+import { backlogOf, findQuest, inboxOf, isUndead, kindOf as kindOfQuest, leftoversOf, lightFire, nestedTasks, periodTasks, planOf, planTask, quickGather, swapInPlan, tailsOf, waitingOf } from '../game/state';
 import { formatClock, formatDate, formatDuration, isMainFor, plural, shiftAt } from '../game/time';
 import type { State, Task } from '../game/types';
 import { PERIOD_KIND_NAME, W, periodName, periodShort, repeatName, weekRange } from '../game/words';
@@ -112,6 +112,8 @@ function DayPlan({ ui }: { ui: Ui }) {
 
   return (
     <>
+      {!lit && <QuickStart ui={ui} planned={open.length} />}
+
       {letters > 0 && (
         <button class="banner" onClick={() => ui.open({ kind: 'letters' })}>
           <LIcon name="envelope" size={16} />
@@ -251,11 +253,64 @@ function DayPlan({ ui }: { ui: Ui }) {
           >
             <GIcon name="campfire" size={19} />
             {W.lightFire}
-            {open.length > 0 && <small class="btn-cost">+{open.length * PLAN_XP_PER_TASK} опыта</small>}
+            {open.length > 0 && <small class="btn-cost">+{planXp(open.length)} опыта</small>}
           </button>
         )}
       </div>
     </>
+  );
+}
+
+/**
+ * Сбор отряда по желанию: можно сразу идти к огню с тем, что уже у костра, или одним касанием
+ * вернуть вчерашние дела и тоже сразу к огню. Собирать план руками никто не заставляет.
+ */
+function QuickStart({ ui, planned }: { ui: Ui; planned: number }) {
+  const { store } = ui;
+  const leftovers = leftoversOf(store.state).length;
+  if (planned === 0 && leftovers === 0) return null;
+  const go = (act: () => { xp: number; text: string }) => {
+    const before = heroLevel(store.state.hero.xp).level;
+    const { xp, text } = act();
+    ui.toast(xp > 0 ? `${text}: +${xp} опыта за план` : text);
+    ui.go('camp');
+    ignite(xp, before, heroLevel(store.state.hero.xp).level);
+  };
+  const tasks = (n: number) => `${n} ${plural(n, 'задача', 'задачи', 'задач')}`;
+  return (
+    <section class="quick" aria-labelledby="quick-head">
+      <h2 class="sc" id="quick-head">
+        Начать день
+      </h2>
+      <p class="note">
+        {planned > 0 ? `У костра уже ${tasks(planned)}. ` : ''}
+        {leftovers > 0 ? `Со вчера ждут в отряде: ${tasks(leftovers)}. ` : ''}
+        Собирать план не обязательно.
+      </p>
+      <div class="btns">
+        {planned > 0 && (
+          <button class="btn btn-gold" onClick={() => go(() => ({ xp: store.act((st, n) => lightFire(st, n)), text: 'Костёр горит' }))}>
+            <GIcon name="campfire" size={18} />
+            Сразу к огню
+          </button>
+        )}
+        {leftovers > 0 && (
+          <button
+            class={`btn ${planned > 0 ? 'btn-ghost' : 'btn-gold'}`}
+            onClick={() =>
+              go(() => {
+                const r = store.act((st, n) => quickGather(st, n));
+                return { xp: r.xp, text: `Вчерашние дела у костра: ${r.added}` };
+              })
+            }
+          >
+            <LIcon name="undo" size={16} />
+            Быстрый сбор
+            <small class="btn-cost">+{leftovers} со вчера</small>
+          </button>
+        )}
+      </div>
+    </section>
   );
 }
 

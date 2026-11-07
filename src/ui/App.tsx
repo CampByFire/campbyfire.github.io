@@ -165,6 +165,17 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
     }
   }, [s.day, day]);
 
+  // Вернулись после перерыва: «Костёр ждал» встречает один раз на этом устройстве, после знакомства.
+  const restedDay = s.rested?.day === s.day ? s.day : null;
+  useEffect(() => {
+    if (!restedDay || intro) return;
+    if (loadLocal(store.now()).welcomed === restedDay) return;
+    updateLocal(store.now(), (l) => {
+      l.welcomed = restedDay;
+    });
+    showSheet({ kind: 'welcome' });
+  }, [restedDay, intro]);
+
   // В GitHub другая игра: сразу спрашиваем, какую оставить.
   const phase = sync.status.phase;
   useEffect(() => {

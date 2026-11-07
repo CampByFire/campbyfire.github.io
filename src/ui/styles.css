@@ -2687,3 +2687,125 @@ button.trophy {
   font-size: 13.5px;
   color: var(--muted);
 }
+/* Туман в дальнем конце дороги: нежити больше, чем мест, но её не пересчитывают. */
+.road-fog {
+  position: absolute;
+  width: 44%;
+  height: 16%;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(214, 226, 218, 0.72), rgba(214, 226, 218, 0.38) 55%, rgba(214, 226, 218, 0));
+  pointer-events: none;
+  filter: blur(2px);
+}
+
+.light-evening .road-fog {
+  background: radial-gradient(closest-side, rgba(190, 196, 210, 0.6), rgba(190, 196, 210, 0.3) 55%, rgba(190, 196, 210, 0));
+}
+
+.light-night .road-fog {
+  background: radial-gradient(closest-side, rgba(140, 156, 170, 0.5), rgba(140, 156, 170, 0.24) 55%, rgba(140, 156, 170, 0));
+}
+
+/* Нежить: три равных решения в один ряд. */
+.btns-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.btn-choice {
+  flex-direction: column;
+  gap: 2px;
+  min-height: 74px;
+  padding: 8px 4px;
+  font-size: 15.5px;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.undead-note {
+  margin-top: 10px;
+}
+
+.postpone {
+  margin-top: 10px;
+}
+
+/* Что уже принёс огонь: искра за старт и угольки. */
+.fire-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.fire-line.is-lit {
+  color: var(--text);
+}
+
+.fire-spark {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  border-radius: 2px;
+  background: var(--line-2);
+}
+
+.fire-line.is-lit .fire-spark {
+  background: var(--gold);
+  box-shadow: 0 0 8px rgba(255, 180, 80, 0.8);
+}
+
+.rested {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-2);
+  font-size: 14px;
+  color: var(--text);
+}
+
+.rested svg {
+  color: var(--gold);
+  flex: none;
+}
+
+.welcome-lead {
+  font-size: 17px;
+  line-height: 1.4;
+  margin: 4px 0 12px;
+}
+
+/* Начать день без сбора: сразу к огню или быстрый сбор вчерашних дел. */
+.quick {
+  margin: 4px 0 14px;
+  padding: 12px 14px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line-2);
+}
+
+.quick .note {
+  margin: 6px 0 0;
+}
+
+/* План «если — то» под задачей: когда начать и с какого шага. */
+.cue {
+  margin-top: 8px;
+  padding: 7px 11px;
+  border-left: 3px solid var(--gold);
+  border-radius: 4px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: var(--text);
+  background: rgba(241, 196, 90, 0.08);
+}
+
+.fact-cue {
+  font-style: italic;
+}

@@ -84,8 +84,8 @@ function mergeById<T extends { id: string }>(base: T[], local: T[], remote: T[],
 
 const TASK_COUNTERS = ['spentMs'];
 const TASK_GROUPS = [
-  ['status', 'doneAt', 'doneDay', 'reward', 'releasedAt', 'releasedFrom'],
-  ['day', 'order'],
+  ['status', 'doneAt', 'doneDay', 'reward', 'releasedAt', 'releasedFrom', 'releasedXp'],
+  ['day', 'order', 'leftDay'],
 ];
 const LOG_COUNTERS = ['gold', 'xp', 'done', 'workedMs', 'restMs', 'undeadSlain'];
 const EMPTY_LOG: DayLog = { gold: 0, xp: 0, done: 0, workedMs: 0, restMs: 0, undeadSlain: 0 };
@@ -110,6 +110,11 @@ function mergeCurrent(b: Current | null, l: Current | null, r: Current | null, l
     for (const c of [l, r]) if (c && c.taskId === out.taskId && c.runningSince === out.runningSince) out.seenAt = Math.max(out.seenAt, c.seenAt);
   }
   return out;
+}
+
+function mergeRested(b: State['rested'], l: State['rested'], r: State['rested'], localWins: boolean): State['rested'] {
+  if (l && r && l.day === r.day) return { day: l.day, left: Math.min(l.left, r.left) };
+  return pick(b, l, r, localWins);
 }
 
 /** Задачи и походы без общей версии: всё с обеих сторон, совпадающее берётся у победителя. */
@@ -179,6 +184,9 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   out.litDay = pick(b.litDay, l.litDay, r.litDay, localWins);
   out.closedDay = pick(b.closedDay, l.closedDay, r.closedDay, localWins);
   out.secondWindDay = pick(b.secondWindDay, l.secondWindDay, r.secondWindDay, localWins);
+  // Бонус отдохнувшего героя: сколько дел с ним осталось, считается по меньшему, чтобы два устройства не дали его дважды.
+  out.rested = mergeRested(b.rested, l.rested, r.rested, localWins);
+  if (!out.rested) delete out.rested;
   // Таймер не может стоять на задаче, которой больше нет.
   if (out.current && !out.tasks.some((t) => t.id === out.current!.taskId)) out.current = null;
   tidyRoutines(out);

@@ -2,21 +2,31 @@
 // поэтому store вызывает их на своей копии. DOM здесь нет, всё проверяется тестами.
 import {
   DAY_STARTS_AT_HOUR,
+  EMBER_EVERY,
+  EMBER_XP,
   FORGOTTEN_AFTER,
   GOLD_PER_LEVEL,
   HOUR,
   MANA_DRAIN_PER_HOUR,
   MANA_MAX,
   MANA_REST_PER_HOUR,
-  PLAN_XP_PER_TASK,
+  MERCY_XP,
   RATE_EVERY_DAYS,
   RATE_FIRST_AFTER_DAYS,
   SCORE_MAX,
   SCORE_MIN,
+  planXp,
+  RESTED_AFTER_DAYS,
+  RESTED_TASKS,
+  RESTED_XP_BONUS,
   SECOND_WIND,
+  SPARK_AFTER,
+  SPARK_XP,
   SWITCH_COST,
+  UNDEAD_XP_BONUS,
   XP_BY_LEVEL,
   levelForEstimate,
+  undeadRank,
 } from './rules';
 import { BIGGER, isPast, periodKind, periodOf, within, type PeriodKey } from './period';
 import { addDays, dayKey, daysBetween, parseDay, repeatsOn, shiftAt } from './time';
@@ -107,6 +117,13 @@ function clampMana(m: number): number {
   return Math.max(0, Math.min(MANA_MAX, m));
 }
 
+/** Опыт герою и в итоги дня. */
+function grantXp(s: State, day: DayKey, xp: number): void {
+  if (!xp) return;
+  s.hero.xp += xp;
+  logOf(s, day).xp += xp;
+}
+
 // ---------- время ----------
 
 /** Начисляет время и ману с прошлого раза до now и переводит день, если он сменился. */
@@ -119,6 +136,7 @@ export function settle(s: State, now: number): void {
       const until = Math.min(now, stopAt);
       const start = Math.max(from, cur.runningSince);
       if (until > start) accrueWork(s, cur.taskId, until - start, start);
+      if (until - cur.runningSince >= SPARK_AFTER) spark(s, cur.taskId, cur.runningSince + SPARK_AFTER);
       if (now >= stopAt) {
         cur.runningSince = null;
         cur.idleSince = stopAt;
@@ -135,11 +153,30 @@ export function settle(s: State, now: number): void {
   if (today !== s.day) rollover(s, today);
 }
 
+/** Работа у огня: время в задачу, мана вниз, а каждые 15 минут работы уголёк опыта. */
 function accrueWork(s: State, taskId: string, dt: number, at: number): void {
   const t = findTask(s, taskId);
-  if (t) t.spentMs += dt;
+  if (t) {
+    const before = Math.floor(t.spentMs / EMBER_EVERY);
+    t.spentMs += dt;
+    grantXp(s, dayKey(at), (Math.floor(t.spentMs / EMBER_EVERY) - before) * EMBER_XP);
+  }
   s.hero.mana = clampMana(s.hero.mana - (MANA_DRAIN_PER_HOUR * dt) / HOUR);
   logOf(s, dayKey(at)).workedMs += dt;
+}
+
+/** Искра: две минуты у огня подряд, и за старт уже есть опыт. Раз в день за задачу. */
+function spark(s: State, taskId: string, at: number): void {
+  const t = findTask(s, taskId);
+  const day = dayKey(at);
+  if (!t || t.status !== 'open' || t.sparkDay === day) return;
+  t.sparkDay = day;
+  grantXp(s, day, SPARK_XP);
+}
+
+/** Сколько угольков у задачи: по одному за каждые 15 минут у огня. */
+export function embersOf(t: Task, spentMs: number = t.spentMs): number {
+  return Math.floor(spentMs / EMBER_EVERY);
 }
 
 /**
@@ -147,6 +184,12 @@ function accrueWork(s: State, taskId: string, dt: number, at: number): void {
  * повторяющиеся задачи встают в план сами.
  */
 function rollover(s: State, today: DayKey): void {
+  // Долго не заходили: герой отдохнул. Бонус один и тот же, сколько бы ни длился перерыв.
+  if (s.touchedAt !== null && daysBetween(dayKey(s.touchedAt), today) >= RESTED_AFTER_DAYS) {
+    s.rested = { day: today, left: RESTED_TASKS };
+  } else if (s.rested && s.rested.day !== today) {
+    delete s.rested;
+  }
   for (const t of s.tasks) {
     if (t.status === 'open' && t.day !== null && t.day < today) t.day = today;
   }
@@ -381,6 +424,8 @@ export interface TaskInput {
   at?: string | null;
   /** Горизонт задачи (period.ts), null или нет поля: без горизонта. */
   period?: PeriodKey | null;
+  /** План «если — то»; пустой не сохраняется. */
+  cue?: string | null;
 }
 
 export function addTask(s: State, now: number, input: TaskInput): string {
@@ -403,6 +448,7 @@ export function addTask(s: State, now: number, input: TaskInput): string {
     createdAt: now,
   };
   if (input.period) t.period = input.period;
+  if (input.cue?.trim()) t.cue = input.cue.trim();
   s.tasks.push(t);
   return id;
 }
@@ -411,17 +457,26 @@ export function addTask(s: State, now: number, input: TaskInput): string {
 export function updateTask(
   s: State,
   id: string,
-  patch: Partial<Omit<Task, 'id' | 'status' | 'spentMs' | 'period'>> & { period?: PeriodKey | null },
+  patch: Partial<Omit<Task, 'id' | 'status' | 'spentMs' | 'period' | 'cue'>> & { period?: PeriodKey | null; cue?: string | null },
 ): void {
   const t = findTask(s, id);
   if (!t) return;
   if (patch.day !== undefined && patch.day !== t.day && patch.day !== null) {
     t.order = nextOrder(s, patch.day);
+    delete t.leftDay;
   }
-  const { period, ...rest } = patch;
+  const { period, cue, ...rest } = patch;
   Object.assign(t, rest);
+  if (cue !== undefined) setCue(t, cue);
   if (period !== undefined) setPeriod(s, id, period);
   if (t.status === 'inbox' && (t.questId || t.period)) t.status = 'open';
+}
+
+/** План «если — то» задачи или повторяющейся: пустой убирается. */
+function setCue(x: { cue?: string }, cue: string | null): void {
+  const c = cue?.trim();
+  if (c) x.cue = c;
+  else delete x.cue;
 }
 
 /** Поставить задаче горизонт или снять его. Письмо с горизонтом встаёт в отряд. */
@@ -456,6 +511,7 @@ export function planTask(s: State, id: string, day: DayKey | null): void {
     t.day = day;
     t.order = nextOrder(s, day);
   }
+  delete t.leftDay;
   if (t.status === 'inbox') t.status = 'open';
 }
 
@@ -467,6 +523,7 @@ export interface RoutineInput {
   level: Level;
   estimateMin: number | null;
   at: string | null;
+  cue?: string | null;
   repeat: Repeat;
 }
 
@@ -485,7 +542,10 @@ export function waitingOf(s: State, routineId: string): Task | undefined {
  */
 export function addRoutine(s: State, now: number, input: RoutineInput, fromTaskId?: string): string {
   const id = nextId(s, 'r');
-  s.routines.push({ id, ...input, title: input.title.trim() || 'Без названия', repeat: { ...input.repeat }, createdAt: now });
+  const { cue, ...rest } = input;
+  const r: Routine = { id, ...rest, title: input.title.trim() || 'Без названия', repeat: { ...input.repeat }, createdAt: now };
+  setCue(r, cue ?? null);
+  s.routines.push(r);
   const t = fromTaskId ? findTask(s, fromTaskId) : undefined;
   if (t && (t.status === 'open' || t.status === 'inbox')) {
     t.routineId = id;
@@ -500,10 +560,13 @@ export function updateRoutine(s: State, id: string, input: RoutineInput): void {
   const r = findRoutine(s, id);
   if (!r) return;
   const moved = JSON.stringify(r.repeat) !== JSON.stringify(input.repeat);
-  Object.assign(r, input, { title: input.title.trim() || r.title, repeat: { ...input.repeat } });
+  const { cue, ...rest } = input;
+  Object.assign(r, rest, { title: input.title.trim() || r.title, repeat: { ...input.repeat } });
+  if (cue !== undefined) setCue(r, cue);
   const t = waitingOf(s, id);
   if (t) {
     Object.assign(t, { title: r.title, questId: r.questId, level: r.level, estimateMin: r.estimateMin, at: r.at });
+    setCue(t, r.cue ?? null);
     if (t.status === 'inbox' && t.questId) t.status = 'open';
   }
   if (moved) planRoutines(s, id);
@@ -548,6 +611,7 @@ export function planRoutines(s: State, only?: string): void {
       spentMs: 0,
       createdAt: Math.max(dayStart, r.createdAt),
       routineId: r.id,
+      ...(r.cue ? { cue: r.cue } : {}),
     });
   }
 }
@@ -686,7 +750,17 @@ export function complete(s: State, now: number, id: string, level?: Level): Comp
   const lairBefore = project && !project.sphere && !t.routineId ? lairOf(s, project.id) : null;
   const undead = isUndead(t, s.day);
   const reward = rewardFor(t, t.level);
-  if (undead) reward.undead = true;
+  const base = reward.xp;
+  if (undead) {
+    reward.undead = true;
+    reward.undeadXp = Math.round(base * UNDEAD_XP_BONUS[undeadRank(daysOverdue(t, s.day))]);
+    reward.xp += reward.undeadXp;
+  }
+  if (restedLeft(s) > 0) {
+    s.rested!.left -= 1;
+    reward.restedXp = Math.round(base * RESTED_XP_BONUS);
+    reward.xp += reward.restedXp;
+  }
   t.status = 'done';
   t.doneAt = now;
   t.doneDay = s.day;
@@ -708,15 +782,60 @@ export function complete(s: State, now: number, id: string, level?: Level): Comp
   };
 }
 
-/** Отпустить: задача уходит без награды и без штрафа. Её можно вернуть (unrelease). */
-export function release(s: State, now: number, id: string): void {
+/**
+ * Отпустить: задача уходит без штрафа. Её можно вернуть (unrelease). Отпустить нежить тоже
+ * решение, за него немного опыта: так разобраться с долгом всегда выгоднее, чем его обходить.
+ * Возвращает, сколько опыта дали.
+ */
+export function release(s: State, now: number, id: string): number {
   settle(s, now);
   const t = findTask(s, id);
-  if (!t || t.status === 'done' || t.status === 'released') return;
+  if (!t || t.status === 'done' || t.status === 'released') return 0;
+  const xp = isUndead(t, s.day) ? MERCY_XP : 0;
   t.releasedFrom = t.status;
   t.releasedAt = now;
   t.status = 'released';
+  if (xp) {
+    t.releasedXp = xp;
+    grantXp(s, s.day, xp);
+  }
   if (s.current?.taskId === id) s.current = null;
+  return xp;
+}
+
+/**
+ * Перенести срок нежити: она уходит с дороги и ждёт в отряде до нового срока (null: без срока).
+ * Это тоже разбор долга, за него немного опыта. Возвращает, сколько опыта дали.
+ */
+export function postpone(s: State, now: number, id: string, due: DayKey | null): number {
+  settle(s, now);
+  const t = findTask(s, id);
+  if (!t || t.status !== 'open') return 0;
+  const xp = isUndead(t, s.day) ? MERCY_XP : 0;
+  t.due = due;
+  grantXp(s, s.day, xp);
+  return xp;
+}
+
+/** Покой нежити одним касанием: сроки у всей нежити снимаются, задачи ждут в отряде. Возвращает прежние сроки для «Вернуть». */
+export function amnesty(s: State, now: number): { id: string; due: DayKey }[] {
+  settle(s, now);
+  const was = undeadOf(s).map((t) => ({ id: t.id, due: t.due! }));
+  for (const { id } of was) findTask(s, id)!.due = null;
+  return was;
+}
+
+/** Вернуть сроки, снятые покоем. */
+export function restoreDues(s: State, was: { id: string; due: DayKey }[]): void {
+  for (const { id, due } of was) {
+    const t = findTask(s, id);
+    if (t && t.status === 'open' && t.due === null) t.due = due;
+  }
+}
+
+/** Сколько ещё дел сегодня дадут бонус отдохнувшего героя. */
+export function restedLeft(s: State): number {
+  return s.rested && s.rested.day === s.day ? Math.max(0, s.rested.left) : 0;
 }
 
 /**
@@ -727,8 +846,10 @@ export function unrelease(s: State, id: string): void {
   const t = findTask(s, id);
   if (!t || t.status !== 'released') return;
   t.status = t.releasedFrom ?? 'open';
+  if (t.releasedXp) grantXp(s, dayKey(t.releasedAt ?? s.settledAt), -t.releasedXp);
   delete t.releasedFrom;
   delete t.releasedAt;
+  delete t.releasedXp;
   if (t.day && t.day < s.day) t.day = null;
   if (!t.questId && !t.day && !t.period) t.status = 'inbox';
 }
@@ -749,6 +870,7 @@ export function undoComplete(s: State, id: string): void {
   l.xp -= t.reward.xp;
   l.done -= 1;
   if (t.reward.undead) l.undeadSlain = Math.max(0, l.undeadSlain - 1);
+  if (t.reward.restedXp && s.rested && s.rested.day === t.doneDay) s.rested.left = Math.min(RESTED_TASKS, s.rested.left + 1);
   t.status = 'open';
   delete t.doneAt;
   delete t.doneDay;
@@ -760,11 +882,32 @@ export function lightFire(s: State, now: number): number {
   settle(s, now);
   if (s.litDay === s.day) return 0;
   const n = s.tasks.filter((t) => t.day === s.day && t.status === 'open').length;
-  const xp = n * PLAN_XP_PER_TASK;
+  const xp = planXp(n);
   s.hero.xp += xp;
   logOf(s, s.day).xp += xp;
   s.litDay = s.day;
   return xp;
+}
+
+/**
+ * Вчерашние дела: что последний отбой вернул из плана в отряд и что с тех пор никуда не позвали.
+ * Нежить сюда не входит, она ждёт на дороге.
+ */
+export function leftoversOf(s: State): Task[] {
+  let last = '';
+  for (const t of s.tasks) if (t.leftDay && t.leftDay > last) last = t.leftDay;
+  if (!last) return [];
+  return s.tasks
+    .filter((t) => t.status === 'open' && t.day === null && t.leftDay === last && !isUndead(t, s.day))
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** Быстрый сбор: вчерашние дела снова у костра, и костёр сразу горит. Возвращает, сколько позвали и сколько опыта за план. */
+export function quickGather(s: State, now: number): { added: number; xp: number } {
+  settle(s, now);
+  const back = leftoversOf(s);
+  for (const t of back) planTask(s, t.id, s.day);
+  return { added: back.length, xp: lightFire(s, now) };
 }
 
 export function canSecondWind(s: State, now: number): boolean {
@@ -794,6 +937,7 @@ export function endDay(s: State, now: number, keepIds: string[]): void {
       t.order = nextOrder(s, tomorrow);
     } else {
       t.day = null;
+      t.leftDay = s.day;
     }
   }
   s.current = null;

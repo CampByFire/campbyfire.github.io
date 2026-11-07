@@ -610,3 +610,20 @@ export function ascend(from: number, to: number, chain = false): void {
     { chain },
   );
 }
+
+/** Искра за старт или уголёк: тёплые искры летят от таймера к уровню героя, над ним всплывает опыт. */
+export function kindle(xp: number): void {
+  cast(async (s) => {
+    await s.frame();
+    const from = $('.timer');
+    const chip = $('[data-magic="level"]');
+    if (calm() || !from || !chip) return;
+    const [fx, fy] = pt(from, 0.15, 0.5);
+    const [lx, ly] = pt(chip);
+    flight([fx, fy], [lx, ly + 10], { n: 9, kind: 'spark', pal: 'warm', stagger: 30, life: 460, arc: 0.35, lift: 0.2, size: [1.8, 2.8], trail: 6 });
+    await s.wait(460);
+    flare(lx, ly, 48, { c1: 'rgba(255,236,190,.95)', c2: 'rgba(255,170,70,.45)', dur: 380 });
+    floatText(lx, ly + 22, `+${xp}`, { c: '#ffe2a8', g: 'rgba(255,150,60,.85)', dur: 680, dy: -18 });
+    await s.wait(700);
+  });
+}

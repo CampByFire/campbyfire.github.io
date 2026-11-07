@@ -36,8 +36,10 @@ test('оценка сфер рисует колесо, а вторая оцен�
   expect(await axe(page), 'Королевство с колесом').toEqual([]);
 
   // Через неделю оценка ниже: в легенде видно, на сколько, а на колесе бледный контур прошлой.
-  // Новый день открывается сбором отряда, в Королевство переходим сами.
+  // Новый день открывается сбором отряда, в Королевство переходим сами. Неделю в игру не заглядывали,
+  // поэтому сначала встречает «Костёр ждал».
   await setTime(page, at(10, 0, 30));
+  await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
   await tab(page, 'Королевство').click();
   await page.getByRole('button', { name: 'Оценить сферы' }).click();
   const again = sheet(page, 'Оценить сферы');
@@ -101,7 +103,9 @@ test('напоминание оценить сферы: в Настройках,
   await expect(every.getByRole('radio', { name: 'Раз в неделю' })).toBeChecked();
 
   // Игре три дня: лагерь просит оценить сферы, кнопка ведёт прямо в оценку.
+  // В выходные в игру не заглядывали, поэтому сначала встречает «Костёр ждал».
   await setTime(page, at(10, 0, 26));
+  await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
   await tab(page, 'Лагерь').click();
   const notice = page.locator('.notice');
   await expect(notice).toContainText('Пора оценить сферы');
@@ -114,6 +118,7 @@ test('напоминание оценить сферы: в Настройках,
   await tab(page, 'Настройки').click();
   await every.getByRole('radio', { name: 'Не напоминать' }).click();
   await setTime(page, at(10, 0, 30));
+  await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
   await tab(page, 'Лагерь').click();
   await expect(page.locator('.notice')).toBeHidden();
 });
