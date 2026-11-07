@@ -178,7 +178,8 @@ export function Sheet(p: { title: string; onClose: () => void; children: preact.
     };
   }, [p.onClose]);
   useEffect(() => {
-    if (!ref.current?.contains(document.activeElement)) ref.current?.focus();
+    // Лист ещё выезжает снизу: без preventScroll браузер прокрутил бы приложение вслед за ним.
+    if (!ref.current?.contains(document.activeElement)) ref.current?.focus({ preventScroll: true });
   }, []);
   // Длинный текст без кнопок (правила) прокручивается только с клавиатуры, если до него можно дойти Tab.
   useLayoutEffect(() => {

@@ -129,7 +129,10 @@ button:disabled {
   display: flex;
   flex-direction: column;
   background: var(--bg);
+  /* clip, а не hidden: блок с hidden можно прокрутить фокусом или scrollIntoView. Тогда всё приложение
+     уезжает вверх вместе с нижним меню, а под ним остаётся пустой чёрный фон страницы. */
   overflow: hidden;
+  overflow: clip;
 }
 
 .screen {
@@ -1875,6 +1878,8 @@ button.sheet-grip:focus-visible {
 }
 
 .modal-body {
+  /* Опора для .sr-only в длинных списках: иначе скрытый текст вылезает за прокрутку листа и удлиняет приложение. */
+  position: relative;
   overflow-y: auto;
   padding: 4px 18px 14px;
 }

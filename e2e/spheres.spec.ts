@@ -1,6 +1,7 @@
 // Королевство: сферы как в колесе баланса, их оценка, проекты в сферах и напоминание оценить сферы.
 import { expect, test, type Page } from '@playwright/test';
-import { addTask, at, axe, openGame, openSettings, setTime, sheet, tab, toast } from './helpers';
+import { addQuest, addTask as addGameTask, newState } from '../src/game/state';
+import { addTask, at, axe, openGame, openSettings, seedGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Кнопки и поля в открытом листе, которые меньше 44×44. */
 const tooSmall = (page: Page) =>
@@ -128,4 +129,29 @@ test('напоминание оценить сферы: в Настройках,
   await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
   await tab(page, 'Лагерь').click();
   await expect(page.locator('.notice')).toBeHidden();
+});
+
+test('длинный проект не сдвигает экран: под нижним меню нет пустого места', async ({ page }) => {
+  const now = at(8).getTime();
+  const s = newState(now);
+  const id = addQuest(s, now, { name: 'Большой проект', kind: 'work', color: s.quests[0].color, sphereId: s.quests[0].id });
+  for (let i = 1; i <= 40; i++) addGameTask(s, now, { title: `Шаг ${i}`, questId: id, level: 1 });
+  s.touchedAt = now;
+  s.litDay = s.day;
+  await seedGame(page, s);
+  await openGame(page);
+  await tab(page, 'Королевство').click();
+  await page.locator('.project-card', { hasText: 'Большой проект' }).click();
+  await expect(sheet(page, 'Большой проект')).toBeVisible();
+  // Фокус уходит в лист, пока тот ещё выезжает снизу: приложение не должно проскроллиться вслед за ним.
+  await page.evaluate(() => Promise.all(document.querySelector('.modal')!.getAnimations().map((a) => a.finished)));
+  const box = await page.evaluate(() => ({
+    height: innerHeight,
+    scrolled: document.querySelector('.app')!.scrollTop,
+    menu: document.querySelector('.tabbar')!.getBoundingClientRect().bottom,
+    sheet: document.querySelector('.modal')!.getBoundingClientRect().bottom,
+  }));
+  expect(box.scrolled, 'приложение проскроллилось').toBe(0);
+  expect(box.menu, 'нижнее меню уехало вверх').toBe(box.height);
+  expect(box.sheet, 'лист не достаёт до низа экрана').toBe(box.height);
 });
