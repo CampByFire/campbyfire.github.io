@@ -1,7 +1,7 @@
 // Настройки: герой, распорядок, магия, сохранение в GitHub, копия в файл, справка и «Стереть всё».
 // Раньше этот раздел назывался Летописью; теперь Летопись это заметки (Notes.tsx).
 import { useRef, useState } from 'preact/hooks';
-import { REMIND_BEFORE_MIN, heroLevel } from '../game/rules';
+import { MEETING_REMIND_MIN, REMIND_BEFORE_MIN, heroLevel } from '../game/rules';
 import { buildIcs, calendarEvents, type IcsOptions } from '../game/ics';
 import { isNewerSave, parseSave } from '../game/store';
 import { formatMinutes, plural, scheduleError } from '../game/time';
@@ -287,6 +287,7 @@ function Reminders({ ui }: { ui: Ui }) {
   const parts: string[] = [];
   if (what.morning) parts.push(`утренний костёр в ${formatMinutes(opt.morning!).padStart(5, '0')}`);
   if (what.tasks.length) parts.push(`${what.tasks.length} ${plural(what.tasks.length, 'задача', 'задачи', 'задач')} со временем`);
+  if (what.meetings.length) parts.push(`${what.meetings.length} ${plural(what.meetings.length, 'встреча', 'встречи', 'встреч')}`);
   if (what.routines) parts.push(`${what.routines} ${plural(what.routines, 'повторяющаяся', 'повторяющиеся', 'повторяющихся')}`);
   const download = () => {
     saveFile('lager.ics', buildIcs(ui.store.state, ui.store.now(), o), 'text/calendar');
@@ -298,7 +299,7 @@ function Reminders({ ui }: { ui: Ui }) {
         <h2 class="sc">Напоминания</h2>
       </div>
       <p class="note">
-        Лагерь сам не звонит: у него нет своего сервера. Зато звонит календарь телефона. Файл добавит в него утренний костёр и задачи со временем с будильником за {REMIND_BEFORE_MIN} минут. Если задачи со временем поменялись, скачай файл заново.
+        Лагерь сам не звонит: у него нет своего сервера. Зато звонит календарь телефона. Файл добавит в него утренний костёр и задачи со временем с будильником за {REMIND_BEFORE_MIN} минут, а встречи из календаря Лагеря с будильником за {MEETING_REMIND_MIN} минут (встречи на весь день напомнят о себе накануне вечером). Если что-то поменялось, скачай файл заново.
       </p>
       <Chips
         label="Утренний костёр"

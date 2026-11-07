@@ -91,7 +91,7 @@ export function newState(now: number): State {
   return s;
 }
 
-function nextId(s: State, prefix: string): string {
+export function nextId(s: State, prefix: string): string {
   s.seq += 1;
   return `${prefix}${s.seq.toString(36)}-${randomId(4)}`;
 }

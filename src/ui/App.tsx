@@ -4,6 +4,7 @@ import type { Notes } from '../notes/notes';
 import type { Sync } from '../sync/sync';
 import type { CompleteResult } from '../game/state';
 import { W } from '../game/words';
+import { CalendarScreen } from './Calendar';
 import { Camp } from './Camp';
 import { sheetBack, useBackButton } from './back';
 import { isLost, restoreFocus, spotOf, type FocusSpot } from './focus';
@@ -23,7 +24,7 @@ import { Settings } from './Settings';
 import { Sheets, type SheetState } from './Sheets';
 import { useSync } from './SyncPanel';
 
-export type Screen = 'camp' | 'plan' | 'realm' | 'notes' | 'settings';
+export type Screen = 'camp' | 'plan' | 'realm' | 'notes' | 'settings' | 'calendar';
 
 export interface ToastAction {
   label: string;
@@ -304,6 +305,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
         {screen === 'realm' && <Realm ui={ui} />}
         {screen === 'notes' && <NotesScreen ui={ui} />}
         {screen === 'settings' && <Settings ui={ui} />}
+        {screen === 'calendar' && <CalendarScreen ui={ui} />}
       </main>
       <Notices ui={ui} covered={covered} />
       <nav class="tabbar" aria-label="Разделы" inert={covered}>

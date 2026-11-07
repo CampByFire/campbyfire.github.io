@@ -3,10 +3,12 @@ import { MANA_DRAIN_PER_HOUR, MANA_MAX, estimateOf, heroLevel, planXp } from '..
 import { useState } from 'preact/hooks';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { backlogOf, findQuest, inboxOf, isUndead, kindOf as kindOfQuest, leftoversOf, lightFire, nestedTasks, periodTasks, planOf, planTask, quickGather, swapInPlan, tailsOf, waitingOf } from '../game/state';
-import { formatClock, formatDate, formatDuration, isMainFor, plural, shiftAt } from '../game/time';
+import { addDays, formatClock, formatDate, formatDuration, isMainFor, plural, shiftAt } from '../game/time';
+import { meetingsOn } from '../game/calendar';
 import type { State, Task } from '../game/types';
 import { PERIOD_KIND_NAME, W, periodName, periodShort, repeatName, weekRange } from '../game/words';
 import type { Ui } from './App';
+import { AgendaRow, openCalendar, tomorrowNews } from './Calendar';
 import { GIcon, LIcon } from './Icon';
 import { ignite } from './magic/spells';
 import { QuestDot, TaskMeta } from './parts';
@@ -109,6 +111,7 @@ function DayPlan({ ui }: { ui: Ui }) {
   const tooMuch = planMin > canMin;
 
   const tails = tailsOf(s);
+  const meetings = meetingsOn(s, s.day);
 
   return (
     <>
@@ -128,6 +131,30 @@ function DayPlan({ ui }: { ui: Ui }) {
           {tailsNews(s, tails)}: разобрать
           <LIcon name="chevron" size={16} />
         </button>
+      )}
+
+      <button class="banner banner-cal" onClick={() => openCalendar(ui, addDays(s.day, 1))}>
+        <LIcon name="calendar" size={16} />
+        {tomorrowNews(s)}
+        <LIcon name="chevron" size={16} />
+      </button>
+
+      {meetings.length > 0 && (
+        <section class="group">
+          <div class="group-head">
+            <h2 class="sc">Встречи сегодня</h2>
+            <button class="link-btn" onClick={() => openCalendar(ui, s.day)}>
+              календарь
+            </button>
+          </div>
+          <ul class="cal-list">
+            {meetings.map((m) => (
+              <li key={m.id}>
+                <AgendaRow ui={ui} s={s} x={{ kind: 'meeting', at: m.at, meeting: m }} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <section class="group">

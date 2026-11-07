@@ -47,7 +47,7 @@ describe('файл календаря', () => {
     expect(flat).toContain('SUMMARY:Разжечь костёр');
     expect(flat).toContain('DTSTART:20261023T083000');
     expect(flat).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR');
-    expect(flat).toContain('SUMMARY:Позвонить маме\\, папе\; бабушке');
+    expect(flat).toContain('SUMMARY:Позвонить маме\\, папе\\; бабушке');
     expect(flat).toContain('DTSTART:20261023T190000');
     expect(flat).toContain('DURATION:PT15M');
     expect(flat).toContain('DESCRIPTION:Когда приду домой\\, наберу номер\\nОткрыть Лагерь: https://igor.github.io/lager/');
@@ -65,7 +65,7 @@ describe('файл календаря', () => {
     expect(buildIcs(s, at(9), { morning: 9 * 60, morningDays: 'all', url: URL })).toContain('RRULE:FREQ=DAILY');
     const none = buildIcs(s, at(9), { morning: null, morningDays: 'work', url: URL });
     expect(none).not.toContain('Разжечь костёр');
-    expect(calendarEvents(s, { morning: null, morningDays: 'work', url: URL })).toEqual({ morning: false, tasks: [expect.objectContaining({ at: '19:00' })], routines: 1 });
+    expect(calendarEvents(s, { morning: null, morningDays: 'work', url: URL })).toEqual({ morning: false, tasks: [expect.objectContaining({ at: '19:00' })], routines: 1, meetings: [] });
   });
 
   it('длинные строки переносятся по 75 байт, буквы не разрываются', () => {

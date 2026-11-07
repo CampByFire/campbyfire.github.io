@@ -110,6 +110,7 @@ export function checkSave(raw: unknown): State | null {
   s.touchedAt ??= null;
   if (!Array.isArray(s.routines)) s.routines = [];
   if (!Array.isArray(s.ratings)) s.ratings = [];
+  if (s.meetings !== undefined && !Array.isArray(s.meetings)) delete s.meetings;
   if (s.settings) s.settings.rateEvery ??= DEFAULT_SETTINGS.rateEvery;
   dropFrog(s);
   return s;

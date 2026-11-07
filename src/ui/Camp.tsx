@@ -17,12 +17,14 @@ import {
   toggleBreak,
   undoComplete,
 } from '../game/state';
-import { formatClock, formatDate, formatDuration, formatTimer, formatTimerSeconds } from '../game/time';
+import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatTimer, formatTimerSeconds, minutesOfDay } from '../game/time';
+import { meetingsOn } from '../game/calendar';
 import type { State, Task } from '../game/types';
 import { campView, type CampView, type Tone } from '../game/view';
 import { CLASS_AT, CLASS_BY_LEVEL, SHIFT_NAME, W } from '../game/words';
 import { SCENE, SCENE_H, SCENE_W, assetUrl } from '../scene/scene';
 import type { Ui } from './App';
+import { openCalendar, tomorrowNews } from './Calendar';
 import { useSize } from './hooks';
 import { GIcon, LIcon } from './Icon';
 import { interrupt } from './magic/engine';
@@ -120,6 +122,7 @@ export function Camp({ ui }: { ui: Ui }) {
           <button class="chip camp-book-btn" aria-label="Записать мысль" title="Записать мысль" onClick={() => ui.open({ kind: 'thought' })}>
             <LIcon name="bulb" size={18} />
           </button>
+          <CalendarChip ui={ui} />
           <button class="chip camp-book-btn" onClick={() => ui.go('notes')}>
             <LIcon name="book" size={18} />
             {W.chronicle}
@@ -287,6 +290,23 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
         <span class="sr-only">{`${W.mana}: ${mana} из ${MANA_MAX}`}</span>
       </div>
     </div>
+  );
+}
+
+/**
+ * Календарь у книги. Если сегодня ещё будет встреча со временем, на кнопке её час, чтобы не забыть.
+ * Иначе только значок, а диктор слышит, что стоит на завтра.
+ */
+function CalendarChip({ ui }: { ui: Ui }) {
+  const s = ui.store.state;
+  const nowAt = formatMinutes(Math.min(minutesOfDay(ui.now), 24 * 60 - 1)).padStart(5, '0');
+  const next = meetingsOn(s, s.day).find((m) => m.at && m.at >= nowAt);
+  const label = next ? `Календарь: сегодня в ${next.at!.replace(/^0/, '')} ${next.title}` : `Календарь. ${tomorrowNews(s)}`;
+  return (
+    <button class="chip camp-book-btn" aria-label={label} title={label} onClick={() => openCalendar(ui, next ? s.day : addDays(s.day, 1))}>
+      <LIcon name="calendar" size={18} />
+      {next && <span aria-hidden="true">{next.at!.replace(/^0/, '')}</span>}
+    </button>
   );
 }
 

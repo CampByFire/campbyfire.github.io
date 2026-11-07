@@ -1,7 +1,7 @@
 // Все слова мира в одном месте: экраны берут названия только отсюда.
 import { periodEnd, periodKind, periodOf, periodStart, shiftPeriod, type PeriodKey, type PeriodKind } from './period';
 import type { UndeadRank } from './rules';
-import { parseDay, type Shift } from './time';
+import { parseDay, plural, type Shift } from './time';
 import type { Level, QuestKind, QuestPreset, RateEvery, Repeat } from './types';
 
 export type ClassId = 'rogue' | 'barbarian' | 'mage' | 'knight';
@@ -103,6 +103,30 @@ export const PERIOD_KIND_NAME: Record<PeriodKind, string> = {
   year: 'Год',
 };
 
+/** Дни недели полностью, 0 воскресенье. */
+export const WEEKDAY_NAME = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
+
+/** «Сегодня, суббота, 7 ноября», «Завтра, воскресенье, 8 ноября», «Вторник, 10 ноября», «Пятница, 1 января 2027». */
+export function dayTitle(day: string, today: string): string {
+  const d = parseDay(day);
+  const year = d.getFullYear() === parseDay(today).getFullYear() ? '' : ` ${d.getFullYear()}`;
+  const date = `${d.getDate()} ${MONTH_OF[d.getMonth()]}${year}`;
+  const wd = WEEKDAY_NAME[d.getDay()];
+  const n = Math.round((d.getTime() - parseDay(today).getTime()) / 86_400_000);
+  if (n === 0) return `Сегодня, ${wd}, ${date}`;
+  if (n === 1) return `Завтра, ${wd}, ${date}`;
+  if (n === -1) return `Вчера, ${wd}, ${date}`;
+  return `${wd[0].toUpperCase()}${wd.slice(1)}, ${date}`;
+}
+
+/** «1 встреча и 3 задачи», «2 встречи», «4 задачи»; пусто, если ничего. */
+export function agendaCount(meetings: number, tasks: number): string {
+  const parts: string[] = [];
+  if (meetings) parts.push(`${meetings} ${plural(meetings, 'встреча', 'встречи', 'встреч')}`);
+  if (tasks) parts.push(`${tasks} ${plural(tasks, 'задача', 'задачи', 'задач')}`);
+  return parts.join(' и ');
+}
+
 export const MONTH_NAME = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 /** «2 ноября», «до 15 декабря». */
 export const MONTH_OF = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -178,6 +202,7 @@ export const W = {
   realm: 'Королевство',
   chronicle: 'Летопись',
   settings: 'Настройки',
+  calendar: 'Календарь',
   gold: 'Золото',
   mana: 'Мана',
   xp: 'опыт',

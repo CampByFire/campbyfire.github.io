@@ -6,11 +6,11 @@
 //
 // Что менялось только с одной стороны, берётся оттуда. Что менялось с обеих, берётся у той,
 // где действовали позже. Золото, опыт, мана, итоги дня и время на задаче складываются
-// приростами обеих сторон. Задачи, походы и повторяющиеся задачи сливаются поштучно: добавленные
+// приростами обеих сторон. Задачи, походы, повторяющиеся задачи и встречи сливаются поштучно: добавленные
 // с обеих сторон остаются, удалённое на одной стороне уходит, если на другой его с тех пор не трогали.
 import { MANA_MAX } from './rules';
 import { settle, tidyRoutines } from './state';
-import type { Current, DayLog, Quest, Rating, Routine, State, Task } from './types';
+import type { Current, DayLog, Meeting, Quest, Rating, Routine, State, Task } from './types';
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
@@ -155,6 +155,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
     out.quests = unionById(l.quests, r.quests, localWins);
     out.tasks = unionById(l.tasks, r.tasks, localWins);
     out.routines = unionById(l.routines, r.routines, localWins);
+    setMeetings(out, unionById(l.meetings ?? [], r.meetings ?? [], localWins));
     out.ratings = mergeRatings(l.ratings, r.ratings);
     out.log = {};
     for (const day of new Set([...Object.keys(l.log), ...Object.keys(r.log)])) {
@@ -175,6 +176,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   out.quests = mergeById<Quest>(b.quests, l.quests, r.quests, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
   out.tasks = mergeById<Task>(b.tasks, l.tasks, r.tasks, (x, y, z) => mergeFields(x, y, z, localWins, TASK_COUNTERS, TASK_GROUPS), localWins);
   out.routines = mergeById<Routine>(b.routines, l.routines, r.routines, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
+  setMeetings(out, mergeById<Meeting>(b.meetings ?? [], l.meetings ?? [], r.meetings ?? [], (x, y, z) => mergeFields(x, y, z, localWins, []), localWins));
   out.ratings = mergeRatings(l.ratings, r.ratings);
   out.log = mergeLog(b.log, l.log, r.log, localWins);
   out.settings = mergeFields(b.settings, l.settings, r.settings, localWins, []);
@@ -191,6 +193,12 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   if (out.current && !out.tasks.some((t) => t.id === out.current!.taskId)) out.current = null;
   tidyRoutines(out);
   return out;
+}
+
+/** Встречи календаря: пустой список не сохраняется, как и в самой игре. */
+function setMeetings(s: State, list: Meeting[]): void {
+  if (list.length) s.meetings = list;
+  else delete s.meetings;
 }
 
 /**

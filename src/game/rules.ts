@@ -101,6 +101,12 @@ export const EMBER_XP = 2;
 export const REMIND_BEFORE_MIN = 10;
 /** Длина события в календаре, если у задачи нет оценки. */
 export const EVENT_MIN = 30;
+/** Напоминание о встрече со временем приходит за столько минут. */
+export const MEETING_REMIND_MIN = 30;
+/** Встреча без конца стоит в календаре телефона столько минут. */
+export const MEETING_MIN = 60;
+/** Встреча на весь день напоминает о себе накануне вечером: за столько часов до полуночи. */
+export const ALL_DAY_REMIND_HOURS = 6;
 
 /** Перерыв не меньше стольких игровых дней, и герой возвращается отдохнувшим. */
 export const RESTED_AFTER_DAYS = 2;

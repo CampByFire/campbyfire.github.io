@@ -1,9 +1,10 @@
 // Напоминания без сервера: файл календаря (iCalendar, RFC 5545) с будильниками. Телефонный
 // календарь звонит сам, а Лагерь только один раз отдаёт ему события. Время «плавающее», без пояса:
 // календарь ставит его в поясе телефона, как и показывает Лагерь.
-import { EVENT_MIN, REMIND_BEFORE_MIN, estimateOf } from './rules';
+import { ALL_DAY_REMIND_HOURS, EVENT_MIN, MEETING_MIN, MEETING_REMIND_MIN, REMIND_BEFORE_MIN, estimateOf } from './rules';
+import { meetingsOf } from './calendar';
 import { nextRepeat } from './time';
-import type { DayKey, Repeat, Settings, State, Task } from './types';
+import type { DayKey, Meeting, Repeat, Settings, State, Task } from './types';
 
 export interface IcsOptions {
   /** Утренний костёр, минуты от полуночи; null: без него. */
@@ -28,7 +29,7 @@ function utc(ms: number): string {
 }
 
 function text(s: string): string {
-  return s.replace(/\\/g, '\\\\').replace(/;/g, '\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
 }
 
 /** Строки длиннее 75 байт переносятся с пробелом в начале продолжения, буквы не разрываются. */
@@ -64,20 +65,26 @@ function rrule(r: Repeat, st: Settings): string {
 
 interface Ev {
   uid: string;
+  /** Начало «20261105T093000» или, для события на весь день, «20261105». */
   start: string;
+  /** Длина в минутах; у события на весь день не нужна. */
   min: number;
+  allDay?: boolean;
   title: string;
   note: string;
+  place?: string;
   rule?: string;
+  /** За сколько минут до начала звонит будильник. */
   alarm: number;
 }
 
-/** Что попадёт в календарь: утренний костёр, задачи со временем на сегодня и дальше, повторяющиеся со временем. */
-export function calendarEvents(s: State, o: IcsOptions): { morning: boolean; tasks: Task[]; routines: number } {
+/** Что попадёт в календарь: утренний костёр, задачи со временем на сегодня и дальше, повторяющиеся со временем, встречи с сегодняшней. */
+export function calendarEvents(s: State, o: IcsOptions): { morning: boolean; tasks: Task[]; routines: number; meetings: Meeting[] } {
+  const meetings = meetingsOf(s).filter((m) => m.day >= s.day);
   const tasks = s.tasks.filter((t) => t.status === 'open' && t.at && t.day && t.day >= s.day && !t.routineId && minutesOf(t.at) !== null);
   const routines = s.routines.filter((r) => r.at && minutesOf(r.at) !== null && nextRepeat(r.repeat, s.day, s.settings)).length;
   const morning = o.morning !== null && (o.morningDays === 'all' || s.settings.workDays.length > 0);
-  return { morning, tasks, routines };
+  return { morning, tasks, routines, meetings };
 }
 
 export function buildIcs(s: State, now: number, o: IcsOptions): string {
@@ -122,6 +129,20 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
       alarm: REMIND_BEFORE_MIN,
     });
   }
+  for (const m of calendarEvents(s, o).meetings) {
+    const at = m.at ? minutesOf(m.at) : null;
+    const end = m.until ? minutesOf(m.until) : null;
+    evs.push({
+      uid: `meeting-${m.id}@${s.gameId}.lager`,
+      start: at === null ? m.day.replace(/-/g, '') : local(m.day, at),
+      min: at !== null && end !== null && end > at ? end - at : MEETING_MIN,
+      allDay: at === null,
+      title: m.title,
+      note: link,
+      place: m.place,
+      alarm: at === null ? ALL_DAY_REMIND_HOURS * 60 : MEETING_REMIND_MIN,
+    });
+  }
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Taskcraft//Lager//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Лагерь'];
   const stamp = utc(now);
   for (const e of evs) {
@@ -130,11 +151,11 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
       `UID:${e.uid}`,
       `DTSTAMP:${stamp}`,
       `SEQUENCE:${Math.floor(now / 1000)}`,
-      `DTSTART:${e.start}`,
-      `DURATION:PT${Math.max(5, Math.round(e.min))}M`,
+      ...(e.allDay ? [`DTSTART;VALUE=DATE:${e.start}`, 'DURATION:P1D'] : [`DTSTART:${e.start}`, `DURATION:PT${Math.max(5, Math.round(e.min))}M`]),
       ...(e.rule ? [`RRULE:${e.rule}`] : []),
       `SUMMARY:${text(e.title)}`,
       `DESCRIPTION:${text(e.note)}`,
+      ...(e.place ? [`LOCATION:${text(e.place)}`] : []),
       `URL:${o.url}`,
       'BEGIN:VALARM',
       'ACTION:DISPLAY',

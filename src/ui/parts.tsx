@@ -28,6 +28,8 @@ export function TaskMeta({ s, t, estimate = false, period = true }: { s: State; 
       </span>
     );
   }
+  // Задача позвана на будущий день: видно, когда она придёт к костру.
+  if (t.status === 'open' && t.day && t.day > s.day) return <span class="meta">{repeat}{formatDue(t.day, s.day)}{t.at && `, ${t.at}`}</span>;
   if (t.at) return <span class="meta">{repeat}в {t.at}</span>;
   if (t.due === s.day) return <span class="meta meta-gold">сегодня</span>;
   if (estimate) {

@@ -79,6 +79,7 @@ import { WipeSheet } from './Settings';
 import { DiarySheet, NoteSheet, SectionSheet, ThoughtSheet } from './NoteSheets';
 import { SyncConflictSheet, SyncSheet } from './SyncPanel';
 import { setSheetBack } from './back';
+import { MeetingSheet } from './MeetingSheet';
 
 export type SheetState =
   | { kind: 'add'; questId?: string | null; day?: DayKey | null; period?: PeriodKey | null }
@@ -101,7 +102,8 @@ export type SheetState =
   | { kind: 'note'; slug: string; path?: string }
   | { kind: 'section'; slug?: string }
   | { kind: 'diary'; path: string; entry: DiaryEntry }
-  | { kind: 'welcome' };
+  | { kind: 'welcome' }
+  | { kind: 'meeting'; meetingId?: string; day?: DayKey };
 
 export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
   switch (sheet.kind) {
@@ -147,6 +149,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <DiarySheet key={`${sheet.path}|${sheet.entry.time}|${sheet.entry.title ?? ''}|${sheet.entry.text}`} ui={ui} path={sheet.path} entry={sheet.entry} />;
     case 'welcome':
       return <WelcomeSheet ui={ui} />;
+    case 'meeting':
+      return <MeetingSheet key={sheet.meetingId ?? sheet.day ?? ''} ui={ui} meetingId={sheet.meetingId} day={sheet.day} />;
   }
 }
 
@@ -298,7 +302,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
     }
     const letters = inboxOf(ui.store.state).length;
     ui.store.act((st, now) => addTask(st, now, patch));
-    const where = v.period && !v.day ? ` · ${periodName(v.period, s.day).toLowerCase()}` : '';
+    const where = v.period && !v.day ? ` · ${periodName(v.period, s.day).toLowerCase()}` : v.day && v.day > s.day ? ` · ${formatDue(v.day, s.day)}` : '';
     ui.toast(willBeLetter ? 'Письмо у вестника: разберёшь в сборе отряда' : `${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]]} в отряде${where}`);
     if (willBeLetter) expectLetter(letters);
     ui.close();
