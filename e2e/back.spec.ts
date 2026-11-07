@@ -56,12 +56,17 @@ test('«Назад» с любого раздела возвращает в Ла
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   await inCamp(page);
 
-  for (const name of ['План', 'Королевство', 'Летопись', 'Настройки']) {
+  for (const name of ['План', 'Королевство', 'Летопись']) {
     await tab(page, name).click();
     await expect(tab(page, name)).toHaveAttribute('aria-current', 'page');
     await page.goBack();
     await inCamp(page);
   }
+  // Настройки открываются шестерёнкой в Лагере, «Назад» возвращает туда же.
+  await page.locator('.topbar').getByRole('button', { name: 'Настройки', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Настройки' })).toBeVisible();
+  await page.goBack();
+  await inCamp(page);
 
   // Несколько разделов подряд: всё равно одно «Назад» до Лагеря, второе выходит.
   await tab(page, 'План').click();

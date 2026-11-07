@@ -45,6 +45,14 @@ export async function unlock(page: Page) {
 /** Кнопка меню внизу экрана. */
 export const tab = (page: Page, name: string): Locator => page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name, exact: true });
 
+/** Открыть Настройки: шестерёнка в верхней полосе Лагеря. */
+export async function openSettings(page: Page) {
+  const nav = page.getByRole('navigation', { name: 'Разделы' });
+  await nav.getByRole('button', { name: 'Лагерь', exact: true }).click();
+  await page.locator('.topbar').getByRole('button', { name: 'Настройки', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Настройки' })).toBeVisible();
+}
+
 /** Всплывающее сообщение внизу экрана. */
 export const toast = (page: Page): Locator => page.locator('.toast');
 
@@ -171,7 +179,7 @@ export async function fakeGitHub(page: Page) {
 
 /** Подключить GitHub в Настройках токеном good. */
 export async function connectGitHub(page: Page) {
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   await page.getByLabel('Токен GitHub').fill('good');
   await page.getByRole('button', { name: 'Подключить' }).click();
   await expect(toast(page)).toHaveText('GitHub подключён');

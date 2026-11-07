@@ -289,6 +289,9 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
         </span>
         <span class="sr-only">{`${W.mana}: ${mana} из ${MANA_MAX}`}</span>
       </div>
+      <button class="chip chip-gear" aria-label={W.settings} title={W.settings} onClick={() => ui.go('settings')}>
+        <LIcon name="gear" size={18} />
+      </button>
     </div>
   );
 }

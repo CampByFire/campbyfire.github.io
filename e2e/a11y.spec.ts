@@ -1,7 +1,7 @@
 // Доступность: проверка axe на главных экранах и листах, работа с клавиатуры.
 // Как звучит игра в VoiceOver и TalkBack, проверяется руками: docs/screen-reader-check.md.
 import { expect, test, type Page } from '@playwright/test';
-import { addTask, axe, openGame, sheet, tab } from './helpers';
+import { addTask, axe, openGame, openSettings, sheet, tab } from './helpers';
 
 test('axe не находит нарушений на экранах и в листах', async ({ page }) => {
   await openGame(page);
@@ -14,7 +14,7 @@ test('axe не находит нарушений на экранах и в ли�
   expect(await axe(page), 'Королевство').toEqual([]);
   await tab(page, 'Летопись').click();
   expect(await axe(page), 'Летопись').toEqual([]);
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   expect(await axe(page), 'Настройки').toEqual([]);
   await tab(page, 'Добавить задачу').click();
   expect(await axe(page), 'Новая задача').toEqual([]);

@@ -1,7 +1,7 @@
 // Строка «когда начну» и напоминания через файл календаря.
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { at, axe, openGame, sheet, tab, toast } from './helpers';
+import { at, axe, openGame, openSettings, sheet, tab, toast } from './helpers';
 
 test('«когда начну» видно у огня, а файл календаря несёт её в напоминание', async ({ page }) => {
   await openGame(page, { time: at(9) });
@@ -19,7 +19,7 @@ test('«когда начну» видно у огня, а файл календ
   const day = page.getByRole('region', { name: 'Задачи дня' });
   await expect(day.locator('.cue')).toHaveText('Когда начать: Когда приду домой, наберу номер');
 
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   const remind = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Напоминания' }) });
   await expect(remind).toContainText('утренний костёр в 09:00, 1 задача со временем');
   await remind.getByRole('radiogroup', { name: 'Утренний костёр' }).getByRole('radio', { name: 'Каждый день' }).click();
@@ -40,6 +40,6 @@ test('«когда начну» видно у огня, а файл календ
 
   // Выбор помнит устройство.
   await page.reload();
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   await expect(remind).toContainText('утренний костёр в 08:15');
 });

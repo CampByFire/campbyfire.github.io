@@ -177,6 +177,7 @@ h2.sc {
   height: calc(var(--tabbar-h) + env(safe-area-inset-bottom));
   padding-bottom: env(safe-area-inset-bottom);
   display: grid;
+  /* Лагерь, План, «+», Королевство, Летопись: «+» в средней ячейке, ровно по центру. */
   grid-template-columns: repeat(5, minmax(0, 1fr));
   border-top: 1px solid var(--line-2);
   background: #1a140f;
@@ -649,6 +650,22 @@ h2.sc {
 }
 
 .chip-alert::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+/* Шестерёнка Настроек в правом углу верхней полосы. Как и значок сохранения, нажимается шире, чем видно. */
+.chip-gear {
+  position: relative;
+  flex: none;
+  width: 30px;
+  padding: 0;
+  justify-content: center;
+  color: var(--text-hi);
+}
+
+.chip-gear::before {
   content: '';
   position: absolute;
   inset: -7px;

@@ -4,7 +4,7 @@ import { useRef, useState } from 'preact/hooks';
 import { MEETING_REMIND_MIN, REMIND_BEFORE_MIN, heroLevel } from '../game/rules';
 import { buildIcs, calendarEvents, type IcsOptions } from '../game/ics';
 import { isNewerSave, parseSave } from '../game/store';
-import { formatMinutes, plural, scheduleError } from '../game/time';
+import { formatClock, formatDate, formatMinutes, plural, scheduleError } from '../game/time';
 import type { RateEvery, Settings as Schedule } from '../game/types';
 import { RATE_EVERY_NAME, W, WEEKDAY_CHIPS } from '../game/words';
 import { GitHubError } from '../sync/github';
@@ -49,6 +49,16 @@ export function Settings({ ui }: { ui: Ui }) {
 
   return (
     <div class="page">
+      <div class="page-top">
+        <span class="page-date">
+          <LIcon name="gear" size={15} class="ic-gold" />
+          {formatDate(s.day)} · {formatClock(ui.now)}
+        </span>
+        <button class="link-btn" onClick={() => ui.go('camp')}>
+          В лагерь
+          <LIcon name="chevron" size={16} />
+        </button>
+      </div>
       <h1 class="page-title">{W.settings}</h1>
 
       <div class="hero-card">

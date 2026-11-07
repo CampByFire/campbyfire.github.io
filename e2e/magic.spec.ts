@@ -1,7 +1,7 @@
 // Магия: заклинания не держат игру, сила магии выбирается в Настройках и помнится на этом устройстве.
 // Идёт на телефоне со всей магией и на телефоне с «Уменьшить движение» в системе, где магия спокойная.
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { addTask, at, openGame, setTime, sheet, tab, toast, unlock } from './helpers';
+import { addTask, at, openGame, openSettings, setTime, sheet, tab, toast, unlock } from './helpers';
 
 /** Ошибки страницы и предупреждения магии. Их не должно быть ни одного. */
 function watchErrors(page: Page): string[] {
@@ -125,7 +125,7 @@ test('сила магии выбирается в Настройках и пом
   const reduced = await reducedMotion(page);
   await expect(html).toHaveAttribute('data-motion', reduced ? 'calm' : 'full');
 
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   const magic = page.getByRole('radiogroup', { name: 'Сколько анимаций' });
   await expect(magic.getByRole('radio', { name: reduced ? 'Спокойная' : 'Вся' })).toBeChecked();
   await magic.getByRole('radio', { name: 'Без анимаций' }).click();
@@ -135,7 +135,7 @@ test('сила магии выбирается в Настройках и пом
   await page.reload();
   await unlock(page);
   await expect(html).toHaveAttribute('data-motion', 'off');
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   await expect(magic.getByRole('radio', { name: 'Без анимаций' })).toBeChecked();
   await magic.getByRole('radio', { name: 'Вся' }).click();
   await expect(html).toHaveAttribute('data-motion', 'full');

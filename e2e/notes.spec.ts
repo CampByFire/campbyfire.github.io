@@ -1,7 +1,7 @@
 // Летопись: дневник, свои разделы и заметки. Быстрая мысль из лагеря, лента, статьи, «Назад» внутри
 // Летописи, заметки и дни дневника в GitHub отдельными файлами в notes/ и diary/.
 import { expect, test, type Page } from '@playwright/test';
-import { connectGitHub, expectNoSideScroll, fakeGitHub, openGame, sheet, tab, toast } from './helpers';
+import { connectGitHub, expectNoSideScroll, fakeGitHub, openGame, openSettings, sheet, tab, toast } from './helpers';
 
 const inCamp = (page: Page) => expect(tab(page, 'Лагерь')).toHaveAttribute('aria-current', 'page');
 
@@ -84,7 +84,7 @@ test('«Последние дни» теперь в Летописи, а рас�
   await tab(page, 'Летопись').click();
   await page.getByRole('button', { name: /Последние дни/ }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Последние дни' })).toBeVisible();
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   await expect(page.getByRole('heading', { level: 1, name: 'Настройки' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Распорядок' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Последние дни' })).toHaveCount(0);

@@ -333,7 +333,6 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
         </button>
         <TabButton icon="kingdom" label={W.realm} active={screen === 'realm'} onClick={() => ui.go('realm')} />
         <TabButton icon="scroll" label={W.chronicle} active={screen === 'notes'} onClick={() => ui.go('notes')} />
-        <TabButton icon="gear" label={W.settings} active={screen === 'settings'} onClick={() => ui.go('settings')} />
       </nav>
       {sheet && (
         <SheetLayer key={sheetKey} closing={closing}>
@@ -366,10 +365,11 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   );
 }
 
-function TabButton(p: { icon: 'campfire' | 'sunrise' | 'kingdom' | 'scroll' | 'gear'; label: string; active: boolean; onClick: () => void }) {
+// Четыре раздела и «+» ровно посередине. Настройки открываются шестерёнкой в верхней полосе Лагеря.
+function TabButton(p: { icon: 'campfire' | 'sunrise' | 'kingdom' | 'scroll'; label: string; active: boolean; onClick: () => void }) {
   return (
     <button class={`tab${p.active ? ' is-active' : ''}`} aria-current={p.active ? 'page' : undefined} onClick={p.onClick}>
-      {p.icon === 'gear' ? <LIcon name="gear" size={22} /> : <GIcon name={p.icon} size={24} />}
+      <GIcon name={p.icon} size={24} />
       {p.label}
     </button>
   );

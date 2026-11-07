@@ -1,6 +1,6 @@
 // «Стереть всё» в Настройках: игра уходит из браузера, по желанию вместе с сохранением в GitHub.
 import { expect, test } from '@playwright/test';
-import { addTask, connectGitHub, fakeGitHub, openGame, sheet, tab } from './helpers';
+import { addTask, connectGitHub, fakeGitHub, openGame, openSettings, sheet, tab } from './helpers';
 
 test('стёртая игра начинается заново со знакомства', async ({ page }) => {
   await openGame(page, { intro: true });
@@ -10,7 +10,7 @@ test('стёртая игра начинается заново со знако�
   await page.getByRole('button', { name: 'Записать мысль' }).click();
   await sheet(page, 'Записать мысль').getByLabel('Мысль').fill('Личная мысль');
   await sheet(page, 'Записать мысль').getByRole('button', { name: 'Записать', exact: true }).click();
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   await page.getByRole('button', { name: 'Стереть игру…' }).click();
   const confirm = sheet(page, 'Стереть всё');
   await expect(confirm.getByText('Часть заметок есть только в этом браузере')).toBeVisible();

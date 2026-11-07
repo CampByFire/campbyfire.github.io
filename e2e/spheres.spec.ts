@@ -1,6 +1,6 @@
 // Королевство: сферы как в колесе баланса, их оценка, проекты в сферах и напоминание оценить сферы.
 import { expect, test, type Page } from '@playwright/test';
-import { addTask, at, axe, openGame, setTime, sheet, tab, toast } from './helpers';
+import { addTask, at, axe, openGame, openSettings, setTime, sheet, tab, toast } from './helpers';
 
 /** Кнопки и поля в открытом листе, которые меньше 44×44. */
 const tooSmall = (page: Page) =>
@@ -96,7 +96,7 @@ test('проект в сфере: задачи, выполнение и возв
 
 test('напоминание оценить сферы: в Настройках, по умолчанию раз в месяц', async ({ page }) => {
   await openGame(page);
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   const every = page.getByRole('radiogroup', { name: 'Напоминать оценить сферы' });
   await expect(every.getByRole('radio', { name: 'Раз в месяц' })).toBeChecked();
   await every.getByRole('radio', { name: 'Раз в неделю' }).click();
@@ -115,7 +115,7 @@ test('напоминание оценить сферы: в Настройках,
   await expect(page.locator('.notice')).toBeHidden();
 
   // Не напоминать: подсказка не приходит.
-  await tab(page, 'Настройки').click();
+  await openSettings(page);
   await every.getByRole('radio', { name: 'Не напоминать' }).click();
   await setTime(page, at(10, 0, 30));
   await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
