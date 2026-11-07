@@ -188,11 +188,17 @@ function ProjectCard({ ui, s, q }: { ui: Ui; s: State; q: Quest }) {
   );
 }
 
-const SIZE = 240;
+const SIZE = 260;
 const R = 104;
+/** На сколько подпись с оценкой отстоит от края сектора. */
+const VALUE_GAP = 11;
+
+/** Оценка на колесе: целая без дробной части, дробная с одним знаком. */
+const scoreText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ','));
 
 /**
  * Колесо баланса: у каждой сферы свой сектор, чем выше оценка, тем дальше он от центра.
+ * Внутри сектора по дуге на каждую единицу оценки, край сектора замыкает счёт: у шестёрки ровно 6 полос.
  * Прошлая оценка видна бледным контуром. Диктору колесо не нужно: те же баллы стоят списком под ним.
  */
 function Wheel({ spheres, last, prev }: { spheres: Quest[]; last: Rating | undefined; prev: Rating | undefined }) {
@@ -200,19 +206,18 @@ function Wheel({ spheres, last, prev }: { spheres: Quest[]; last: Rating | undef
   const n = spheres.length;
   const step = (2 * Math.PI) / n;
   const point = (a: number, r: number) => `${(c + r * Math.sin(a)).toFixed(2)} ${(c - r * Math.cos(a)).toFixed(2)}`;
-  const sector = (i: number, r: number) => {
-    const a0 = i * step;
-    const a1 = (i + 1) * step;
-    if (n === 1) return `M ${point(0, r)} A ${r} ${r} 0 1 1 ${point(Math.PI, r)} A ${r} ${r} 0 1 1 ${point(0, r)} Z`;
-    return `M ${c} ${c} L ${point(a0, r)} A ${r} ${r} 0 0 1 ${point(a1, r)} Z`;
+  const arc = (i: number, r: number) => {
+    if (n === 1) return `M ${point(0, r)} A ${r} ${r} 0 1 1 ${point(Math.PI, r)} A ${r} ${r} 0 1 1 ${point(0, r)}`;
+    return `M ${point(i * step, r)} A ${r} ${r} 0 0 1 ${point((i + 1) * step, r)}`;
   };
+  const sector = (i: number, r: number) => (n === 1 ? `${arc(i, r)} Z` : `M ${c} ${c} L ${arc(i, r).slice(2)} Z`);
   const radius = (v: number | undefined) => (v === undefined ? 0 : (R * v) / SCORE_MAX);
+  /** Целые единицы ниже оценки: на них лежат дуги-деления. */
+  const units = (v: number) => Array.from({ length: Math.ceil(v) - 1 }, (_, k) => k + 1);
   return (
     <div class="wheel" aria-hidden="true">
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE}>
-        {[2, 4, 6, 8, 10].map((v) => (
-          <circle key={v} cx={c} cy={c} r={(R * v) / SCORE_MAX} class="wheel-ring" />
-        ))}
+        <circle cx={c} cy={c} r={R} class="wheel-ring" />
         {spheres.map((_, i) => (
           <line key={i} x1={c} y1={c} x2={point(i * step, R).split(' ')[0]} y2={point(i * step, R).split(' ')[1]} class="wheel-ring" />
         ))}
@@ -220,11 +225,32 @@ function Wheel({ spheres, last, prev }: { spheres: Quest[]; last: Rating | undef
           const r = radius(last?.scores[q.id]);
           return r > 0 ? <path key={q.id} d={sector(i, r)} fill={questHex(q.color)} class="wheel-sector" /> : null;
         })}
+        {spheres.map((q, i) => {
+          const v = last?.scores[q.id];
+          if (v === undefined) return null;
+          return (
+            <g key={`t-${q.id}`} class="wheel-ticks">
+              {units(v).map((k) => (
+                <path key={k} d={arc(i, radius(k))} />
+              ))}
+            </g>
+          );
+        })}
         {prev &&
           spheres.map((q, i) => {
             const r = radius(prev.scores[q.id]);
             return r > 0 ? <path key={`p-${q.id}`} d={sector(i, r)} class="wheel-prev" /> : null;
           })}
+        {spheres.map((q, i) => {
+          const v = last?.scores[q.id];
+          if (v === undefined) return null;
+          const [x, y] = point((i + 0.5) * step, radius(v) + VALUE_GAP).split(' ');
+          return (
+            <text key={`v-${q.id}`} x={x} y={y} class="wheel-value">
+              {scoreText(v)}
+            </text>
+          );
+        })}
       </svg>
     </div>
   );

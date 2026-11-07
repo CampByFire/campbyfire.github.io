@@ -33,6 +33,10 @@ test('оценка сфер рисует колесо, а вторая оцен�
   await expect(toast(page)).toHaveText('Оценка сохранена');
   await expect(page.locator('.wheel-legend li').first()).toContainText('8 из 10');
   await expect(page.locator('.wheel-sector')).toHaveCount(8);
+  // У оценки 8 внутри сектора 7 дуг, восьмую полосу замыкает его край, а рядом стоит сама цифра.
+  await expect(page.locator('.wheel-ticks').first().locator('path')).toHaveCount(7);
+  await expect(page.locator('.wheel-value')).toHaveCount(8);
+  await expect(page.locator('.wheel-value').first()).toHaveText('8');
   expect(await axe(page), 'Королевство с колесом').toEqual([]);
 
   // Через неделю оценка ниже: в легенде видно, на сколько, а на колесе бледный контур прошлой.
