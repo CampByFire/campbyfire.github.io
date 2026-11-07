@@ -18,7 +18,8 @@ test('мысль из лагеря: первый раз заводит разд�
   await expect(toast(page)).toHaveText('Записал, не потеряется');
   await inCamp(page);
 
-  await page.locator('.camp-book').getByRole('button', { name: 'Летопись' }).click();
+  await expect(page.locator('.camp-book').getByRole('button', { name: 'Летопись' })).toHaveCount(0);
+  await tab(page, 'Летопись').click();
   await expect(page.getByRole('heading', { level: 1, name: 'Летопись' })).toBeVisible();
   await expect(page.getByText('Заметки пока только в этом браузере')).toBeVisible();
   await page.getByRole('button', { name: /^Идеи/ }).click();
