@@ -8,12 +8,12 @@ import type { Ui } from './App';
 import { LIcon } from './Icon';
 import { Sheet } from './Sheets';
 
-export function MeetingSheet({ ui, meetingId, day: preset }: { ui: Ui; meetingId?: string; day?: DayKey }) {
+export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui: Ui; meetingId?: string; day?: DayKey; at?: string }) {
   const s = ui.store.state;
   const editing = meetingId ? findMeeting(s, meetingId) : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
   const [day, setDay] = useState<DayKey>(editing?.day ?? preset ?? s.day);
-  const [at, setAt] = useState(editing?.at ?? '');
+  const [at, setAt] = useState(editing?.at ?? atPreset ?? '');
   const [until, setUntil] = useState(editing?.until ?? '');
   const [place, setPlace] = useState(editing?.place ?? '');
   // Что выбрали руками, сильнее слов во фразе.

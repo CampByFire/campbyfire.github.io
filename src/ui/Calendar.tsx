@@ -1,9 +1,10 @@
 // Календарь: месяц сеткой и что стоит на выбранный день. Встречи живут только здесь,
 // а задачи берутся из игры: на какой день позваны к костру, какой у них срок, когда придут повторы.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { agendaOf, dayCount, monthOf, monthWeeks, shiftMonth, type AgendaItem, type MonthKey } from '../game/calendar';
+import { SLOT_MIN_SHOWN, agendaOf, dayCount, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
+import { questHex } from '../game/color';
 import { findQuest } from '../game/state';
-import { addDays, formatClock, formatDate, parseDay } from '../game/time';
+import { addDays, formatClock, formatDate, minutesOfDay, parseDay } from '../game/time';
 import type { DayKey, State } from '../game/types';
 import { MONTH_NAME, MONTH_OF, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
 import type { Ui } from './App';
@@ -13,10 +14,10 @@ import { QuestDot } from './parts';
 /** Какой день был выбран: вернувшись в календарь, игрок видит тот же. Сбрасывается на сегодня с новым днём. */
 let picked: { day: DayKey; on: DayKey } | null = null;
 
-/** Открыть календарь сразу на нужном дне, например на завтра. */
+/** Открыть в календаре день шкалой по часам, например завтрашний. Вернувшись к месяцу, игрок увидит этот день выбранным. */
 export function openCalendar(ui: Ui, day: DayKey): void {
   picked = { day, on: ui.store.state.day };
-  ui.go('calendar');
+  ui.openDay(day);
 }
 
 const WEEK_HEAD = [1, 2, 3, 4, 5, 6, 0];
@@ -47,6 +48,11 @@ function countOf(items: AgendaItem[]): { meetings: number; tasks: number } {
 }
 
 export function CalendarScreen({ ui }: { ui: Ui }) {
+  if (ui.calDay) return <DayView key={ui.calDay} ui={ui} day={ui.calDay} />;
+  return <MonthView ui={ui} />;
+}
+
+function MonthView({ ui }: { ui: Ui }) {
   const s = ui.store.state;
   const start = picked && picked.on === s.day ? picked.day : s.day;
   const [day, setDayState] = useState<DayKey>(start);
@@ -57,6 +63,11 @@ export function CalendarScreen({ ui }: { ui: Ui }) {
     setMonth(monthOf(d));
   };
   const tomorrow = addDays(s.day, 1);
+  /** Открыть день шкалой по часам; вернувшись к месяцу, он будет выбран. */
+  const open = (d: DayKey) => {
+    setDay(d);
+    ui.openDay(d);
+  };
   return (
     <div class="page">
       <div class="page-top">
@@ -73,10 +84,10 @@ export function CalendarScreen({ ui }: { ui: Ui }) {
       <p class="page-sub">{tomorrowNews(s)}.</p>
 
       <div class="cal-jump">
-        <button class={`chipbtn${day === s.day ? ' is-on' : ''}`} aria-pressed={day === s.day} onClick={() => setDay(s.day)}>
+        <button class="chipbtn" onClick={() => open(s.day)}>
           Сегодня
         </button>
-        <button class={`chipbtn${day === tomorrow ? ' is-on' : ''}`} aria-pressed={day === tomorrow} onClick={() => setDay(tomorrow)}>
+        <button class="chipbtn" onClick={() => open(tomorrow)}>
           Завтра
         </button>
       </div>
@@ -93,7 +104,7 @@ export function CalendarScreen({ ui }: { ui: Ui }) {
         </button>
       </div>
 
-      <MonthGrid s={s} month={month} day={day} onPick={setDay} />
+      <MonthGrid s={s} month={month} day={day} onPick={setDay} onOpen={open} />
 
       <DayAgenda ui={ui} day={day} />
     </div>
@@ -102,9 +113,10 @@ export function CalendarScreen({ ui }: { ui: Ui }) {
 
 /**
  * Месяц сеткой. Дни это кнопки: Tab попадает на выбранный день, стрелки ходят по дням и неделям,
- * Home и End к началу и концу недели. Диктор слышит дату и сколько на ней встреч и задач.
+ * Home и End к началу и концу недели, нажатие открывает день шкалой по часам. Диктор слышит дату
+ * и сколько на ней встреч и задач.
  */
-function MonthGrid({ s, month, day, onPick }: { s: State; month: MonthKey; day: DayKey; onPick: (d: DayKey) => void }) {
+function MonthGrid({ s, month, day, onPick, onOpen }: { s: State; month: MonthKey; day: DayKey; onPick: (d: DayKey) => void; onOpen: (d: DayKey) => void }) {
   const weeks = monthWeeks(month);
   const focusable = monthOf(day) === month ? day : `${month}-01`;
   // День, на который ушли стрелкой: фокус встаёт на него, как только сетка перерисована (и в другом месяце тоже).
@@ -153,7 +165,7 @@ function MonthGrid({ s, month, day, onPick }: { s: State; month: MonthKey; day: 
                     aria-pressed={d === day}
                     aria-current={d === s.day ? 'date' : undefined}
                     tabIndex={d === focusable ? 0 : -1}
-                    onClick={() => onPick(d)}
+                    onClick={() => onOpen(d)}
                     onKeyDown={(e) => onKey(e, d)}
                   >
                     <span class="cal-num" aria-hidden="true">
@@ -182,6 +194,10 @@ function DayAgenda({ ui, day }: { ui: Ui; day: DayKey }) {
     <section class="group cal-agenda">
       <div class="group-head">
         <h2 class="sc">{dayTitle(day, s.day)}</h2>
+        <button class="link-btn" onClick={() => ui.openDay(day)}>
+          по часам
+          <LIcon name="chevron" size={15} />
+        </button>
       </div>
       {items.length === 0 && <p class="note">{past ? 'В этот день ничего не было.' : 'Ничего не запланировано.'}</p>}
       {items.length > 0 && (
@@ -193,20 +209,211 @@ function DayAgenda({ ui, day }: { ui: Ui; day: DayKey }) {
           ))}
         </ul>
       )}
-      <div class="cal-add">
-        <button class="btn btn-ghost" onClick={() => ui.open({ kind: 'meeting', day })}>
-          <LIcon name="plus" size={16} />
-          Встреча
-        </button>
-        {!past && (
-          <button class="btn btn-ghost" onClick={() => ui.open({ kind: 'add', day })}>
-            <LIcon name="plus" size={16} />
-            Задача
-          </button>
-        )}
-      </div>
+      <AddButtons ui={ui} day={day} />
       {!past && <p class="note">Задача на этот день сама придёт к костру утром. Встреча к костру не идёт и опыта не даёт: она просто стоит в календаре и в плане своего дня.</p>}
     </section>
+  );
+}
+
+/** «+ Встреча» и «+ Задача» на этот день. Задачу в прошлое не добавить. */
+function AddButtons({ ui, day, small = false }: { ui: Ui; day: DayKey; small?: boolean }) {
+  const past = day < ui.store.state.day;
+  const cls = `btn btn-ghost${small ? ' btn-sm' : ''}`;
+  return (
+    <div class="cal-add">
+      <button class={cls} onClick={() => ui.open({ kind: 'meeting', day })}>
+        <LIcon name="plus" size={16} />
+        Встреча
+      </button>
+      {!past && (
+        <button class={cls} onClick={() => ui.open({ kind: 'add', day })}>
+          <LIcon name="plus" size={16} />
+          Задача
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Высота часа на шкале дня, в пикселях. */
+const HOUR_PX = 56;
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const hm = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+
+/**
+ * День шкалой по часам, как в календаре телефона. Сверху то, что без времени («Весь день»),
+ * ниже часы с делами. Нажатие на пустое место шкалы заводит встречу на этот час. Стрелки
+ * у заголовка и смахивание вбок листают дни.
+ */
+function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
+  const s = ui.store.state;
+  const items = agendaOf(s, day);
+  const allDay = items.filter((x) => !x.at);
+  const slots = timelineOf(items);
+  const c = countOf(items);
+  const box = useRef<HTMLDivElement>(null);
+  const isToday = day === s.day;
+  const nowMin = minutesOfDay(ui.now);
+
+  // Шкала сразу открывается там, где интересно: сегодня около «сейчас», в другой день у первого дела, иначе с утра.
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const from = isToday && nowMin < 24 * 60 ? nowMin - 60 : slots.length ? slots[0].start - 30 : 8 * 60;
+    el.scrollTop = Math.max(0, (from / 60) * HOUR_PX);
+  }, [day]);
+
+  const go = (n: number) => ui.openDay(addDays(day, n));
+  const touch = useRef<{ x: number; y: number } | null>(null);
+  const newAt = (e: MouseEvent) => {
+    if ((e.target as HTMLElement).closest('.tl-ev')) return;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const h = Math.min(23, Math.max(0, Math.floor((e.clientY - rect.top) / HOUR_PX)));
+    ui.open({ kind: 'meeting', day, at: `${String(h).padStart(2, '0')}:00` });
+  };
+  const what = agendaCount(c.meetings, c.tasks);
+  const rel = dayTitle(day, s.day).split(',')[0];
+  return (
+    <div class="page cal-dayview">
+      <div class="page-top">
+        <button class="link-btn" onClick={() => ui.openDay(null)}>
+          <LIcon name="back" size={16} />
+          {monthName(monthOf(day), s.day)}
+        </button>
+        <button class="link-btn" onClick={() => ui.go('camp')}>
+          В лагерь
+          <LIcon name="chevron" size={16} />
+        </button>
+      </div>
+      <div class="period-nav tl-nav">
+        <button class="icon-btn" aria-label={`Раньше: ${dayTitle(addDays(day, -1), s.day)}`} onClick={() => go(-1)}>
+          <LIcon name="back" size={18} />
+        </button>
+        <div class="period-title">
+          <h1 class="tl-title">{dayLong(day, s.day)}</h1>
+          <span>
+            {/^(Сегодня|Завтра|Вчера)$/.test(rel) ? `${rel} · ` : ''}
+            {what || 'ничего не запланировано'}
+          </span>
+        </div>
+        <button class="icon-btn" aria-label={`Позже: ${dayTitle(addDays(day, 1), s.day)}`} onClick={() => go(1)}>
+          <LIcon name="chevron" size={18} />
+        </button>
+      </div>
+      {!isToday && (
+        <button class="link-btn period-back" onClick={() => ui.openDay(s.day)}>
+          К сегодняшнему дню
+        </button>
+      )}
+      <AddButtons ui={ui} day={day} small />
+
+      {allDay.length > 0 && (
+        <section class="tl-allday" aria-labelledby="tl-allday-h">
+          <h2 class="sc" id="tl-allday-h">
+            Весь день
+          </h2>
+          <ul class="cal-list">
+            {allDay.map((x) => (
+              <li key={key(x)}>
+                <AgendaRow ui={ui} s={s} x={x} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      <section
+        class="tl-scroll"
+        ref={box}
+        tabIndex={0}
+        aria-label="По часам"
+        onTouchStart={(e) => {
+          const t = e.touches[0];
+          touch.current = { x: t.clientX, y: t.clientY };
+        }}
+        onTouchEnd={(e) => {
+          const from = touch.current;
+          touch.current = null;
+          const t = e.changedTouches[0];
+          if (!from || !t) return;
+          const dx = t.clientX - from.x;
+          if (Math.abs(dx) > 70 && Math.abs(t.clientY - from.y) < 40) go(dx < 0 ? 1 : -1);
+        }}
+      >
+        <div class="tl" style={{ height: `${24 * HOUR_PX}px` }} onClick={newAt}>
+          {HOURS.map((h) => (
+            <div key={h} class="tl-hour" style={{ top: `${h * HOUR_PX}px` }} aria-hidden="true">
+              <span class="tl-label">{h ? `${h}:00` : ''}</span>
+            </div>
+          ))}
+          {isToday && nowMin < 24 * 60 && <div class="tl-now" style={{ top: `${(nowMin / 60) * HOUR_PX}px` }} aria-hidden="true" />}
+          {slots.length === 0 && <p class="tl-empty">Нажми на час, чтобы добавить встречу</p>}
+          <ul class="tl-evs">
+            {slots.map((x) => (
+              <li
+                key={key(x.item)}
+                class="tl-slot"
+                style={{
+                  top: `${(x.start / 60) * HOUR_PX}px`,
+                  height: `${Math.max(((x.end - x.start) / 60) * HOUR_PX, (SLOT_MIN_SHOWN / 60) * HOUR_PX) - 2}px`,
+                  left: `calc(var(--tl-gutter) + (100% - var(--tl-gutter)) * ${x.col / x.cols})`,
+                  width: `calc((100% - var(--tl-gutter)) / ${x.cols} - 3px)`,
+                }}
+              >
+                <TimelineEvent ui={ui} s={s} slot={x} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** «Суббота, 8 ноября» без «Сегодня» и «Завтра»: они стоят строкой ниже. */
+function dayLong(day: DayKey, today: DayKey): string {
+  const t = dayTitle(day, today);
+  return /^(Сегодня|Завтра|Вчера), /.test(t) ? t.replace(/^[^,]+, /, '').replace(/^./, (c) => c.toUpperCase()) : t;
+}
+
+/** Дело на шкале дня: название, часы и что это такое. Нажатие открывает его лист. */
+function TimelineEvent({ ui, s, slot }: { ui: Ui; s: State; slot: Slot }) {
+  const x = slot.item;
+  const range = `${hm(slot.start)}–${hm(slot.end)}`;
+  let title: string;
+  let kind: string;
+  let cls = 'tl-ev';
+  let open: () => void;
+  let color: string | undefined;
+  if (x.kind === 'meeting') {
+    title = x.meeting.title;
+    kind = ['встреча', x.meeting.place].filter(Boolean).join(' · ');
+    cls += ' tl-ev-meet';
+    open = () => ui.open({ kind: 'meeting', meetingId: x.meeting.id });
+  } else if (x.kind === 'routine') {
+    title = x.routine.title;
+    kind = 'повторяется';
+    cls += ' tl-ev-routine';
+    open = () => ui.open({ kind: 'routine', routineId: x.routine.id });
+    color = questHex(findQuest(s, x.routine.questId)?.color);
+  } else {
+    title = x.task.title;
+    kind = x.kind === 'task' && x.done ? 'сделано' : 'задача';
+    if (x.kind === 'task' && x.done) cls += ' tl-ev-done';
+    open = () => ui.open({ kind: 'task', taskId: x.task.id });
+    color = questHex(findQuest(s, x.task.questId)?.color);
+  }
+  const short = slot.end - slot.start <= 30;
+  return (
+    <button class={`${cls}${short ? ' is-short' : ''}`} style={color ? { borderLeftColor: color } : undefined} aria-label={`${range}, ${title}, ${kind}`} onClick={open}>
+      <span class="tl-ev-title" aria-hidden="true">
+        {title}
+      </span>
+      <span class="tl-ev-sub" aria-hidden="true">
+        {range}
+        {x.kind === 'meeting' && x.meeting.place ? ` · ${x.meeting.place}` : ''}
+      </span>
+    </button>
   );
 }
 

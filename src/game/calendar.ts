@@ -1,6 +1,7 @@
 // Календарь: встречи и что стоит на каждый день. Встречи живут в State.meetings, а дела берутся
 // из задач (день у костра, срок, сделано в этот день) и повторяющихся задач.
 import { parsePhrase } from './phrase';
+import { EVENT_MIN, MEETING_MIN, estimateOf } from './rules';
 import { nextId, waitingOf } from './state';
 import { addDays, parseDay, repeatsOn } from './time';
 import type { DayKey, Meeting, Routine, State, Task } from './types';
@@ -183,4 +184,65 @@ export function parseMeeting(text: string, today: DayKey): { title: string; day?
   const day = p.day ?? p.due;
   if (!day && !at) return { title: text.trim() };
   return { title, ...(day ? { day } : {}), ...(at ? { at } : {}) };
+}
+
+/** Строка дня на шкале времени: с какой по какую минуту и в какой колонке, если дела накладываются. */
+export interface Slot {
+  item: AgendaItem;
+  /** Минуты от полуночи. */
+  start: number;
+  end: number;
+  /** Колонка и сколько всего колонок в группе дел, которые накладываются друг на друга. */
+  col: number;
+  cols: number;
+}
+
+const DAY_END = 24 * 60;
+/** Короче этого дело на шкале не рисуется, чтобы название читалось; накладки считаются по этой длине. */
+export const SLOT_MIN_SHOWN = 30;
+
+const toMin = (at: string) => Number(at.slice(0, 2)) * 60 + Number(at.slice(3, 5));
+
+/** Сколько длится строка дня: встреча до своего конца или час, задача по оценке или полчаса. */
+function lengthOf(x: AgendaItem): number {
+  if (x.kind === 'meeting') return x.meeting.until && x.at ? toMin(x.meeting.until) - toMin(x.at) : MEETING_MIN;
+  if (x.kind === 'routine') return x.routine.estimateMin ?? EVENT_MIN;
+  return Math.min(estimateOf(x.task) ?? EVENT_MIN, 8 * 60);
+}
+
+/**
+ * Шкала дня как в календаре телефона: всё со временем раскладывается по часам. Дела, которые
+ * накладываются, встают рядом в колонки, каждая группа накладок делит ширину поровну.
+ * Без времени на шкалу не попадает: это строка «Весь день».
+ */
+export function timelineOf(items: AgendaItem[]): Slot[] {
+  const slots = items
+    .filter((x) => x.at)
+    .map((item) => {
+      const start = toMin(item.at!);
+      return { item, start, end: Math.min(DAY_END, start + Math.max(5, lengthOf(item))), col: 0, cols: 1 };
+    })
+    .sort((a, b) => a.start - b.start || b.end - a.end);
+  let group: Slot[] = [];
+  let colEnds: number[] = [];
+  let groupEnd = -1;
+  const close = () => {
+    for (const x of group) x.cols = colEnds.length;
+    group = [];
+    colEnds = [];
+  };
+  for (const x of slots) {
+    const shownEnd = Math.max(x.end, x.start + SLOT_MIN_SHOWN);
+    if (x.start >= groupEnd) close();
+    let col = colEnds.findIndex((e) => e <= x.start);
+    if (col < 0) {
+      col = colEnds.length;
+      colEnds.push(shownEnd);
+    } else colEnds[col] = shownEnd;
+    x.col = col;
+    group.push(x);
+    groupEnd = Math.max(groupEnd, shownEnd);
+  }
+  close();
+  return slots;
 }

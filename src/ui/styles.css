@@ -2965,3 +2965,176 @@ button.trophy {
 .cal-agenda .note {
   margin-top: 8px;
 }
+
+/* ---------- шкала дня ---------- */
+.cal-dayview {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+.cal-dayview > * {
+  flex: none;
+}
+.tl-nav {
+  margin-top: 6px;
+}
+.tl-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 21px;
+  color: var(--text-hi);
+}
+.cal-dayview .cal-add {
+  margin-top: 8px;
+}
+.tl-allday {
+  margin-top: 10px;
+  max-height: 30vh;
+  overflow-y: auto;
+}
+.tl-allday .cal-time {
+  display: none;
+}
+.tl-allday .cal-row {
+  min-height: 46px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+@media (max-height: 700px) {
+  .tl-allday {
+    max-height: 20vh;
+  }
+  .cal-dayview .period-back {
+    margin-top: 0;
+  }
+}
+.tl-allday .sc {
+  font-size: 13.5px;
+  margin: 0 0 6px;
+}
+.tl-scroll {
+  --tl-gutter: 46px;
+  flex: 1 1 auto;
+  min-height: 160px;
+  margin: 10px -16px 0;
+  padding: 0 12px 0 4px;
+  overflow-y: auto;
+  border-top: 1px solid var(--line-2);
+}
+.tl {
+  position: relative;
+  margin: 8px 0 16px;
+  cursor: pointer;
+}
+.tl-hour {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0;
+  border-top: 1px solid var(--line);
+  margin-left: var(--tl-gutter);
+}
+.tl-label {
+  position: absolute;
+  left: calc(-1 * var(--tl-gutter));
+  top: -8px;
+  width: calc(var(--tl-gutter) - 8px);
+  text-align: right;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.tl-now {
+  position: absolute;
+  left: calc(var(--tl-gutter) - 5px);
+  right: 0;
+  height: 2px;
+  background: var(--red-text);
+  z-index: 2;
+  pointer-events: none;
+}
+.tl-now::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -4px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--red-text);
+}
+.tl-empty {
+  position: absolute;
+  left: var(--tl-gutter);
+  right: 0;
+  top: calc(8 * 56px + 14px);
+  margin: 0;
+  text-align: center;
+  font-size: 14px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.tl-evs {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.tl-slot {
+  position: absolute;
+  z-index: 1;
+}
+.tl-ev {
+  width: 100%;
+  height: 100%;
+  min-height: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 0;
+  border-left: 4px solid var(--gold);
+  border-radius: 7px;
+  background: #4a3a22;
+  color: var(--text-hi);
+  text-align: left;
+  cursor: pointer;
+}
+.tl-ev-meet {
+  border-left-color: var(--mana-text);
+  background: #2f3b63;
+}
+.tl-ev-routine {
+  background: repeating-linear-gradient(135deg, #4a3a22 0 8px, #43341f 8px 16px);
+}
+.tl-ev-done {
+  opacity: 0.7;
+}
+.tl-ev-done .tl-ev-title {
+  text-decoration: line-through;
+}
+.tl-ev-title {
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tl-ev-sub {
+  max-width: 100%;
+  font-size: 12px;
+  color: #e3d6bd;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tl-ev.is-short {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding-top: 0;
+  padding-bottom: 0;
+}

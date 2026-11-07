@@ -1,6 +1,6 @@
 // Календарь: встречи, что стоит на день, сетка месяца, файл календаря и слияние встреч.
 import { describe, expect, it } from 'vitest';
-import { addMeeting, agendaOf, cleanTime, parseMeeting, dayCount, findMeeting, meetingsOn, monthWeeks, removeMeeting, restoreMeeting, shiftMonth, updateMeeting } from '../src/game/calendar';
+import { addMeeting, agendaOf, cleanTime, parseMeeting, timelineOf, dayCount, findMeeting, meetingsOn, monthWeeks, removeMeeting, restoreMeeting, shiftMonth, updateMeeting } from '../src/game/calendar';
 import { buildIcs } from '../src/game/ics';
 import { mergeGames } from '../src/game/merge';
 import { addRoutine, addTask, complete, newState, planTask, settle } from '../src/game/state';
@@ -99,6 +99,38 @@ describe('что стоит на день', () => {
     expect(titles(s, '2026-10-24')).not.toContain('Сдать отчёт');
     // Сделанная задача в счёт дня не идёт, остаётся только зарядка.
     expect(dayCount(s, s.day).tasks).toBe(1);
+  });
+});
+
+describe('шкала дня', () => {
+  it('дела со временем по часам, накладки встают рядом, без времени на шкалу не попадает', () => {
+    const s = newState(at(8));
+    const q = s.quests[0].id;
+    const day = '2026-10-24';
+    addMeeting(s, at(8), { title: 'Стоматолог', day, at: '10:00', until: '11:00' });
+    addMeeting(s, at(8), { title: 'Созвон', day, at: '10:30' });
+    addTask(s, at(8), { title: 'Отчёт', questId: q, day, at: '10:45', estimateMin: 15 });
+    addMeeting(s, at(8), { title: 'Ужин', day, at: '19:00' });
+    addMeeting(s, at(8), { title: 'Весь день', day });
+    const slots = timelineOf(agendaOf(s, day));
+    const by = (t: string) => slots.find((x) => (x.item.kind === 'meeting' ? x.item.meeting.title : x.item.kind === 'task' ? x.item.task.title : '') === t)!;
+    expect(slots).toHaveLength(4);
+    expect(by('Стоматолог')).toMatchObject({ start: 600, end: 660, col: 0, cols: 3 });
+    expect(by('Созвон')).toMatchObject({ start: 630, end: 690, col: 1, cols: 3 });
+    expect(by('Отчёт')).toMatchObject({ start: 645, end: 660, col: 2, cols: 3 });
+    expect(by('Ужин')).toMatchObject({ start: 1140, end: 1200, col: 0, cols: 1 });
+  });
+
+  it('свободная колонка занимается снова, поздняя встреча не уходит за полночь', () => {
+    const s = newState(at(8));
+    const day = '2026-10-24';
+    addMeeting(s, at(8), { title: 'А', day, at: '09:00', until: '10:00' });
+    addMeeting(s, at(8), { title: 'Б', day, at: '09:30', until: '11:00' });
+    addMeeting(s, at(8), { title: 'В', day, at: '10:00', until: '10:30' });
+    addMeeting(s, at(8), { title: 'Ночь', day, at: '23:30' });
+    const slots = timelineOf(agendaOf(s, day));
+    expect(slots.map((x) => [x.col, x.cols])).toEqual([[0, 2], [1, 2], [0, 2], [0, 1]]);
+    expect(slots[3].end).toBe(24 * 60);
   });
 });
 

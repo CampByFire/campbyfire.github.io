@@ -3,6 +3,7 @@ import type { Store } from '../game/store';
 import type { Notes } from '../notes/notes';
 import type { Sync } from '../sync/sync';
 import type { CompleteResult } from '../game/state';
+import type { DayKey } from '../game/types';
 import { W } from '../game/words';
 import { CalendarScreen } from './Calendar';
 import { Camp } from './Camp';
@@ -48,6 +49,10 @@ export interface Ui {
   section: string | null;
   /** Открыть раздел Летописи (и саму Летопись) или вернуться к списку разделов. */
   openSection(slug: string | null): void;
+  /** День, открытый в Календаре шкалой по часам; null, когда виден месяц. */
+  calDay: DayKey | null;
+  /** Открыть в Календаре шкалу дня или вернуться к месяцу. */
+  openDay(day: DayKey | null): void;
   open(sheet: SheetState): void;
   close(): void;
   /** Короткое сообщение внизу; с действием живёт дольше, чтобы успеть нажать. */
@@ -87,6 +92,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   const s = store.state;
   const [screen, setScreen] = useState<Screen>(() => (s.litDay !== s.day && s.closedDay !== s.day ? 'plan' : 'camp'));
   const [section, setSection] = useState<string | null>(null);
+  const [calDay, setCalDay] = useState<DayKey | null>(null);
   const [sheet, setSheet] = useState<SheetState | null>(null);
   /** Лист закрыт, но ещё уезжает вниз. */
   const [closing, setClosing] = useState(false);
@@ -252,6 +258,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
       if (sc !== screen) pageLeave(main.current);
       setScreen(sc);
       if (sc === 'notes' && screen === 'notes') setSection(null);
+      if (sc === 'calendar') setCalDay(null);
     },
     section: screen === 'notes' ? section : null,
     openSection: (slug) => {
@@ -259,6 +266,13 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
       if (screen !== 'notes' || slug !== section) pageLeave(main.current);
       setSection(slug);
       setScreen('notes');
+    },
+    calDay: screen === 'calendar' ? calDay : null,
+    openDay: (day) => {
+      closeSheet();
+      if (screen !== 'calendar' || day !== calDay) pageLeave(main.current);
+      setCalDay(day);
+      setScreen('calendar');
     },
     open: (next) => {
       if (!sheetShown.current) opener.current = spotOf(document.activeElement);
@@ -289,11 +303,12 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   };
 
   // «Назад» на телефоне закрывает знакомство или лист, из раздела Летописи ведёт к списку разделов,
-  // с других разделов в Лагерь, и только из Лагеря без открытых листов выходит из приложения.
-  const inSection = screen === 'notes' && section !== null;
+  // из шкалы дня в Календаре к месяцу, с других разделов в Лагерь, и только из Лагеря без открытых листов выходит из приложения.
+  const inSection = (screen === 'notes' && section !== null) || (screen === 'calendar' && calDay !== null);
   useBackButton((covered ? 1 : 0) + (screen !== 'camp' ? 1 : 0) + (inSection ? 1 : 0), () => {
     if (intro) closeIntro();
     else if (sheetShown.current) (sheetBack() ?? closeSheet)();
+    else if (inSection && screen === 'calendar') ui.openDay(null);
     else if (inSection) ui.openSection(null);
     else if (screen !== 'camp') ui.go('camp');
   });

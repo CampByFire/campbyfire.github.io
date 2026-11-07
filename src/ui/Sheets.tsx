@@ -103,7 +103,7 @@ export type SheetState =
   | { kind: 'section'; slug?: string }
   | { kind: 'diary'; path: string; entry: DiaryEntry }
   | { kind: 'welcome' }
-  | { kind: 'meeting'; meetingId?: string; day?: DayKey };
+  | { kind: 'meeting'; meetingId?: string; day?: DayKey; at?: string };
 
 export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
   switch (sheet.kind) {
@@ -150,7 +150,7 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
     case 'welcome':
       return <WelcomeSheet ui={ui} />;
     case 'meeting':
-      return <MeetingSheet key={sheet.meetingId ?? sheet.day ?? ''} ui={ui} meetingId={sheet.meetingId} day={sheet.day} />;
+      return <MeetingSheet key={sheet.meetingId ?? `${sheet.day ?? ''}${sheet.at ?? ''}`} ui={ui} meetingId={sheet.meetingId} day={sheet.day} at={sheet.at} />;
   }
 }
 
