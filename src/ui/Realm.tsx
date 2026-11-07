@@ -199,6 +199,7 @@ const scoreText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1)
 /**
  * Колесо баланса: у каждой сферы свой сектор, чем выше оценка, тем дальше он от центра.
  * Внутри сектора по дуге на каждую единицу оценки, край сектора замыкает счёт: у шестёрки ровно 6 полос.
+ * Дальше до обода шкала продолжается дугами потише, чтобы было видно, сколько осталось до 10.
  * Прошлая оценка видна бледным контуром. Диктору колесо не нужно: те же баллы стоят списком под ним.
  */
 function Wheel({ spheres, last, prev }: { spheres: Quest[]; last: Rating | undefined; prev: Rating | undefined }) {
@@ -212,12 +213,24 @@ function Wheel({ spheres, last, prev }: { spheres: Quest[]; last: Rating | undef
   };
   const sector = (i: number, r: number) => (n === 1 ? `${arc(i, r)} Z` : `M ${c} ${c} L ${arc(i, r).slice(2)} Z`);
   const radius = (v: number | undefined) => (v === undefined ? 0 : (R * v) / SCORE_MAX);
-  /** Целые единицы ниже оценки: на них лежат дуги-деления. */
-  const units = (v: number) => Array.from({ length: Math.ceil(v) - 1 }, (_, k) => k + 1);
+  /** Целые единицы шкалы внутри обода: на них лежат дуги-деления. */
+  const units = Array.from({ length: SCORE_MAX - 1 }, (_, k) => k + 1);
   return (
     <div class="wheel" aria-hidden="true">
       <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE}>
         <circle cx={c} cy={c} r={R} class="wheel-ring" />
+        {spheres.map((q, i) => {
+          const v = last?.scores[q.id] ?? 0;
+          return (
+            <g key={`e-${q.id}`} class="wheel-ticks-empty">
+              {units
+                .filter((k) => k > v)
+                .map((k) => (
+                  <path key={k} d={arc(i, radius(k))} />
+                ))}
+            </g>
+          );
+        })}
         {spheres.map((_, i) => (
           <line key={i} x1={c} y1={c} x2={point(i * step, R).split(' ')[0]} y2={point(i * step, R).split(' ')[1]} class="wheel-ring" />
         ))}
@@ -230,9 +243,11 @@ function Wheel({ spheres, last, prev }: { spheres: Quest[]; last: Rating | undef
           if (v === undefined) return null;
           return (
             <g key={`t-${q.id}`} class="wheel-ticks">
-              {units(v).map((k) => (
-                <path key={k} d={arc(i, radius(k))} />
-              ))}
+              {units
+                .filter((k) => k < v)
+                .map((k) => (
+                  <path key={k} d={arc(i, radius(k))} />
+                ))}
             </g>
           );
         })}

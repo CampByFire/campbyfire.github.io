@@ -18,6 +18,8 @@ test('оценка сфер рисует колесо, а вторая оцен�
   await expect(page.getByRole('heading', { name: 'Колесо баланса' })).toBeVisible();
   await expect(page.locator('.wheel-legend li')).toHaveCount(8);
   await expect(page.locator('.wheel-legend')).toContainText('нет оценки');
+  // Без оценки вся шкала пустая: 9 тихих дуг, десятая единица это обод.
+  await expect(page.locator('.wheel-ticks-empty').first().locator('path')).toHaveCount(9);
 
   await page.getByRole('button', { name: 'Оценить сферы' }).click();
   const rate = sheet(page, 'Оценить сферы');
@@ -35,6 +37,7 @@ test('оценка сфер рисует колесо, а вторая оцен�
   await expect(page.locator('.wheel-sector')).toHaveCount(8);
   // У оценки 8 внутри сектора 7 дуг, восьмую полосу замыкает его край, а рядом стоит сама цифра.
   await expect(page.locator('.wheel-ticks').first().locator('path')).toHaveCount(7);
+  await expect(page.locator('.wheel-ticks-empty').first().locator('path')).toHaveCount(1);
   await expect(page.locator('.wheel-value')).toHaveCount(8);
   await expect(page.locator('.wheel-value').first()).toHaveText('8');
   expect(await axe(page), 'Королевство с колесом').toEqual([]);

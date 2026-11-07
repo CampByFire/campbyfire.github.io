@@ -2595,8 +2595,14 @@ h2.sc {
 
 .wheel-ticks {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.45);
-  stroke-width: 1;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 0.75;
+}
+
+.wheel-ticks-empty {
+  fill: none;
+  stroke: rgba(255, 236, 200, 0.1);
+  stroke-width: 0.75;
 }
 
 .wheel-prev {
