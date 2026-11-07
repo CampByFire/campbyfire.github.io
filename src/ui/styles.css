@@ -232,6 +232,7 @@ h2.sc {
 /* ---------- лагерь ---------- */
 
 .camp {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -772,12 +773,96 @@ h2.sc {
   padding-bottom: 6px;
 }
 
+/*
+ * Шторка задач дня. Свёрнутая стоит под сценой. Развёрнутая лежит поверх сцены от нижнего края
+ * до верхней полосы, её высоту ставит Camp.tsx, а список внутри прокручивается сам.
+ */
+.sheet.is-up {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: height 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.sheet.is-dragging {
+  transition: none;
+}
+.sheet.is-up .sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Пока шторку тянут пальцем, страница не прокручивается и не обновляется. */
+.sheet {
+  overscroll-behavior: contain;
+}
+
+.sheet-space {
+  flex: none;
+}
+
+/* Сцена под развёрнутой шторкой притушена; нажатие на неё шторку сворачивает. */
+.shade-dim {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(10, 8, 6, 0.5);
+  opacity: 0;
+  transition: opacity 0.26s ease;
+}
+.shade-dim.is-on {
+  opacity: 1;
+}
+
+/* Ручка шторки. На вид полоска, а нажимается полосой 96×44: верх заходит на сцену над краем шторки. */
+.sheet-grip {
+  position: relative;
+  display: block;
+  width: 96px;
+  height: 26px;
+  margin: 0 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  touch-action: none;
+  cursor: grab;
+}
+.sheet-grip::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -18px;
+  bottom: 0;
+}
+div.sheet-grip {
+  cursor: default;
+}
+.is-dragging .sheet-grip {
+  cursor: grabbing;
+}
+
 .sheet-handle {
+  display: block;
   width: 38px;
   height: 4px;
   border-radius: 2px;
   background: #5c4b3b;
-  margin: 8px auto 6px;
+  margin: 10px auto 0;
+}
+button.sheet-grip .sheet-handle {
+  background: #7a6650;
+}
+button.sheet-grip:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+  border-radius: 8px;
 }
 
 .banner {
@@ -1153,11 +1238,35 @@ h2.sc {
 }
 
 .list-done {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 5px;
+  min-height: 28px;
+  margin: -6px -8px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
   font-size: 13px;
   color: var(--muted);
+}
+/* «N сделано» на вид строчка текста, а нажимается на 44 пикселя в высоту. */
+.list-done::before {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+}
+.list-done[aria-expanded='true'] {
+  color: var(--text);
+}
+
+/* Сделанные за день задачи внизу развёрнутой шторки: приглушённые и зачёркнутые (.row-done). */
+.done-mark {
+  flex: none;
+  width: 22px;
+  display: inline-flex;
+  justify-content: center;
+  color: #9fd07a;
 }
 .list-done svg {
   color: #9fd07a;

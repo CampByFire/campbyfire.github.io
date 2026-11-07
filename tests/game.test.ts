@@ -293,6 +293,7 @@ describe('экран дня', () => {
     expect(v.road[0].rank).toBe('minion');
     expect(v.ring?.pose).toBe('work');
     expect(v.doneToday).toBe(1);
+    expect(v.done.map((t) => t.id)).toEqual([a]);
   });
 
   it('«выше» и «ниже» двигают задачу через видимого соседа, а не через сделанную', () => {

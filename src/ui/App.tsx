@@ -59,6 +59,9 @@ export interface Ui {
   toast(text: string, action?: ToastAction): void;
   cheer: Cheer | null;
   setCheer(c: Cheer | null): void;
+  /** Шторка задач дня в Лагере развёрнута. Свернуть её можно и кнопкой «Назад». */
+  shade: boolean;
+  setShade(up: boolean): void;
   /** Поверх экрана лист или знакомство: экран под ними недоступен. */
   covered: boolean;
   showIntro(): void;
@@ -110,6 +113,11 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   const [day, setDay] = useState(s.day);
   const [intro, setIntro] = useState(() => needIntro(store));
   const [motion, setMotionState] = useState<Motion>(() => motionOf(store.now()));
+  const [shade, setShade] = useState(false);
+  // Из Лагеря уходят со свёрнутой шторкой: вернёшься, и снова видна сцена.
+  useEffect(() => {
+    if (screen !== 'camp') setShade(false);
+  }, [screen]);
   const main = useRef<HTMLElement>(null);
   const shownScreen = useRef(screen);
 
@@ -280,6 +288,8 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
     },
     close: closeSheet,
     toast: (text, action) => setToast({ text, id: Date.now(), action }),
+    shade: screen === 'camp' && shade,
+    setShade,
     cheer: liveCheer,
     setCheer: (c) => setCheerState(c ? { ...c, until: store.now() + CHEER_MS } : null),
     covered,
@@ -302,12 +312,14 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
     });
   };
 
-  // «Назад» на телефоне закрывает знакомство или лист, из раздела Летописи ведёт к списку разделов,
+  // «Назад» на телефоне закрывает знакомство или лист, сворачивает шторку задач дня, из раздела Летописи ведёт к списку разделов,
   // из шкалы дня в Календаре к месяцу, с других разделов в Лагерь, и только из Лагеря без открытых листов выходит из приложения.
   const inSection = (screen === 'notes' && section !== null) || (screen === 'calendar' && calDay !== null);
-  useBackButton((covered ? 1 : 0) + (screen !== 'camp' ? 1 : 0) + (inSection ? 1 : 0), () => {
+  const shadeUp = screen === 'camp' && shade;
+  useBackButton((covered ? 1 : 0) + (screen !== 'camp' ? 1 : 0) + (inSection ? 1 : 0) + (shadeUp ? 1 : 0), () => {
     if (intro) closeIntro();
     else if (sheetShown.current) (sheetBack() ?? closeSheet)();
+    else if (shadeUp) setShade(false);
     else if (inSection && screen === 'calendar') ui.openDay(null);
     else if (inSection) ui.openSection(null);
     else if (screen !== 'camp') ui.go('camp');

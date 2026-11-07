@@ -44,6 +44,8 @@ export interface CampView {
   /** Задачи на вечер, пока идёт рабочий день. */
   later: Task[];
   doneToday: number;
+  /** Сделанные сегодня задачи в порядке плана: их показывает развёрнутая шторка по нажатию на «N сделано». */
+  done: Task[];
   undead: Task[];
   inbox: number;
   ring: { task: Task; cls: ClassId; pose: Pose } | null;
@@ -118,6 +120,7 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
   for (const t of undead) if (!tones.has(t.id)) tones.set(t.id, 'undead');
   if (cur) tones.set(cur.id, 'current');
 
+  const done = plan.filter((t) => t.status === 'done');
   const onBreak = s.breakSince !== null;
   const running = !!(s.current && s.current.runningSince !== null);
   const sleepy = asleep || light === 'night';
@@ -159,7 +162,8 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
     colors,
     main,
     later,
-    doneToday: plan.filter((t) => t.status === 'done').length,
+    doneToday: done.length,
+    done,
     undead,
     inbox: inboxOf(s).length,
     ring,

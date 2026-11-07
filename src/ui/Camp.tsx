@@ -32,6 +32,7 @@ import { done, kindle, rest, summon, wind } from './magic/spells';
 import { campShown, dusk, lightNow } from './magic/world';
 import { LevelMark, TaskMeta, numLook } from './parts';
 import { Scene } from './Scene';
+import { dragHeight, snapUp } from './shade';
 import { syncTrouble } from './SyncPanel';
 
 export function Camp({ ui }: { ui: Ui }) {
@@ -45,12 +46,27 @@ export function Camp({ ui }: { ui: Ui }) {
   const [rootRef, root] = useSize<HTMLDivElement>();
   const [wrapRef, wrap] = useSize<HTMLDivElement>();
   const sheetRef = useRef<HTMLElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const rowsRef = useRef<HTMLDivElement>(null);
+  const doneRef = useRef<HTMLDivElement>(null);
+  const handleRef = useRef<HTMLButtonElement>(null);
   const [fixedH, setFixedH] = useState(0);
 
+  // Шторка: свёрнутая стоит под сценой, как раньше; развёрнутая поднимается поверх сцены со всеми задачами дня.
+  // ui.shade говорит, куда она едет; up держит развёрнутый вид, пока она уезжает вниз; drag, пока её тянут.
+  const [up, setUp] = useState(ui.shade);
+  const [drag, setDrag] = useState(false);
+  const [showDone, setShowDone] = useState(false);
+  const isUp = ui.shade || up || drag;
+  /** Высота свёрнутой шторки: на её место встаёт пустое место, пока она развёрнута, и сцена не прыгает. */
+  const lowH = useRef(0);
+  const wasUp = useRef(false);
+
   useLayoutEffect(() => {
+    if (isUp) return;
     const sh = sheetRef.current?.getBoundingClientRect().height ?? 0;
     const rh = rowsRef.current?.getBoundingClientRect().height ?? 0;
+    lowH.current = sh;
     const f = Math.round(sh - rh);
     if (Math.abs(f - fixedH) > 1) setFixedH(f);
   });
@@ -95,8 +111,185 @@ export function Camp({ ui }: { ui: Ui }) {
   // Задача из карточки «Дальше» в списке не повторяется.
   const nextInCard = !v.asleep && !ui.cheer && !v.onBreak && !current;
   const list = nextInCard ? v.main.slice(1) : v.main;
-  const shown = list.length > fit ? list.slice(0, fit - 1) : list;
-  const hidden = list.length - shown.length;
+  const cut = list.length > fit ? list.slice(0, fit - 1) : list;
+  const hidden = list.length - cut.length;
+  const shown = isUp ? list : cut;
+  // Тянуть есть что, если в свёрнутой шторке не все задачи дня или за день уже что-то сделано.
+  const canOpen = !v.asleep && (hidden > 0 || v.doneToday > 0);
+
+  /** Выше шторка не поднимается: над ней остаётся верхняя полоса с датой, золотом и маной. */
+  const highMax = () => {
+    const rootEl = rootRef.current;
+    if (!rootEl) return lowH.current;
+    const top = rootEl.getBoundingClientRect().top;
+    const bar = wrapRef.current?.querySelector('.topbar')?.getBoundingClientRect().bottom ?? top + TOPBAR_H;
+    return Math.max(lowH.current, rootEl.clientHeight - (bar - top) - SHADE_GAP);
+  };
+  /** Развёрнутая шторка ровно по содержимому, но не выше highMax. */
+  const highH = () => {
+    const el = sheetRef.current;
+    const body = bodyRef.current;
+    if (!el || !body) return highMax();
+    const pad = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+    return Math.max(lowH.current, Math.min(highMax(), body.offsetTop + body.scrollHeight + pad));
+  };
+
+  const setShade = (next: boolean) => {
+    if (next && !isUp) lowH.current = sheetRef.current?.getBoundingClientRect().height ?? lowH.current;
+    ui.setShade(next);
+  };
+
+  // Развернуть нечего (отбой, все дела видны и ничего не сделано): шторка сворачивается сама.
+  useEffect(() => {
+    if (!canOpen && ui.shade) ui.setShade(false);
+  }, [canOpen, ui.shade]);
+
+  // Свёрнутую шторку ещё показываем развёрнутой, пока она уезжает вниз.
+  useEffect(() => {
+    if (ui.shade) {
+      setUp(true);
+      return;
+    }
+    if (!up || drag) return;
+    const id = window.setTimeout(
+      () => {
+        setUp(false);
+        setShowDone(false);
+      },
+      ui.motion === 'off' ? 0 : SHADE_MS,
+    );
+    return () => window.clearTimeout(id);
+  }, [ui.shade, up, drag, ui.motion]);
+
+  // Высоту развёрнутой шторки ставим сами: от свёрнутой к нужной, и CSS её плавно ведёт.
+  useLayoutEffect(() => {
+    const el = sheetRef.current;
+    const was = wasUp.current;
+    wasUp.current = isUp;
+    if (!el || drag) return;
+    if (!isUp) {
+      el.style.height = '';
+      // Фокус был на строке, которой в свёрнутой шторке нет: он встаёт на ручку.
+      if (was && (document.activeElement === document.body || !document.activeElement)) handleRef.current?.focus();
+      return;
+    }
+    if (!was) {
+      el.style.height = `${lowH.current}px`;
+      void el.offsetHeight;
+    }
+    el.style.height = `${ui.shade ? highH() : lowH.current}px`;
+  });
+
+  // Сделанные задачи раскрылись внизу: подвинуть список, чтобы их было видно.
+  useEffect(() => {
+    if (showDone && ui.shade) doneRef.current?.scrollIntoView({ block: 'nearest', behavior: ui.motion === 'full' ? 'smooth' : 'auto' });
+  }, [showDone, ui.shade]);
+
+  const toggleDone = () => {
+    if (!ui.shade) {
+      setShowDone(true);
+      setShade(true);
+    } else setShowDone((d) => !d);
+  };
+
+  // Пальцем шторку тянут за любое место: вверх из свёрнутой, вниз из развёрнутой, когда её список
+  // прокручен к началу. Мышью тянут за ручку. Отпущенная, она встаёт к ближайшему положению.
+  const live = useRef({ canOpen, shade: ui.shade, isUp });
+  live.current = { canOpen, shade: ui.shade, isUp };
+  /** Только что тянули: нажатие, которым закончилось движение, не открывает задачу. */
+  const dragged = useRef(false);
+  const grab = useRef<{ y: number; x: number; h: number; low: number; high: number; inBody: boolean; on: boolean | null; ly: number; lt: number; v: number } | null>(null);
+
+  const dragStart = (x: number, y: number, target: EventTarget | null) => {
+    const el = sheetRef.current;
+    if (!el || !live.current.canOpen) return;
+    const h = el.getBoundingClientRect().height;
+    if (!live.current.isUp) lowH.current = h;
+    grab.current = {
+      y,
+      x,
+      h,
+      low: lowH.current,
+      high: live.current.isUp ? highH() : highMax(),
+      inBody: !!bodyRef.current && target instanceof Node && bodyRef.current.contains(target),
+      on: null,
+      ly: y,
+      lt: performance.now(),
+      v: 0,
+    };
+  };
+  /** Вернёт true, если шторку тянут и движение пальца надо забрать у прокрутки. */
+  const dragMove = (x: number, y: number): boolean => {
+    const g = grab.current;
+    const el = sheetRef.current;
+    if (!g || !el) return false;
+    const dy = y - g.y;
+    if (g.on === null) {
+      const body = bodyRef.current;
+      const atTop = !body || body.scrollTop <= 0;
+      // Из развёрнутой вниз тянут, только когда список у начала; вверх её список прокручивается.
+      const could = !live.current.shade ? dy <= 0 : !g.inBody || (dy >= 0 && atTop);
+      if (Math.abs(dy) < DRAG_SLOP && Math.abs(x - g.x) < DRAG_SLOP) return could;
+      if (!could || Math.abs(x - g.x) > Math.abs(dy)) {
+        grab.current = null;
+        return false;
+      }
+      g.on = true;
+      el.style.height = `${g.h}px`;
+      setDrag(true);
+    }
+    const now = performance.now();
+    if (now > g.lt) g.v = 0.6 * ((y - g.ly) / (now - g.lt)) + 0.4 * g.v;
+    g.ly = y;
+    g.lt = now;
+    el.style.height = `${dragHeight(g.h, dy, g.low, g.high)}px`;
+    return true;
+  };
+  const dragEnd = () => {
+    const g = grab.current;
+    grab.current = null;
+    const el = sheetRef.current;
+    if (!g || !g.on || !el) return;
+    dragged.current = true;
+    window.setTimeout(() => (dragged.current = false), 400);
+    const open = snapUp(el.getBoundingClientRect().height, g.v, g.low, g.high);
+    setDrag(false);
+    ui.setShade(open);
+  };
+
+  useEffect(() => {
+    const el = sheetRef.current;
+    if (!el) return;
+    const start = (e: TouchEvent) => {
+      if (e.touches.length === 1) dragStart(e.touches[0].clientX, e.touches[0].clientY, e.target);
+      else grab.current = null;
+    };
+    const move = (e: TouchEvent) => {
+      if (e.touches.length === 1 && dragMove(e.touches[0].clientX, e.touches[0].clientY) && e.cancelable) e.preventDefault();
+    };
+    el.addEventListener('touchstart', start, { passive: true });
+    el.addEventListener('touchmove', move, { passive: false });
+    el.addEventListener('touchend', dragEnd);
+    el.addEventListener('touchcancel', dragEnd);
+    return () => {
+      el.removeEventListener('touchstart', start);
+      el.removeEventListener('touchmove', move);
+      el.removeEventListener('touchend', dragEnd);
+      el.removeEventListener('touchcancel', dragEnd);
+    };
+  }, []);
+
+  const handleDown = (e: PointerEvent) => {
+    if (e.pointerType === 'touch' || e.button !== 0) return;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragStart(e.clientX, e.clientY, e.currentTarget);
+  };
+  const handleMove = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') dragMove(e.clientX, e.clientY);
+  };
+  const handleUp = (e: PointerEvent) => {
+    if (e.pointerType !== 'touch') dragEnd();
+  };
 
   const box = sceneBox(wrap.w, wrap.h);
   const bg = SCENE.backgrounds[v.light] ?? SCENE.backgrounds.day;
@@ -105,7 +298,7 @@ export function Camp({ ui }: { ui: Ui }) {
     <div class={`camp${compact ? ' is-compact' : ''}`} ref={rootRef}>
       <h1 class="sr-only">{W.camp}</h1>
       {/* Картинки поляны не ловят пальца, а меню по долгому нажатию в сцене не открывается совсем. */}
-      <div class="scene-wrap" ref={wrapRef} onContextMenu={(e) => e.preventDefault()}>
+      <div class="scene-wrap" ref={wrapRef} inert={isUp} onContextMenu={(e) => e.preventDefault()}>
         {box.gaps && bg && <img class="scene-blur" src={assetUrl(bg)} alt="" aria-hidden="true" draggable={false} />}
         <div class="scene-box" style={box.style}>
           <Scene
@@ -138,64 +331,111 @@ export function Camp({ ui }: { ui: Ui }) {
         </div>
       </div>
 
-      <section class="sheet" ref={sheetRef} aria-label="Задачи дня">
-        <div class="sheet-handle" aria-hidden="true" />
-        {v.summaryDue && (
-          <button class="banner" onClick={() => ui.open({ kind: 'summary' })}>
-            <GIcon name="zzz" size={16} />
-            Скоро отбой: подвести итоги дня
-            <LIcon name="chevron" size={16} />
+      {/* Пока шторка развёрнута, она лежит поверх сцены, а на её прежнем месте пусто. Нажатие на сцену её сворачивает. */}
+      {isUp && <div class="sheet-space" style={{ height: `${Math.max(0, lowH.current - SHEET_OVERLAP)}px` }} />}
+      {isUp && <div class={`shade-dim${ui.shade ? ' is-on' : ''}`} aria-hidden="true" onClick={() => ui.setShade(false)} />}
+      <section
+        class={`sheet${isUp ? ' is-up' : ''}${drag ? ' is-dragging' : ''}`}
+        ref={sheetRef}
+        aria-label="Задачи дня"
+        onClickCapture={(e) => {
+          if (!dragged.current) return;
+          dragged.current = false;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      >
+        {canOpen ? (
+          <button
+            class="sheet-grip"
+            ref={handleRef}
+            aria-label="Все задачи дня"
+            aria-expanded={ui.shade}
+            aria-controls="day-tasks"
+            onClick={() => setShade(!ui.shade)}
+            onPointerDown={handleDown}
+            onPointerMove={handleMove}
+            onPointerUp={handleUp}
+            onPointerCancel={handleUp}
+          >
+            <span class="sheet-handle" />
           </button>
-        )}
-        {!v.asleep && restedLeft(s) > 0 && <RestedHint left={restedLeft(s)} />}
-        <MainCard ui={ui} v={v} timer={timer} seconds={current ? formatTimerSeconds(spent) : ''} />
-
-        {!v.asleep && (list.length > 0 || v.doneToday > 0) && (
-          <div class="list-head">
-            <h2 class="sc">{W.moreToday}</h2>
-            {v.doneToday > 0 && (
-              <span class="list-done">
-                <GIcon name="check" size={13} />
-                {v.doneToday} сделано
-              </span>
-            )}
+        ) : (
+          <div class="sheet-grip" aria-hidden="true">
+            <span class="sheet-handle" />
           </div>
         )}
-        <div ref={rowsRef}>
-          {!v.asleep &&
-            shown.map((t) => (
-              <TaskRow
-                key={t.id}
-                s={s}
-                t={t}
-                n={v.numbers.get(t.id) ?? 0}
-                tone={v.tones.get(t.id) ?? 'today'}
-                color={v.colors.get(t.id)}
-                onClick={() => ui.open({ kind: 'task', taskId: t.id })}
-              />
-            ))}
-          {!v.asleep && hidden > 0 && (
-            <button class="row row-more" onClick={() => ui.go('plan')}>
-              <span class="row-title">Ещё {hidden} в плане дня</span>
+        <div class="sheet-body" id="day-tasks" ref={bodyRef}>
+          {v.summaryDue && (
+            <button class="banner" onClick={() => ui.open({ kind: 'summary' })}>
+              <GIcon name="zzz" size={16} />
+              Скоро отбой: подвести итоги дня
               <LIcon name="chevron" size={16} />
             </button>
           )}
-        </div>
-        {!v.asleep && v.later.length > 0 && (
-          <button class="row row-later" onClick={() => ui.go('plan')}>
-            <span class="num-stack" aria-hidden="true">
-              {v.later.slice(0, 2).map((t) => (
-                <span key={t.id} {...numLook('evening', v.colors.get(t.id), 'num-sm')}>
-                  {v.numbers.get(t.id)}
-                </span>
+          {!v.asleep && restedLeft(s) > 0 && <RestedHint left={restedLeft(s)} />}
+          <MainCard ui={ui} v={v} timer={timer} seconds={current ? formatTimerSeconds(spent) : ''} />
+
+          {!v.asleep && (list.length > 0 || v.doneToday > 0) && (
+            <div class="list-head">
+              <h2 class="sc">{W.moreToday}</h2>
+              {v.doneToday > 0 && (
+                <button class="list-done" aria-expanded={isUp && showDone} aria-controls="day-done" onClick={toggleDone}>
+                  <GIcon name="check" size={13} />
+                  {v.doneToday} сделано
+                </button>
+              )}
+            </div>
+          )}
+          <div ref={rowsRef}>
+            {!v.asleep &&
+              shown.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  s={s}
+                  t={t}
+                  n={v.numbers.get(t.id) ?? 0}
+                  tone={v.tones.get(t.id) ?? 'today'}
+                  color={v.colors.get(t.id)}
+                  onClick={() => ui.open({ kind: 'task', taskId: t.id })}
+                />
               ))}
-            </span>
-            <span class="row-title row-muted">
-              {W.evening}: {v.later.map((t) => t.title).join(', ')}
-            </span>
-            <LIcon name="chevron" size={16} />
-          </button>
-        )}
+            {!v.asleep && !isUp && hidden > 0 && (
+              <button class="row row-more" aria-controls="day-tasks" aria-expanded={false} onClick={() => setShade(true)}>
+                <span class="row-title">Ещё {hidden} в плане дня</span>
+                <LIcon name="chevron" size={16} />
+              </button>
+            )}
+          </div>
+          {!v.asleep && v.later.length > 0 && (
+            <button class="row row-later" onClick={() => ui.go('plan')}>
+              <span class="num-stack" aria-hidden="true">
+                {v.later.slice(0, 2).map((t) => (
+                  <span key={t.id} {...numLook('evening', v.colors.get(t.id), 'num-sm')}>
+                    {v.numbers.get(t.id)}
+                  </span>
+                ))}
+              </span>
+              <span class="row-title row-muted">
+                {W.evening}: {v.later.map((t) => t.title).join(', ')}
+              </span>
+              <LIcon name="chevron" size={16} />
+            </button>
+          )}
+          {isUp && showDone && v.done.length > 0 && (
+            <div id="day-done" class="done-rows" ref={doneRef}>
+              <h3 class="sr-only">Сделано сегодня</h3>
+              {v.done.map((t) => (
+                <button key={t.id} class="row row-done" onClick={() => ui.open({ kind: 'task', taskId: t.id })}>
+                  <span class="done-mark" aria-hidden="true">
+                    <GIcon name="check" size={13} />
+                  </span>
+                  <span class="row-title">{t.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -203,6 +443,12 @@ export function Camp({ ui }: { ui: Ui }) {
 
 /** Лист заходит на сцену скруглённым краем. */
 const SHEET_OVERLAP = 22;
+/** Столько шторка задач дня едет вверх или вниз (как transition у .sheet.is-up в styles.css). */
+const SHADE_MS = 260;
+/** Зазор над развёрнутой шторкой под верхней полосой. */
+const SHADE_GAP = 10;
+/** Палец сдвинулся на столько, и понятно, тянут шторку или нажимают. */
+const DRAG_SLOP = 8;
 /** Нижний край верхней полосы с датой, золотом и маной. */
 const TOPBAR_H = 42;
 /** Номер над макушкой вместе с хвостиком, в пикселях экрана: от масштаба сцены не зависит. */
