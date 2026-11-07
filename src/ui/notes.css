@@ -122,7 +122,7 @@
   display: block;
   min-height: 0;
   padding: 10px 12px;
-  line-height: 1.4;
+  line-height: 1.6;
   resize: vertical;
 }
 
@@ -263,7 +263,7 @@
   font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.25;
-  color: var(--text-hi);
+  color: var(--gold);
 }
 
 .md h1 {
@@ -339,11 +339,52 @@
 
 /* ---------- редактор ---------- */
 
+/* Панель видна, пока пишешь: место на экране остаётся тексту. При прокрутке длинного текста стоит у верха листа. */
+.rich-tools {
+  display: none;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin-bottom: 6px;
+  padding: 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 8px 18px -10px rgba(0, 0, 0, 0.8);
+}
+
+.rich:focus-within .rich-tools,
+.rich.is-hold .rich-tools {
+  display: block;
+}
+
 .rich-bar {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px;
-  margin-bottom: 6px;
+}
+
+/* На телефоне панель в одну строку и листается вбок: два ряда кнопок над клавиатурой съели бы весь текст. */
+@media (max-width: 600px) {
+  .rich-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+
+  .rich-bar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.rich-sep {
+  flex: none;
+  width: 1px;
+  height: 28px;
+  margin: 0 2px;
+  background: var(--line-2);
 }
 
 .rich-btn {
@@ -359,18 +400,23 @@
   background: var(--card-2);
   color: var(--text);
   font: inherit;
-  font-size: 16px;
+  font-size: 17px;
 }
 
 .rich-btn.is-on {
   border-color: var(--gold);
   color: var(--gold);
+  background: rgba(241, 196, 90, 0.12);
+}
+
+.rich-btn:disabled {
+  opacity: 0.45;
 }
 
 .rich-h {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 19px;
+  font-size: 16px;
 }
 
 .rich-ol,
@@ -385,16 +431,35 @@
   text-underline-offset: 3px;
 }
 
+.rich-clear {
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.rich-fold {
+  width: 9px;
+  height: 9px;
+  margin-top: -4px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.rich-fold.is-shut {
+  margin: 0 0 0 -4px;
+  transform: rotate(-45deg);
+}
+
 .rich-palette {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
-  padding: 10px;
-  border-radius: 12px;
-  background: var(--card-2);
-  border: 1px solid var(--line-2);
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-2);
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 .rich-swatch {
@@ -429,7 +494,8 @@
 }
 
 .rich-plain {
-  height: 44px;
+  flex: none;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--line-2);
   border-radius: 22px;
@@ -439,16 +505,42 @@
   font-size: 14px;
 }
 
+.rich-code {
+  display: flex;
+  flex-basis: 100%;
+  min-width: 0;
+  gap: 8px;
+}
+
+.rich-code .input {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  min-height: 44px;
+  font-size: 16px;
+  text-transform: lowercase;
+}
+
+.rich-bad {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13.5px;
+  color: #ff9d90;
+}
+
+/* Поле растёт по тексту до 15 строк, дальше листается. «Развернуть поле» снимает предел. */
 .rich-box {
+  --rich-line: 1.6em;
   position: relative;
   display: block;
-  min-height: 9em;
-  max-height: 55vh;
+  min-height: calc(var(--rich-line) * 5 + 22px);
+  max-height: min(calc(var(--rich-line) * 15 + 22px), 60vh);
   overflow-y: auto;
   padding: 10px 12px;
-  line-height: 1.45;
+  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  cursor: text;
   user-select: text;
   -webkit-user-select: text;
 }
@@ -457,29 +549,44 @@
   min-height: 40vh;
 }
 
-.rich-box > * {
-  margin: 0 0 0.5em;
+.rich-box.is-full {
+  max-height: none;
+  overflow-y: visible;
 }
 
-.rich-box > :last-child {
-  margin-bottom: 0;
+/* Заголовок в поле это начало раздела: слева стрелка 44 на 44, текст под ним сворачивается. */
+.rich-box > :is(h1, h2, h3, h4, h5, h6) {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 44px;
+  margin: 0.15em 0;
+  padding: 9px 0 9px 30px;
 }
 
-.rich-box h3 {
-  font-family: var(--font-display);
-  font-size: 1.15em;
-  color: var(--text-hi);
+.rich-box > :is(h1, h2, h3, h4, h5, h6)::before {
+  content: '';
+  position: absolute;
+  left: 7px;
+  top: 17px;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--gold);
+  border-bottom: 2px solid var(--gold);
+  transform: rotate(45deg);
+  cursor: pointer;
 }
 
-.rich-box ul,
-.rich-box ol {
-  padding-left: 1.4em;
+.rich-box > .fold::before {
+  transform: rotate(-45deg);
 }
 
-.rich-box blockquote {
-  padding-left: 12px;
-  border-left: 3px solid var(--gold-deep);
+.rich-box > .fold::after {
+  content: ' …';
   color: var(--muted);
+}
+
+.rich-box .acc-hid {
+  display: none;
 }
 
 .rich-box.is-empty::before {
@@ -489,6 +596,19 @@
   left: 12px;
   color: var(--dim);
   pointer-events: none;
+}
+
+.rich-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.rich-count {
+  font-size: 13px;
+  color: var(--muted);
 }
 
 /* ---------- чтение статьи ---------- */
@@ -502,7 +622,46 @@
 
 .nread {
   font-size: 16.5px;
-  line-height: 1.5;
+  line-height: 1.6;
+}
+
+/* Раздел при чтении: заголовок со стрелкой сворачивает текст под ним. */
+.md-sec summary {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding-left: 26px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.md-sec summary::-webkit-details-marker {
+  display: none;
+}
+
+.md-sec summary::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: calc(50% - 7px);
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid var(--gold);
+  border-bottom: 2px solid var(--gold);
+  transform: rotate(-45deg);
+}
+
+.md-sec[open] > summary::before {
+  transform: rotate(45deg);
+}
+
+.md-sec summary > * {
+  margin: 0;
+}
+
+.md-sec[open] > summary {
+  margin-bottom: 0.3em;
 }
 
 /* ---------- поиск ---------- */

@@ -1,7 +1,9 @@
 // Оформление текста заметок: маленький Markdown без сети и без библиотек. Файлы остаются обычным
 // Markdown, который читают GitHub и Obsidian. Цвет пишется так же, как в Obsidian:
 //   <span style="color:#e0a050">текст</span>
-// GitHub цвет не покажет, но текст останется. Любой другой HTML в файле показывается как текст.
+// GitHub цвет не покажет, но текст останется. Подчёркнутый пишется тегом <u>текст</u>, а свёрнутый
+// раздел пометкой в конце заголовка: ### Заголовок <!-- свёрнуто --> (GitHub и Obsidian её не показывают).
+// Любой другой HTML в файле показывается как текст.
 //
 // Здесь текст разбирается в дерево (Block/Inline) и собирается обратно. Из дерева экраны рисуют
 // оформленный текст, а редактор (ui/RichEditor) строит своё содержимое и снимает его обратно.
@@ -9,14 +11,14 @@
 export type Inline =
   | { t: 'text'; v: string }
   | { t: 'br' }
-  | { t: 'b' | 'i' | 's'; c: Inline[] }
+  | { t: 'b' | 'i' | 'u' | 's'; c: Inline[] }
   | { t: 'code'; v: string }
   | { t: 'a'; href: string; c: Inline[] }
   | { t: 'color'; color: string; c: Inline[] };
 
 export type Block =
   | { t: 'p'; c: Inline[] }
-  | { t: 'h'; level: number; c: Inline[] }
+  | { t: 'h'; level: number; c: Inline[]; fold?: boolean }
   | { t: 'ul' | 'ol'; items: Inline[][] }
   | { t: 'quote'; c: Inline[] }
   | { t: 'code'; v: string }
@@ -30,6 +32,8 @@ const SAFE_HREF = /^(https?:\/\/|mailto:)/i;
 
 const FENCE = /^\s*(```|~~~)/;
 const HEAD = /^(#{1,6})[ \t]+(.*?)[ \t#]*$/;
+/** Пометка свёрнутого раздела в конце заголовка. Перед ней пробел, поэтому «\<!--» из текста её не изображает. */
+const FOLD = /(?:^|[ \t]+)<!--[ \t]*свёрнуто[ \t]*-->$/;
 const HR = /^\s*([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 const UL = /^\s*[-*+][ \t]+(.*)$/;
 const OL = /^\s*\d{1,9}[.)][ \t]+(.*)$/;
@@ -58,7 +62,8 @@ export function parseMarkdown(text: string): Block[] {
     }
     const h = line.match(HEAD);
     if (h) {
-      out.push({ t: 'h', level: h[1].length, c: parseInline(h[2]) });
+      const head: Block = { t: 'h', level: h[1].length, c: parseInline(h[2].replace(FOLD, '')) };
+      out.push(FOLD.test(h[2]) ? { ...head, fold: true } : head);
       i++;
       continue;
     }
@@ -198,6 +203,15 @@ export function parseInline(s: string): Inline[] {
       }
     }
     if (ch === '<') {
+      const u = rest.match(/^<u>/i);
+      if (u) {
+        const end = closeTag(s, i + u[0].length, 'u');
+        if (end > 0) {
+          push({ t: 'u', c: parseInline(s.slice(i + u[0].length, end)) });
+          i = s.indexOf('>', end) + 1;
+          continue;
+        }
+      }
       const m = rest.match(OPEN_SPAN) ?? rest.match(OPEN_FONT);
       if (m) {
         const tag = m[0][1].toLowerCase() === 's' ? 'span' : 'font';
@@ -233,7 +247,7 @@ export function tidy(list: Inline[]): Inline[] {
     if (n.t === 'text' && !n.v) continue;
     const last = out[out.length - 1];
     if (last && last.t === 'text' && n.t === 'text') out[out.length - 1] = { t: 'text', v: last.v + n.v };
-    else if (last && (last.t === 'b' || last.t === 'i' || last.t === 's') && last.t === n.t)
+    else if (last && (last.t === 'b' || last.t === 'i' || last.t === 'u' || last.t === 's') && last.t === n.t)
       out[out.length - 1] = { t: last.t, c: tidy([...last.c, ...(n as { c: Inline[] }).c]) };
     else if (last && last.t === 'color' && n.t === 'color' && last.color === n.color) out[out.length - 1] = { ...last, c: tidy([...last.c, ...n.c]) };
     else out.push(n);
@@ -261,6 +275,8 @@ export function inlineMarkdown(list: Inline[], br = '\n'): string {
           return wrap('**', inlineMarkdown(n.c, br));
         case 'i':
           return wrap('*', inlineMarkdown(n.c, br));
+        case 'u':
+          return wrap('<u>', inlineMarkdown(n.c, br), '</u>');
         case 's':
           return wrap('~~', inlineMarkdown(n.c, br));
         case 'code': {
@@ -291,7 +307,7 @@ export function toMarkdown(blocks: Block[]): string {
           return guardLines(inlineMarkdown(b.c));
         case 'h': {
           const text = inlineMarkdown(b.c, ' ').trim();
-          return text ? `${'#'.repeat(b.level)} ${text}` : '';
+          return text ? `${'#'.repeat(b.level)} ${text}${b.fold ? ' <!-- свёрнуто -->' : ''}` : '';
         }
         case 'ul':
         case 'ol':

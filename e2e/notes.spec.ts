@@ -1,7 +1,7 @@
 // Летопись: дневник, свои разделы и заметки. Быстрая мысль из лагеря, лента, статьи, «Назад» внутри
 // Летописи, заметки и дни дневника в GitHub отдельными файлами в notes/ и diary/.
 import { expect, test, type Page } from '@playwright/test';
-import { connectGitHub, expectNoSideScroll, fakeGitHub, openGame, openSettings, sheet, tab, toast } from './helpers';
+import { axe, connectGitHub, expectNoSideScroll, fakeGitHub, openGame, openSettings, sheet, tab, toast } from './helpers';
 
 const inCamp = (page: Page) => expect(tab(page, 'Лагерь')).toHaveAttribute('aria-current', 'page');
 
@@ -247,6 +247,9 @@ test('оформление: жирный и свой цвет в записи л
 
   // Свой цвет запомнился в палитре.
   await page.getByRole('button', { name: /Важная идея/ }).click();
+  // Панель оформления появляется, когда курсор в поле.
+  await expect(sheet(page, 'Запись').getByRole('toolbar', { name: 'Оформление' })).toBeHidden();
+  await sheet(page, 'Запись').getByRole('textbox', { name: 'Текст' }).click();
   await sheet(page, 'Запись').getByRole('button', { name: 'Цвет', exact: true }).click();
   await expect(sheet(page, 'Запись').getByRole('button', { name: 'свой #12ab34' })).toBeVisible();
   await page.keyboard.press('Escape');
@@ -257,4 +260,171 @@ test('оформление: жирный и свой цвет в записи л
   await expect(page.locator('.nhit mark')).toHaveText('костёр');
   await page.locator('.nhit').click();
   await expect(sheet(page, 'Запись')).toBeVisible();
+});
+
+/** Новая статья с двумя разделами. Курсор в поле, файл ещё не сохранён. */
+async function draftArticle(page: Page) {
+  const gh = await fakeGitHub(page);
+  await openGame(page);
+  await connectGitHub(page);
+  await tab(page, 'Летопись').click();
+  await page.getByRole('button', { name: 'Новый раздел' }).click();
+  const make = sheet(page, 'Новый раздел');
+  await make.getByLabel('Название').fill('Статьи');
+  await make.getByRole('radio', { name: 'Статьи' }).click();
+  await make.getByRole('button', { name: 'Создать' }).click();
+  await page.getByRole('button', { name: 'Новая статья' }).click();
+  const form = sheet(page, 'Новая статья');
+  await form.getByLabel('Заголовок', { exact: true }).fill('Поход');
+  const box = form.getByRole('textbox', { name: 'Текст' });
+  await box.click();
+  await page.keyboard.type('Разведка');
+  await form.getByRole('button', { name: 'Подзаголовок' }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Лес тихий');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Лагерь');
+  await form.getByRole('button', { name: 'Подзаголовок' }).click();
+  await page.keyboard.press('End');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Костёр горит');
+  return { gh, form, box };
+}
+
+const articleFile = (gh: Awaited<ReturnType<typeof fakeGitHub>>) => [...gh.notes.entries()].find(([p]) => p.startsWith('notes/stati/') && !p.endsWith('_razdel.json'))?.[1].text;
+
+test('раздел сворачивается стрелкой и кнопкой, пометка ложится в файл, при чтении раздел свёрнут', async ({ page }) => {
+  const { gh, form, box } = await draftArticle(page);
+  const heads = box.locator('h3');
+  await expect(heads).toHaveCount(2);
+
+  // Стрелка у заголовка прячет текст раздела, соседний раздел остаётся.
+  await heads.first().click({ position: { x: 12, y: 20 } });
+  await expect(box.getByText('Лес тихий')).toBeHidden();
+  await expect(box.getByText('Костёр горит')).toBeVisible();
+  await heads.first().click({ position: { x: 12, y: 20 } });
+  await expect(box.getByText('Лес тихий')).toBeVisible();
+
+  // Кнопка на панели сворачивает раздел, где стоит курсор, и курсор уходит на заголовок.
+  await box.getByText('Лес тихий').click();
+  const foldBtn = form.getByRole('button', { name: 'Свернуть раздел' });
+  await foldBtn.click();
+  await expect(foldBtn).toHaveAttribute('aria-pressed', 'true');
+  await expect(box.getByText('Лес тихий')).toBeHidden();
+
+  // Enter в конце свёрнутого заголовка раскрывает раздел: новая строка не прячется.
+  await page.keyboard.press('Enter');
+  await expect(box.getByText('Лес тихий')).toBeVisible();
+  await page.keyboard.press('Backspace');
+  await heads.first().click({ position: { x: 12, y: 20 } });
+  await expect(box.getByText('Лес тихий')).toBeHidden();
+
+  await form.getByRole('button', { name: 'Сохранить' }).click();
+  await page.clock.runFor(3000);
+  await expect.poll(() => articleFile(gh)).toBe('# Поход\n\n### Разведка <!-- свёрнуто -->\n\nЛес тихий\n\n### Лагерь\n\nКостёр горит\n');
+
+  // При чтении разделы сворачиваются, первый свёрнут, как сохранён.
+  await page.getByRole('button', { name: /Поход/ }).click();
+  const reading = sheet(page, 'Статья');
+  await expect(reading.getByText('Лес тихий')).toBeHidden();
+  await expect(reading.getByText('Костёр горит')).toBeVisible();
+  await reading.getByRole('heading', { name: 'Разведка' }).click();
+  await expect(reading.getByText('Лес тихий')).toBeVisible();
+  expect(await axe(page), 'Статья с разделами').toEqual([]);
+
+  // Правка открывается со свёрнутым разделом, текст из файла не теряется.
+  await reading.getByRole('button', { name: 'Править' }).click();
+  await expect(reading.getByRole('textbox', { name: 'Текст' }).getByText('Лес тихий')).toBeHidden();
+});
+
+test('удаление не съедает спрятанный текст: сначала раздел раскрывается', async ({ page }) => {
+  const { form, box } = await draftArticle(page);
+  await box.locator('h3').first().click({ position: { x: 12, y: 20 } });
+  await expect(box.getByText('Лес тихий')).toBeHidden();
+
+  await box.click();
+  await page.keyboard.press('Control+A');
+  await page.keyboard.press('Delete');
+  await expect(toast(page)).toContainText('Раздел раскрыт');
+  await expect(box.getByText('Лес тихий')).toBeVisible();
+  await expect(form.getByRole('textbox', { name: 'Текст' })).toContainText('Костёр горит');
+});
+
+test('подчёркнутый, код цвета и снятие стилей; счётчик знаков и размер поля', async ({ page }) => {
+  const { gh, form, box } = await draftArticle(page);
+  await expect(form.locator('.rich-count')).toHaveText('35 знаков');
+
+  // Статья сразу во всю длину, кнопка ограничивает поле, панель стоит у верха листа.
+  const size = form.getByRole('button', { name: 'Свернуть поле' });
+  await expect(box).toHaveCSS('max-height', 'none');
+  await size.click();
+  await expect(box).not.toHaveCSS('max-height', 'none');
+  await form.getByRole('button', { name: 'Развернуть поле' }).click();
+  await expect(box).toHaveCSS('max-height', 'none');
+  await expect(form.locator('.rich-tools')).toHaveCSS('position', 'sticky');
+
+  const select = (text: string) =>
+    box.evaluate((el, what) => {
+      const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+      for (let n = w.nextNode(); n; n = w.nextNode()) {
+        const at = n.textContent!.indexOf(what);
+        if (at < 0) continue;
+        const r = document.createRange();
+        r.setStart(n, at);
+        r.setEnd(n, at + what.length);
+        getSelection()!.removeAllRanges();
+        getSelection()!.addRange(r);
+        return;
+      }
+    }, text);
+
+  await select('тихий');
+  await form.getByRole('button', { name: 'Подчёркнутый' }).click();
+  await expect(box.locator('u')).toHaveText('тихий');
+  await expect(form.getByRole('button', { name: 'Подчёркнутый' })).toHaveAttribute('aria-pressed', 'true');
+
+  await select('Костёр');
+  await form.getByRole('button', { name: 'Цвет', exact: true }).click();
+  const code = form.getByLabel('Код цвета');
+  await code.fill('нет');
+  await page.keyboard.press('Enter');
+  await expect(code).toHaveAttribute('aria-invalid', 'true');
+  expect(await axe(page), 'Неверный код цвета').toEqual([]);
+  await code.fill('f80');
+  await form.getByRole('button', { name: 'Применить' }).click();
+  await expect(form.getByRole('group', { name: 'Цвет' })).toBeHidden();
+  await expect(box.locator('font')).toHaveText('Костёр');
+
+  await select('горит');
+  await form.getByRole('button', { name: 'Жирный' }).click();
+  await box.evaluate((el) => getSelection()!.selectAllChildren(el.lastElementChild!));
+  await form.getByRole('button', { name: 'Убрать стили' }).click();
+  await expect(box.locator('font, b')).toHaveCount(0);
+
+  await form.getByRole('button', { name: 'Сохранить' }).click();
+  await page.clock.runFor(3000);
+  await expect.poll(() => articleFile(gh)).toBe('# Поход\n\n### Разведка\n\nЛес <u>тихий</u>\n\n### Лагерь\n\nКостёр горит\n');
+});
+
+test('клавиатура телефона: лист с редактором встаёт над ней', async ({ page }) => {
+  const { form } = await draftArticle(page);
+  const overlay = page.locator('.overlay');
+  const bottomOf = () => form.evaluate((el) => el.getBoundingClientRect().bottom);
+  const before = await bottomOf();
+  const covered = 300;
+  await page.evaluate((px) => {
+    const vv = window.visualViewport!;
+    Object.defineProperty(vv, 'height', { configurable: true, get: () => window.innerHeight - px });
+    vv.dispatchEvent(new Event('resize'));
+  }, covered);
+  await expect(overlay).toHaveCSS('bottom', `${covered}px`);
+  expect(await bottomOf()).toBeLessThanOrEqual(before - covered + 1);
+  await expect(form.getByRole('button', { name: 'Сохранить' })).toBeInViewport();
+  await page.evaluate(() => {
+    const vv = window.visualViewport!;
+    delete (vv as unknown as Record<string, unknown>).height;
+    vv.dispatchEvent(new Event('resize'));
+  });
+  await expect(overlay).toHaveCSS('bottom', '0px');
 });

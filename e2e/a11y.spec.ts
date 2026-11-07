@@ -62,6 +62,7 @@ test('axe не находит нарушений в Летописи и её л�
   expect(await tooSmall(page), 'Лента').toEqual([]);
   await page.getByRole('button', { name: /Искры над костром/ }).click();
   const note = sheet(page, 'Запись');
+  await note.getByRole('textbox', { name: 'Текст' }).click();
   await expect(note.getByRole('toolbar', { name: 'Оформление' })).toBeVisible();
   expect(await axe(page), 'Запись').toEqual([]);
   await page.keyboard.press('Escape');
@@ -117,6 +118,7 @@ test('axe не находит нарушений в Летописи и её л�
   await page.getByRole('button', { name: 'Записать', exact: true }).click();
   expect(await axe(page), 'Дневник с названием записи').toEqual([]);
   await page.getByRole('button', { name: /Утром прошёлся пешком/ }).click();
+  await sheet(page, 'Запись в дневнике').getByRole('textbox', { name: 'Текст' }).click();
   await expect(sheet(page, 'Запись в дневнике').getByRole('toolbar', { name: 'Оформление' })).toBeVisible();
   expect(await axe(page), 'Запись в дневнике').toEqual([]);
   await page.keyboard.press('Escape');

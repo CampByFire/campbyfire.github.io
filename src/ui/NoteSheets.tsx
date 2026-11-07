@@ -124,7 +124,7 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
         }
       >
         <h3 class="nread-title">{note.title || 'Без названия'}</h3>
-        <RichText class="nread" text={note.body} />
+        <RichText class="nread" text={note.body} sections />
         <p class="note nfile">{path}</p>
       </Sheet>
     );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseInline, parseMarkdown, plainText, toMarkdown } from '../src/notes/markdown';
+import { parseInline, parseMarkdown, plainText, toMarkdown, type Inline } from '../src/notes/markdown';
 
 const round = (md: string) => toMarkdown(parseMarkdown(md));
 
@@ -55,6 +55,32 @@ describe('оформление заметок: Markdown', () => {
         },
       ]),
     ).toBe('**раз два** и  <span style="color:#ef6b5e">красное</span> ');
+  });
+
+  it('подчёркнутый пишется тегом и читается обратно, вместе с другим оформлением', () => {
+    expect(parseInline('<u>важно</u>')).toEqual([{ t: 'u', c: [{ t: 'text', v: 'важно' }] }]);
+    expect(round('<u>**важно**</u> и <u>ещё</u>')).toBe('<u>**важно**</u> и <u>ещё</u>');
+    expect(toMarkdown([{ t: 'p', c: [{ t: 'u', c: [{ t: 'text', v: 'а ' }] }, { t: 'u', c: [{ t: 'text', v: 'б' }] }] }])).toBe('<u>а б</u>');
+    // Незакрытый тег это обычный текст.
+    expect(parseInline('<u>нет конца')).toEqual([{ t: 'text', v: '<u>нет конца' }]);
+    expect(plainText('<u>важно</u> дело')).toBe('важно дело');
+  });
+
+  it('свёрнутый раздел помечен в заголовке, а в тексте заголовка пометки нет', () => {
+    const md = '### Разведка <!-- свёрнуто -->\n\nТекст под ним\n\n### Поход';
+    expect(parseMarkdown(md)).toEqual([
+      { t: 'h', level: 3, c: [{ t: 'text', v: 'Разведка' }], fold: true },
+      { t: 'p', c: [{ t: 'text', v: 'Текст под ним' }] },
+      { t: 'h', level: 3, c: [{ t: 'text', v: 'Поход' }] },
+    ]);
+    expect(round(md)).toBe(md);
+    expect(plainText(md)).toBe('Разведка\nТекст под ним\nПоход');
+  });
+
+  it('такая же надпись, набранная как текст, раздел не сворачивает', () => {
+    const typed: Inline[] = [{ t: 'text', v: 'Заметка <!-- свёрнуто -->' }];
+    const md = toMarkdown([{ t: 'h', level: 3, c: typed }]);
+    expect(parseMarkdown(md)).toEqual([{ t: 'h', level: 3, c: typed }]);
   });
 
   it('простой текст для поиска без знаков оформления', () => {
