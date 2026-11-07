@@ -78,7 +78,7 @@ function needIntro(store: Store): boolean {
   return false;
 }
 
-const CHEER_MS = 12_000;
+const CHEER_MS = 6_000;
 /** Столько лист уезжает вниз после закрытия, потом его нет. */
 const SHEET_OUT_MS = 200;
 
