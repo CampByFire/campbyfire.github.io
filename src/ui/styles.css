@@ -574,12 +574,10 @@ h2.sc {
   pointer-events: none;
 }
 
+/* Стоит в нижней полосе сцены (.camp-bottom) слева от книги. Если не влезает целиком, уступает книге и обрезается многоточием. */
 .scene-more {
-  position: absolute;
-  left: 50%;
-  bottom: 30px;
-  z-index: 1;
-  transform: translate(-50%, 0);
+  position: relative;
+  min-width: 0;
   height: 26px;
   padding: 0 10px;
   border-radius: 13px;
@@ -589,6 +587,12 @@ h2.sc {
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+.scene-more > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .chip {
@@ -616,10 +620,16 @@ h2.sc {
   gap: 6px;
 }
 
+/* Время и смена важнее полоски маны: когда в полосе тесно (узкий телефон, шестерёнка, значок сохранения), первой сжимается полоска маны, а плашка времени уступает место только после неё. */
 .chip-date {
+  flex-shrink: 0.01;
   min-width: 0;
   overflow: hidden;
   margin-right: auto;
+}
+
+.chip-date > svg {
+  flex: none;
 }
 
 .chip-day {
@@ -679,6 +689,7 @@ h2.sc {
 
 
 .chip-gold {
+  flex: none;
   font-size: 14px;
   font-weight: 800;
   color: #ffe08a;
@@ -691,6 +702,7 @@ h2.sc {
 }
 
 .chip-mana {
+  min-width: 0;
   height: 30px;
   font-size: 13px;
   font-weight: 800;
@@ -722,7 +734,8 @@ h2.sc {
 }
 
 .chip-mana .bar {
-  width: 44px;
+  flex: 0 1 44px;
+  min-width: 14px;
 }
 
 .bar > span {
