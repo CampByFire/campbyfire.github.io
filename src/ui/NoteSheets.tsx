@@ -2,6 +2,7 @@
 import { useState } from 'preact/hooks';
 import { formatDate } from '../game/time';
 import { diaryDay, sameEntry, type DiaryEntry } from '../notes/diary';
+import { draftKey, draftOutdated, dropDraft, loadDraft, putDraft } from '../notes/drafts';
 import { SECTION_ICONS, type SectionIcon, type SectionKind } from '../notes/model';
 import type { Ui } from './App';
 import { LIcon } from './Icon';
@@ -86,11 +87,19 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
   const section = ui.notes.section(slug);
   const note = path ? ui.notes.note(path) : null;
   const stati = section?.vid === 'stati';
-  const [title, setTitle] = useState(note?.title ?? '');
-  const [text, setText] = useState(() => (note ? (stati ? note.body : note.text).replace(/\n$/, '') : ''));
-  // Статья открывается для чтения, править её можно кнопкой. Новая статья и запись ленты сразу правятся.
-  const [editing, setEditing] = useState(!path || !stati);
-  if (path && !note) {
+  const key = draftKey(slug, path);
+  const [draft] = useState(() => loadDraft(key));
+  const base = { title: note?.title ?? '', text: note ? (stati ? note.body : note.text).replace(/\n$/, '') : '' };
+  const [title, setTitle] = useState(draft?.title ?? base.title);
+  const [text, setText] = useState(draft?.text ?? base.text);
+  // Статья открывается для чтения, править её можно кнопкой. Новая статья и запись ленты сразу правятся, статья с черновиком тоже.
+  const [editing, setEditing] = useState(!path || !stati || !!draft);
+  const change = (nextTitle: string, nextText: string) => {
+    setTitle(nextTitle);
+    setText(nextText);
+    putDraft(key, { title: nextTitle, text: nextText }, base, ui.now);
+  };
+  if (path && !note && !draft) {
     // Заметку удалили, пока лист был открыт (например, на другом устройстве).
     return (
       <Sheet title="Заметка" onClose={ui.close}>
@@ -100,14 +109,17 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
   }
   const save = () => {
     if (!text.trim() && !title.trim()) return;
-    if (path) ui.notes.saveNote(path, { title, text });
+    // Если заметку удалили, а черновик остался, она запишется заново.
+    if (path && note) ui.notes.saveNote(path, { title, text });
     else ui.notes.addNote(slug, { title, text });
+    dropDraft(key);
     ui.close();
     if (!path) ui.toast(HERO_NOTED);
   };
   const remove = () => {
     if (!path || !confirm('Удалить эту заметку? В истории репозитория она останется.')) return;
     ui.notes.deleteNote(path);
+    dropDraft(key);
     ui.close();
     ui.toast('Заметка удалена');
   };
@@ -139,14 +151,21 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
         </button>
       }
     >
+      {draft && (
+        <p class="note ndraft-note">
+          Черновик не сохранён, он есть только на этом устройстве.
+          {path && !note && ' Заметку удалили, «Сохранить» запишет её заново.'}
+          {note && draftOutdated(draft, base.text) && ' Заметка изменилась после начала черновика, «Сохранить» заменит новую версию.'}
+        </p>
+      )}
       {stati && (
         <label class="field">
           <span class="field-label">Заголовок</span>
-          <input class="input" value={title} maxLength={80} onInput={(e) => setTitle(e.currentTarget.value)} />
+          <input class="input" value={title} maxLength={80} onInput={(e) => change(e.currentTarget.value, text)} />
         </label>
       )}
-      <RichEditor ui={ui} label="Текст" value={text} onChange={setText} long={stati} />
-      {path && (
+      <RichEditor ui={ui} label="Текст" value={text} onChange={(next) => change(title, next)} long={stati} />
+      {path && note && (
         <>
           <p class="note nfile">{path}</p>
           <div class="actions">

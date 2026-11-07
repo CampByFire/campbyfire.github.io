@@ -5,6 +5,7 @@ import { doneOn } from '../game/state';
 import { addDays, dayKey, formatClock, formatDate, formatDuration } from '../game/time';
 import { W } from '../game/words';
 import type { DiaryDay } from '../notes/diary';
+import { sectionDrafts } from '../notes/drafts';
 import { plainText } from '../notes/markdown';
 import type { Note, Section } from '../notes/model';
 import { search, type Hit } from '../notes/search';
@@ -186,6 +187,13 @@ function SectionView({ ui, section }: { ui: Ui; section: Section }) {
         <FeedInput ui={ui} slug={section.slug} />
       )}
       <div class="nlist">
+        {sectionDrafts(section.slug).map((d) => (
+          <button key={d.key} class="ncard ndraft" onClick={() => ui.open({ kind: 'note', slug: section.slug, path: d.path })}>
+            <span class="ncard-date">Несохранённый черновик, {when(ui, d.at)}</span>
+            {stati && <span class="ncard-title">{d.title || 'Без названия'}</span>}
+            <span class="ncard-line">{plainText(d.text).split('\n')[0]}</span>
+          </button>
+        ))}
         {list.length === 0 && <p class="note">{stati ? 'Статей пока нет.' : 'Здесь пока пусто. Первая запись появится сверху.'}</p>}
         {list.map((n) => (stati ? <ArticleCard key={n.path} ui={ui} n={n} /> : <FeedCard key={n.path} ui={ui} n={n} />))}
       </div>

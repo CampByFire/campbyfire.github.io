@@ -166,6 +166,11 @@
   color: var(--muted);
 }
 
+.ndraft .ncard-date,
+.ndraft-note {
+  color: var(--gold);
+}
+
 .ncard-text {
   font-size: 16px;
   line-height: 1.4;

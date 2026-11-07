@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { diaryDay, diaryEntry, diaryPath, diaryText, mergeDiary, parseDiary } from '../src/notes/diary';
+import { clearDrafts, draftKey, draftOutdated, dropDraft, loadDraft, putDraft, sectionDrafts, type DraftStorage } from '../src/notes/drafts';
 import { conflictPath, parseMeta, parseNote, slugify, stampName, stampTime } from '../src/notes/model';
 import { Notes, type NotesHost, type NotesStorage } from '../src/notes/notes';
 import { search } from '../src/notes/search';
@@ -562,5 +563,59 @@ describe('дневник в Летописи', () => {
     expect(gh.files.get(path)!.text).toBe('## 07:30\n\nС компьютера.\n\n## 08:12\n\nС телефона.\n');
     expect(phone.pending).toBe(0);
     expect(phone.status.phase).toBe('ok');
+  });
+});
+
+describe('черновики заметок', () => {
+  const memory = (): DraftStorage => {
+    const m = new Map<string, string>();
+    return { getItem: (k) => m.get(k) ?? null, setItem: (k, v) => void m.set(k, v), removeItem: (k) => void m.delete(k) };
+  };
+  const EMPTY = { title: '', text: '' };
+
+  it('новая статья: один черновик на раздел, виден только в своём разделе', () => {
+    const store = memory();
+    putDraft(draftKey('stati'), { title: 'Поход', text: 'Лес' }, EMPTY, T, store);
+    expect(loadDraft('new:stati', store)).toEqual({ title: 'Поход', text: 'Лес', at: T });
+    expect(sectionDrafts('stati', store).map((d) => [d.title, d.path])).toEqual([['Поход', undefined]]);
+    expect(sectionDrafts('idei', store)).toEqual([]);
+  });
+
+  it('стёртый текст выбрасывает черновик', () => {
+    const store = memory();
+    putDraft('new:stati', { title: '', text: 'Лес' }, EMPTY, T, store);
+    putDraft('new:stati', { title: ' ', text: '' }, EMPTY, T, store);
+    expect(loadDraft('new:stati', store)).toBeNull();
+  });
+
+  it('правка, вернувшаяся к сохранённому тексту, черновика не оставляет, в том числе в виде из редактора', () => {
+    const store = memory();
+    const path = 'notes/stati/pohod.md';
+    const base = { title: 'Поход', text: '* один\n* два' };
+    putDraft(path, { title: 'Поход', text: 'новое' }, base, T, store);
+    expect(sectionDrafts('stati', store).map((d) => d.path)).toEqual([path]);
+    putDraft(path, { title: 'Поход', text: '- один\n- два' }, base, T, store);
+    expect(loadDraft(path, store)).toBeNull();
+  });
+
+  it('видно, что заметка изменилась после начала черновика', () => {
+    const store = memory();
+    putDraft('notes/stati/a.md', { title: 'А', text: 'моё' }, { title: 'А', text: 'было' }, T, store);
+    const d = loadDraft('notes/stati/a.md', store)!;
+    expect(draftOutdated(d, 'было')).toBe(false);
+    expect(draftOutdated(d, 'с телефона')).toBe(true);
+  });
+
+  it('сохранение и «Стереть всё» убирают черновики, испорченная запись не мешает', () => {
+    const store = memory();
+    putDraft('new:stati', { title: 'А', text: 'б' }, EMPTY, T, store);
+    putDraft('new:idei', { title: 'В', text: 'г' }, EMPTY, T, store);
+    dropDraft('new:stati', store);
+    expect(loadDraft('new:stati', store)).toBeNull();
+    expect(loadDraft('new:idei', store)?.title).toBe('В');
+    clearDrafts(store);
+    expect(loadDraft('new:idei', store)).toBeNull();
+    store.setItem('taskcraft-lager-drafts', 'не json');
+    expect(sectionDrafts('stati', store)).toEqual([]);
   });
 });

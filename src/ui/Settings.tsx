@@ -12,6 +12,7 @@ import { BUILD, VERSION } from '../version';
 import type { Ui } from './App';
 import { downloadGame, saveFile } from './files';
 import { GIcon, LIcon } from './Icon';
+import { clearDrafts } from '../notes/drafts';
 import { clearLocal, loadLocal, updateLocal } from './local';
 import type { Motion } from './magic/mode';
 import { ChipText, Chips } from './parts';
@@ -230,6 +231,7 @@ export function WipeSheet({ ui }: { ui: Ui }) {
     sync.disconnect();
     store.wipe();
     notes.clear();
+    clearDrafts();
     clearLocal();
     location.reload();
   };

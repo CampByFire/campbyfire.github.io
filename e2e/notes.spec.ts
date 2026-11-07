@@ -428,3 +428,45 @@ test('клавиатура телефона: лист с редактором в
   });
   await expect(overlay).toHaveCSS('bottom', '0px');
 });
+
+test('черновик: не в списке и не на GitHub, переживает закрытие, уходит после сохранения', async ({ page }) => {
+  const { gh, form } = await draftArticle(page);
+  await page.keyboard.press('Escape');
+  await expect(form).toBeHidden();
+
+  // В разделе строка черновика, статьи нет в файлах.
+  const row = page.getByRole('button', { name: /Несохранённый черновик/ });
+  await expect(row).toContainText('Поход');
+  await page.clock.runFor(3000);
+  expect(articleFile(gh)).toBeUndefined();
+  expect(await axe(page), 'Раздел с черновиком').toEqual([]);
+
+  // Лист открывается заново с тем же текстом и с предупреждением.
+  await row.click();
+  const open = sheet(page, 'Новая статья');
+  await expect(open.getByText('Черновик не сохранён, он есть только на этом устройстве.')).toBeVisible();
+  await expect(open.getByLabel('Заголовок', { exact: true })).toHaveValue('Поход');
+  await expect(open.getByRole('textbox', { name: 'Текст' })).toContainText('Костёр горит');
+  await expect(open.getByRole('button', { name: /Выбросить/ })).toHaveCount(0);
+  expect(await axe(page), 'Лист с черновиком').toEqual([]);
+
+  await open.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(row).toHaveCount(0);
+  await page.clock.runFor(3000);
+  await expect.poll(() => articleFile(gh)).toContain('Костёр горит');
+
+  // Правка статьи: чтение черновика не создаёт, правка создаёт, и статья сразу открывается в поле.
+  await page.getByRole('button', { name: /Поход/ }).click();
+  await sheet(page, 'Статья').getByRole('button', { name: 'Править' }).click();
+  await expect(row).toHaveCount(0);
+  await sheet(page, 'Статья').getByLabel('Заголовок', { exact: true }).fill('Поход на север');
+  await page.keyboard.press('Escape');
+  await expect(row).toContainText('Поход на север');
+  await row.click();
+  await expect(sheet(page, 'Статья').getByLabel('Заголовок', { exact: true })).toHaveValue('Поход на север');
+
+  // Вернул как было: черновика больше нет.
+  await sheet(page, 'Статья').getByLabel('Заголовок', { exact: true }).fill('Поход');
+  await page.keyboard.press('Escape');
+  await expect(row).toHaveCount(0);
+});
