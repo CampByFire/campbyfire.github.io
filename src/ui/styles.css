@@ -3321,6 +3321,19 @@ button.trophy {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* Дело в руке: поверх остальных, с тенью и рамкой. Шкала под ним не ловит нажатий. */
+.tl.is-dragging {
+  cursor: grabbing;
+}
+.tl-slot.is-held {
+  z-index: 4;
+}
+.tl-slot.is-held .tl-ev {
+  cursor: grabbing;
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.55);
+}
 .tl-ev.is-short {
   flex-direction: row;
   align-items: center;

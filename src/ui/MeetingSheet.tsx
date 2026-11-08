@@ -1,6 +1,7 @@
-// Лист встречи: новая встреча в календаре или правка. Фраза «завтра в 10 стоматолог» сама ставит день и время.
+// Лист события: новое событие в календаре или правка. Фраза «завтра в 10 стоматолог» сама ставит день и время.
+// Здесь же вопрос, когда день повторяющегося события перетащили на другое время: сдвинуть только его или всю серию.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { addMeeting, cleanTime, findMeeting, meetingOccursOn, parseMeeting, removeMeeting, restoreMeeting, skipMeetingDay, unskipMeetingDay, updateMeeting } from '../game/calendar';
+import { addMeeting, cleanTime, findMeeting, meetingOccursOn, moveMeeting, moveMeetingOnce, parseMeeting, removeMeeting, restoreMeeting, restoreMeetingTime, skipMeetingDay, undoMoveOnce, unskipMeetingDay, updateMeeting } from '../game/calendar';
 import { formatDue } from '../game/time';
 import type { DayKey, MeetingRepeat, QuestColor } from '../game/types';
 import { MEETING_REPEATS, MEETING_REPEAT_NAME, dayTitle } from '../game/words';
@@ -10,7 +11,7 @@ import { QuestColorPicker } from './QuestColorPicker';
 import { Chips } from './parts';
 import { Sheet } from './Sheets';
 
-/** day у новой встречи это её день, а у открытой встречи тот день серии, из которого её открыли. */
+/** day у нового события это его день, а у открытого события тот день серии, из которого его открыли. */
 export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui: Ui; meetingId?: string; day?: DayKey; at?: string }) {
   const s = ui.store.state;
   const editing = meetingId ? findMeeting(s, meetingId) : undefined;
@@ -21,7 +22,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
   const [place, setPlace] = useState(editing?.place ?? '');
   const [repeat, setRepeat] = useState<MeetingRepeat | null>(editing?.repeat ?? null);
   const [repeatUntil, setRepeatUntil] = useState(editing?.repeatUntil ?? '');
-  // undefined: обычный цвет встречи, null: в поле кода сейчас не цвет, под ним уже сказано, что не так.
+  // undefined: обычный цвет события, null: в поле кода сейчас не цвет, под ним уже сказано, что не так.
   const [color, setColor] = useState<QuestColor | null | undefined>(editing?.color);
   // Что выбрали руками, сильнее слов во фразе.
   const [touched, setTouched] = useState<{ day?: true; at?: true }>({});
@@ -30,7 +31,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
     if (!editing) input.current?.focus();
   }, []);
 
-  // Фразу разбирает только новая встреча: «завтра в 10 стоматолог», «в пятницу созвон в 15:30».
+  // Фразу разбирает только новое событие: «завтра в 10 стоматолог», «в пятницу созвон в 15:30».
   const parsed = useMemo(() => (editing ? null : parseMeeting(title, s.day)), [title]);
   const pDay = parsed?.day;
   const vDay = !touched.day && pDay ? pDay : day;
@@ -54,7 +55,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
     if (editing) ui.store.act((st) => updateMeeting(st, editing.id, fields));
     else ui.store.act((st, now) => addMeeting(st, now, fields));
     const when = `${formatDue(vDay, s.day)}${cleanTime(vAt) ? ` в ${cleanTime(vAt)!.replace(/^0/, '')}` : ''}${repeat ? `, ${MEETING_REPEAT_NAME[repeat].toLowerCase()}` : ''}`;
-    ui.toast(editing ? 'Встреча сохранена' : `Встреча в календаре: ${when}`);
+    ui.toast(editing ? 'Событие сохранено' : `Событие в календаре: ${when}`);
     ui.close();
   };
 
@@ -62,7 +63,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
     if (!editing) return;
     const gone = ui.store.act((st) => removeMeeting(st, editing.id));
     ui.close();
-    if (gone) ui.toast(series ? 'Серия встреч удалена' : 'Встреча удалена', { label: 'Вернуть', run: () => ui.store.act((st) => restoreMeeting(st, gone)) });
+    if (gone) ui.toast(series ? 'Серия событий удалена' : 'Событие удалено', { label: 'Вернуть', run: () => ui.store.act((st) => restoreMeeting(st, gone)) });
   };
 
   const skip = () => {
@@ -74,7 +75,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
 
   return (
     <Sheet
-      title={editing ? 'Встреча' : 'Новая встреча'}
+      title={editing ? 'Событие' : 'Новое событие'}
       onClose={ui.close}
       footer={
         <button class="btn btn-gold btn-wide" onClick={save}>
@@ -84,7 +85,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
     >
       <form onSubmit={save}>
         <label class="field">
-          <span class="field-label">Что за встреча</span>
+          <span class="field-label">Что за событие</span>
           <input
             ref={input}
             class="input"
@@ -136,7 +137,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
           <input class="input" type="time" value={until} disabled={!vAt} onInput={(e) => setUntil(e.currentTarget.value)} />
         </label>
       </div>
-      <p class="note">Без времени встреча стоит на весь день, например день рождения или поездка.</p>
+      <p class="note">Без времени событие стоит на весь день, например день рождения или поездка.</p>
       <label class="field">
         <span class="field-label">Где</span>
         <input class="input" value={place} onInput={(e) => setPlace(e.currentTarget.value)} placeholder="Адрес, кабинет или ссылка на созвон" maxLength={200} />
@@ -154,7 +155,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
         </label>
       )}
       <QuestColorPicker initial={editing?.color} onChange={setColor} onNone={() => setColor(undefined)} label="Цвет" noneLabel="Обычный" />
-      {series && <p class="note">Правка меняет все дни этой встречи. Чтобы убрать только один день, пропусти его.</p>}
+      {series && <p class="note">Правка меняет все дни этого события. Чтобы убрать только один день, пропусти его.</p>}
       {editing && (
         <div class="actions">
           {canSkip && (
@@ -165,10 +166,49 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
           )}
           <button class="act act-danger" onClick={remove}>
             <LIcon name="close" size={16} />
-            {series ? 'Удалить всю серию' : 'Удалить встречу'}
+            {series ? 'Удалить всю серию' : 'Удалить событие'}
           </button>
         </div>
       )}
+    </Sheet>
+  );
+}
+
+/**
+ * День повторяющегося события перетащили на другое время: сдвинуть только этот день
+ * (он становится отдельным событием, а в серии пропускается) или всю серию.
+ */
+export function MoveMeetingSheet({ ui, meetingId, day, at }: { ui: Ui; meetingId: string; day: DayKey; at: string }) {
+  const s = ui.store.state;
+  const m = findMeeting(s, meetingId);
+  if (!m) return null;
+  const when = at.replace(/^0/, '');
+  const date = formatDue(day, s.day);
+  const once = () => {
+    const copy = ui.store.act((st, now) => moveMeetingOnce(st, now, meetingId, day, at));
+    ui.close();
+    if (copy) ui.toast(`Перенесено на ${when}: ${date}`, { label: 'Вернуть', run: () => ui.store.act((st) => undoMoveOnce(st, meetingId, day, copy)) });
+  };
+  const all = () => {
+    const was = ui.store.act((st) => moveMeeting(st, meetingId, at));
+    ui.close();
+    if (was) ui.toast(`Вся серия теперь в ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => restoreMeetingTime(st, meetingId, was)) });
+  };
+  return (
+    <Sheet title="Перенести событие" onClose={ui.close}>
+      <p class="note">
+        «{m.title}» повторяется: {m.repeat ? MEETING_REPEAT_NAME[m.repeat].toLowerCase() : ''}. Перенести на {when} только этот день или все дни серии?
+      </p>
+      <div class="actions">
+        <button class="act" onClick={once}>
+          <LIcon name="calendar" size={16} />
+          Только этот день: {date}
+        </button>
+        <button class="act" onClick={all}>
+          <LIcon name="repeat" size={16} />
+          Все дни серии
+        </button>
+      </div>
     </Sheet>
   );
 }

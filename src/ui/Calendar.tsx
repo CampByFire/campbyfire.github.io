@@ -1,13 +1,15 @@
-// Календарь: месяц сеткой и что стоит на выбранный день. Встречи живут только здесь,
+// Календарь: месяц сеткой и что стоит на выбранный день. События (Meeting) живут только здесь,
 // а задачи берутся из игры: на какой день позваны к костру, какой у них срок, когда придут повторы.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { SLOT_MIN_SHOWN, agendaOf, dayCount, meetingsOn, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
+import { SLOT_MIN_SHOWN, agendaOf, clockOf, dropStart, moveMeeting, restoreMeetingTime, dayCount, meetingsOn, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
 import { colorName, isDark, meetingTint, questHex } from '../game/color';
-import { findQuest } from '../game/state';
+import { findQuest, setRoutineAt, updateTask } from '../game/state';
+import { DRAG_STEP_MIN } from '../game/rules';
 import { addDays, formatClock, formatDate, minutesOfDay, parseDay } from '../game/time';
 import type { DayKey, Meeting, State } from '../game/types';
 import { MEETING_REPEAT_NAME, MONTH_NAME, MONTH_OF, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
 import type { Ui } from './App';
+import { useTimelineDrag } from './drag';
 import { GIcon, LIcon } from './Icon';
 import { ColorDot, QuestDot } from './parts';
 
@@ -28,7 +30,7 @@ const monthName = (m: MonthKey, today: DayKey) => {
   return `${MONTH_NAME[mm - 1]}${y === parseDay(today).getFullYear() ? '' : ` ${y}`}`;
 };
 
-/** «Завтра 1 встреча и 2 задачи, с 9:00» или «На завтра ничего не запланировано». */
+/** «Завтра 1 событие и 2 задачи, с 9:00» или «На завтра ничего не запланировано». */
 export function tomorrowNews(s: State): string {
   const items = agendaOf(s, addDays(s.day, 1));
   const c = countOf(items);
@@ -114,7 +116,7 @@ function MonthView({ ui }: { ui: Ui }) {
 /**
  * Месяц сеткой. Дни это кнопки: Tab попадает на выбранный день, стрелки ходят по дням и неделям,
  * Home и End к началу и концу недели, нажатие открывает день шкалой по часам. Диктор слышит дату
- * и сколько на ней встреч и задач.
+ * и сколько на ней событий и задач.
  */
 function MonthGrid({ s, month, day, onPick, onOpen }: { s: State; month: MonthKey; day: DayKey; onPick: (d: DayKey) => void; onOpen: (d: DayKey) => void }) {
   const weeks = monthWeeks(month);
@@ -212,12 +214,12 @@ function DayAgenda({ ui, day }: { ui: Ui; day: DayKey }) {
         </ul>
       )}
       <AddButtons ui={ui} day={day} />
-      {!past && <p class="note">Задача на этот день сама придёт к костру утром. Встреча к костру не идёт и опыта не даёт: она просто стоит в календаре и в плане своего дня.</p>}
+      {!past && <p class="note">Задача на этот день сама придёт к костру утром. Событие к костру не идёт и опыта не даёт: оно просто стоит в календаре и в плане своего дня.</p>}
     </section>
   );
 }
 
-/** «+ Встреча» и «+ Задача» на этот день. Задачу в прошлое не добавить. */
+/** «+ Событие» и «+ Задача» на этот день. Задачу в прошлое не добавить. */
 function AddButtons({ ui, day, small = false }: { ui: Ui; day: DayKey; small?: boolean }) {
   const past = day < ui.store.state.day;
   const cls = `btn btn-ghost${small ? ' btn-sm' : ''}`;
@@ -225,7 +227,7 @@ function AddButtons({ ui, day, small = false }: { ui: Ui; day: DayKey; small?: b
     <div class="cal-add">
       <button class={cls} onClick={() => ui.open({ kind: 'meeting', day })}>
         <LIcon name="plus" size={16} />
-        Встреча
+        Событие
       </button>
       {!past && (
         <button class={cls} onClick={() => ui.open({ kind: 'add', day })}>
@@ -244,8 +246,9 @@ const hm = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart
 
 /**
  * День шкалой по часам, как в календаре телефона. Сверху то, что без времени («Весь день»),
- * ниже часы с делами. Нажатие на пустое место шкалы заводит встречу на этот час. Стрелки
- * у заголовка и смахивание вбок листают дни.
+ * ниже часы с делами. Нажатие на пустое место шкалы заводит событие на этот час. Стрелки
+ * у заголовка и смахивание вбок листают дни. Дело на шкале можно перетащить на другое время
+ * (с клавиатуры Alt со стрелкой), повторяющееся событие спросит, сдвинуть один день или всю серию.
  */
 function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
   const s = ui.store.state;
@@ -266,9 +269,35 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
   }, [day]);
 
   const go = (n: number) => ui.openDay(addDays(day, n));
+  /** Дело перетащили (или сдвинули с клавиатуры) на новое время. */
+  const moveTo = (slot: Slot, start: number) => {
+    const x = slot.item;
+    if (start === slot.start) return;
+    const at = clockOf(start);
+    const when = hm(start);
+    if (x.kind === 'meeting') {
+      const id = x.meeting.id;
+      if (x.meeting.repeat) {
+        ui.open({ kind: 'moveMeeting', meetingId: id, day: x.day, at });
+        return;
+      }
+      const was = ui.store.act((st) => moveMeeting(st, id, at));
+      if (was) ui.toast(`Событие перенесено на ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => restoreMeetingTime(st, id, was)) });
+    } else if (x.kind === 'routine') {
+      const id = x.routine.id;
+      const was = ui.store.act((st) => setRoutineAt(st, id, at));
+      if (was !== undefined) ui.toast(`Повтор теперь каждый раз в ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => setRoutineAt(st, id, was)) });
+    } else {
+      const id = x.task.id;
+      const was = x.task.at ?? null;
+      ui.store.act((st) => updateTask(st, id, { at }));
+      ui.toast(`Задача перенесена на ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => updateTask(st, id, { at: was })) });
+    }
+  };
+  const drag = useTimelineDrag(box, HOUR_PX, moveTo);
   const touch = useRef<{ x: number; y: number } | null>(null);
   const newAt = (e: MouseEvent) => {
-    if ((e.target as HTMLElement).closest('.tl-ev')) return;
+    if ((e.target as HTMLElement).closest('.tl-ev') || drag.held) return;
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const h = Math.min(23, Math.max(0, Math.floor((e.clientY - rect.top) / HOUR_PX)));
     ui.open({ kind: 'meeting', day, at: `${String(h).padStart(2, '0')}:00` });
@@ -337,34 +366,42 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
           const from = touch.current;
           touch.current = null;
           const t = e.changedTouches[0];
-          if (!from || !t) return;
+          if (!from || !t || drag.justDropped()) return;
           const dx = t.clientX - from.x;
           if (Math.abs(dx) > 70 && Math.abs(t.clientY - from.y) < 40) go(dx < 0 ? 1 : -1);
         }}
       >
-        <div class="tl" style={{ height: `${24 * HOUR_PX}px` }} onClick={newAt}>
+        <p class="sr-only" id="tl-drag-hint">
+          Чтобы поменять время, перетащи дело или нажми Alt со стрелкой вверх или вниз.
+        </p>
+        <div class={`tl${drag.held ? ' is-dragging' : ''}`} style={{ height: `${24 * HOUR_PX}px` }} onClick={newAt} onClickCapture={drag.onClickCapture}>
           {HOURS.map((h) => (
             <div key={h} class="tl-hour" style={{ top: `${h * HOUR_PX}px` }} aria-hidden="true">
               <span class="tl-label">{h ? `${h}:00` : ''}</span>
             </div>
           ))}
           {isToday && nowMin < 24 * 60 && <div class="tl-now" style={{ top: `${(nowMin / 60) * HOUR_PX}px` }} aria-hidden="true" />}
-          {slots.length === 0 && <p class="tl-empty">Нажми на час, чтобы добавить встречу</p>}
+          {slots.length === 0 && <p class="tl-empty">Нажми на час, чтобы добавить событие</p>}
           <ul class="tl-evs">
-            {slots.map((x) => (
-              <li
-                key={key(x.item)}
-                class="tl-slot"
-                style={{
-                  top: `${(x.start / 60) * HOUR_PX}px`,
-                  height: `${Math.max(((x.end - x.start) / 60) * HOUR_PX, (SLOT_MIN_SHOWN / 60) * HOUR_PX) - 2}px`,
-                  left: `calc(var(--tl-gutter) + (100% - var(--tl-gutter)) * ${x.col / x.cols})`,
-                  width: `calc((100% - var(--tl-gutter)) / ${x.cols} - 3px)`,
-                }}
-              >
-                <TimelineEvent ui={ui} s={s} slot={x} />
-              </li>
-            ))}
+            {slots.map((x) => {
+              const held = drag.held && key(drag.held.slot.item) === key(x.item) ? drag.held : null;
+              const start = held ? held.start : x.start;
+              const shown = held ? { ...x, start, end: start + x.end - x.start } : x;
+              return (
+                <li
+                  key={key(x.item)}
+                  class={`tl-slot${held ? ' is-held' : ''}`}
+                  style={{
+                    top: `${(start / 60) * HOUR_PX}px`,
+                    height: `${Math.max(((x.end - x.start) / 60) * HOUR_PX, (SLOT_MIN_SHOWN / 60) * HOUR_PX) - 2}px`,
+                    left: `calc(var(--tl-gutter) + (100% - var(--tl-gutter)) * ${x.col / x.cols})`,
+                    width: `calc((100% - var(--tl-gutter)) / ${x.cols} - 3px)`,
+                  }}
+                >
+                  <TimelineEvent ui={ui} s={s} slot={shown} onPointerDown={movable(x.item) ? (e) => drag.onPointerDown(e, x) : undefined} onShift={(n) => moveTo(x, dropStart(x.start + n, x.end - x.start))} />
+                </li>
+              );
+            })}
           </ul>
         </div>
       </section>
@@ -379,7 +416,10 @@ function dayLong(day: DayKey, today: DayKey): string {
 }
 
 /** Дело на шкале дня: название, часы и что это такое. Нажатие открывает его лист. */
-function TimelineEvent({ ui, s, slot }: { ui: Ui; s: State; slot: Slot }) {
+/** Что можно перетащить: события, задачи плана и повторы. Сделанное остаётся там, где его сделали. */
+const movable = (x: AgendaItem) => x.kind !== 'due' && !(x.kind === 'task' && x.done);
+
+function TimelineEvent({ ui, s, slot, onPointerDown, onShift }: { ui: Ui; s: State; slot: Slot; onPointerDown?: (e: PointerEvent) => void; onShift: (min: number) => void }) {
   const x = slot.item;
   const range = `${hm(slot.start)}–${hm(slot.end)}`;
   let title: string;
@@ -390,7 +430,7 @@ function TimelineEvent({ ui, s, slot }: { ui: Ui; s: State; slot: Slot }) {
   let tint: string | undefined;
   if (x.kind === 'meeting') {
     title = x.meeting.title;
-    kind = ['встреча', repeatOf(x.meeting), x.meeting.place].filter(Boolean).join(' · ');
+    kind = ['событие', repeatOf(x.meeting), x.meeting.place].filter(Boolean).join(' · ');
     cls += ' tl-ev-meet';
     open = () => ui.open({ kind: 'meeting', meetingId: x.meeting.id, day: x.day });
     if (x.meeting.color) {
@@ -413,7 +453,16 @@ function TimelineEvent({ ui, s, slot }: { ui: Ui; s: State; slot: Slot }) {
   }
   const short = slot.end - slot.start <= 30;
   return (
-    <button class={`${cls}${short ? ' is-short' : ''}`} style={color ? { borderLeftColor: color, ...(tint ? { background: tint } : {}) } : undefined} aria-label={`${range}, ${title}, ${kind}`} onClick={open}>
+    <button class={`${cls}${short ? ' is-short' : ''}`} style={color ? { borderLeftColor: color, ...(tint ? { background: tint } : {}) } : undefined} aria-label={`${range}, ${title}, ${kind}`}
+      aria-describedby={onPointerDown ? 'tl-drag-hint' : undefined}
+      onClick={open}
+      onPointerDown={onPointerDown}
+      onKeyDown={(e) => {
+        if (!onPointerDown || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+        e.preventDefault();
+        onShift(e.key === 'ArrowUp' ? -DRAG_STEP_MIN : DRAG_STEP_MIN);
+      }}
+    >
       <span class="tl-ev-title" aria-hidden="true">
         {title}
       </span>
@@ -427,7 +476,7 @@ function TimelineEvent({ ui, s, slot }: { ui: Ui; s: State; slot: Slot }) {
 
 const key = (x: AgendaItem) => (x.kind === 'meeting' ? `m-${x.meeting.id}` : x.kind === 'routine' ? `r-${x.routine.id}` : `${x.kind}-${x.task.id}`);
 
-/** Повтор встречи словами для подписи строки: «каждую неделю». */
+/** Повтор события словами для подписи строки: «каждую неделю». */
 const repeatOf = (m: Meeting) => (m.repeat && MEETING_REPEAT_NAME[m.repeat]?.toLowerCase()) || null;
 
 /** Строка дня: время, название и что это такое. */
@@ -440,7 +489,7 @@ export function AgendaRow({ ui, s, x }: { ui: Ui; s: State; x: AgendaItem }) {
   if (x.kind === 'meeting') {
     const m = x.meeting;
     title = m.title;
-    sub = ['встреча', repeatOf(m), m.until && `до ${m.until.replace(/^0/, '')}`, m.place].filter(Boolean).join(' · ');
+    sub = ['событие', repeatOf(m), m.until && `до ${m.until.replace(/^0/, '')}`, m.place].filter(Boolean).join(' · ');
     open = () => ui.open({ kind: 'meeting', meetingId: m.id, day: x.day });
     dot = m.color ? <ColorDot hex={questHex(m.color)} /> : <LIcon name="calendar" size={15} class="cal-ic-meet" />;
   } else if (x.kind === 'routine') {

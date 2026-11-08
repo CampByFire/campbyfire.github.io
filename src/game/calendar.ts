@@ -1,7 +1,7 @@
 // Календарь: встречи и что стоит на каждый день. Встречи живут в State.meetings, а дела берутся
 // из задач (день у костра, срок, сделано в этот день) и повторяющихся задач.
 import { parsePhrase } from './phrase';
-import { EVENT_MIN, MEETING_MIN, estimateOf } from './rules';
+import { DRAG_STEP_MIN, EVENT_MIN, MEETING_MIN, estimateOf } from './rules';
 import { nextId, waitingOf } from './state';
 import { addDays, daysBetween, parseDay, repeatsOn } from './time';
 import type { DayKey, Meeting, MeetingRepeat, QuestColor, Routine, State, Task } from './types';
@@ -26,7 +26,7 @@ export function cleanTime(at: string | null | undefined): string | null {
 }
 
 function fill(m: Meeting, input: MeetingInput): void {
-  m.title = input.title.trim() || 'Встреча';
+  m.title = input.title.trim() || 'Событие';
   m.day = input.day;
   m.at = cleanTime(input.at);
   const until = m.at ? cleanTime(input.until) : null;
@@ -147,6 +147,70 @@ export function removeMeeting(s: State, id: string): Meeting | null {
 export function restoreMeeting(s: State, m: Meeting): void {
   if (findMeeting(s, m.id)) return;
   (s.meetings ??= []).push(m);
+}
+
+/** Минуты от полуночи в «09:05». */
+export const clockOf = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+
+/**
+ * Куда встанет дело, которое перетащили на шкале дня: начало на ближайший шаг DRAG_STEP_MIN,
+ * и всё дело целиком остаётся в этих сутках (конец не позже 23:59).
+ */
+export function dropStart(startMin: number, lengthMin: number): number {
+  const last = Math.max(0, Math.floor((24 * 60 - 1 - Math.max(0, lengthMin)) / DRAG_STEP_MIN) * DRAG_STEP_MIN);
+  return Math.min(last, Math.max(0, Math.round(startMin / DRAG_STEP_MIN) * DRAG_STEP_MIN));
+}
+
+/** Время и конец события, сдвинутые на новое начало: длина остаётся прежней. */
+function shifted(m: Meeting, at: string): { at: string; until?: string } {
+  if (!m.at || !m.until) return { at };
+  const len = toMin(m.until) - toMin(m.at);
+  return { at, until: clockOf(Math.min(24 * 60 - 1, toMin(at) + len)) };
+}
+
+/** Что было у события до переноса: его вернёт «Вернуть». */
+export type MeetingTime = Pick<Meeting, 'at' | 'until'>;
+
+/** Перенести событие (или всю серию) на другое время, длина та же. Возвращает прежнее время. */
+export function moveMeeting(s: State, id: string, at: string): MeetingTime | null {
+  const m = findMeeting(s, id);
+  const clean = cleanTime(at);
+  if (!m || !clean) return null;
+  const was: MeetingTime = { at: m.at, ...(m.until ? { until: m.until } : {}) };
+  const next = shifted(m, clean);
+  m.at = next.at;
+  if (next.until) m.until = next.until;
+  else delete m.until;
+  return was;
+}
+
+/** Вернуть событию время, которое было до переноса. */
+export function restoreMeetingTime(s: State, id: string, was: MeetingTime): void {
+  const m = findMeeting(s, id);
+  if (!m) return;
+  m.at = was.at;
+  if (was.until) m.until = was.until;
+  else delete m.until;
+}
+
+/**
+ * Перенести только один день серии: этот день пропускается, а на его место встаёт отдельное
+ * событие без повтора с тем же названием, местом и цветом. Остальные дни серии не меняются.
+ * Возвращает id нового события; null, если такого дня в серии нет.
+ */
+export function moveMeetingOnce(s: State, now: number, id: string, day: DayKey, at: string): string | null {
+  const m = findMeeting(s, id);
+  const clean = cleanTime(at);
+  if (!m || !clean || !m.repeat || !meetingOccursOn(m, day)) return null;
+  skipMeetingDay(s, id, day);
+  const next = shifted(m, clean);
+  return addMeeting(s, now, { title: m.title, day, at: next.at, until: next.until ?? null, place: m.place ?? null, color: m.color ?? null });
+}
+
+/** Отменить перенос одного дня серии: отдельное событие убирается, день серии возвращается. */
+export function undoMoveOnce(s: State, id: string, day: DayKey, copyId: string): void {
+  removeMeeting(s, copyId);
+  unskipMeetingDay(s, id, day);
 }
 
 /** Встречи дня: сначала на весь день, потом по времени. */

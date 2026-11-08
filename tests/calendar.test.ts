@@ -1,10 +1,10 @@
 // Календарь: встречи, что стоит на день, сетка месяца, файл календаря и слияние встреч.
 import { describe, expect, it } from 'vitest';
-import { addMeeting, agendaOf, cleanTime, meetingOccursOn, nextMeetingDay, parseMeeting, skipMeetingDay, timelineOf, unskipMeetingDay, dayCount, findMeeting, meetingsOn, monthWeeks, removeMeeting, restoreMeeting, shiftMonth, updateMeeting } from '../src/game/calendar';
+import { addMeeting, agendaOf, dropStart, moveMeeting, moveMeetingOnce, restoreMeetingTime, undoMoveOnce, cleanTime, meetingOccursOn, nextMeetingDay, parseMeeting, skipMeetingDay, timelineOf, unskipMeetingDay, dayCount, findMeeting, meetingsOn, monthWeeks, removeMeeting, restoreMeeting, shiftMonth, updateMeeting } from '../src/game/calendar';
 import { contrast, meetingTint } from '../src/game/color';
 import { buildIcs } from '../src/game/ics';
 import { mergeGames } from '../src/game/merge';
-import { addRoutine, addTask, complete, newState, planTask, settle } from '../src/game/state';
+import { addRoutine, addTask, complete, findRoutine, findTask, newState, planTask, setRoutineAt, settle, waitingOf } from '../src/game/state';
 import { checkSave } from '../src/game/store';
 import type { Meeting, MeetingRepeat, State } from '../src/game/types';
 
@@ -22,7 +22,7 @@ describe('встречи', () => {
     expect(findMeeting(s, id)!.until).toBeUndefined();
     expect(findMeeting(s, id)!.place).toBeUndefined();
     updateMeeting(s, id, { title: '', day: '2026-10-25', at: '', until: '12:00' });
-    expect(findMeeting(s, id)).toMatchObject({ title: 'Встреча', day: '2026-10-25', at: null });
+    expect(findMeeting(s, id)).toMatchObject({ title: 'Событие', day: '2026-10-25', at: null });
     expect(findMeeting(s, id)!.until).toBeUndefined();
   });
 
@@ -429,5 +429,81 @@ describe('встречи при слиянии', () => {
   it('сохранение с испорченным списком встреч открывается без него', () => {
     const raw = { ...newState(at(8)), meetings: 'не список' };
     expect(checkSave(JSON.parse(JSON.stringify(raw)))!.meetings).toBeUndefined();
+  });
+});
+
+describe('перенос на шкале дня', () => {
+  it('время встаёт на шаг в 15 минут, и дело целиком остаётся в этих сутках', () => {
+    expect(dropStart(9 * 60 + 7, 60)).toBe(9 * 60);
+    expect(dropStart(9 * 60 + 8, 60)).toBe(9 * 60 + 15);
+    expect(dropStart(-40, 30)).toBe(0);
+    // Час длиной с 23:30 не влезет: начало встаёт так, чтобы конец был не позже 23:59.
+    expect(dropStart(23 * 60 + 30, 60)).toBe(22 * 60 + 45);
+    expect(dropStart(23 * 60 + 50, 5)).toBe(23 * 60 + 45);
+  });
+
+  it('событие переезжает вместе с концом, «Вернуть» ставит прежнее время', () => {
+    const s = newState(at(8));
+    const id = addMeeting(s, at(8), { title: 'Стоматолог', day: '2026-10-24', at: '10:00', until: '10:45' });
+    const was = moveMeeting(s, id, '14:30')!;
+    expect(findMeeting(s, id)).toMatchObject({ at: '14:30', until: '15:15' });
+    restoreMeetingTime(s, id, was);
+    expect(findMeeting(s, id)).toMatchObject({ at: '10:00', until: '10:45' });
+    // Без конца события конца и не появляется, а время берётся только настоящее.
+    const free = addMeeting(s, at(8), { title: 'Созвон', day: '2026-10-24', at: '15:00' });
+    moveMeeting(s, free, '16:00');
+    expect(findMeeting(s, free)!.until).toBeUndefined();
+    expect(moveMeeting(s, free, '25:00')).toBeNull();
+    expect(findMeeting(s, free)!.at).toBe('16:00');
+  });
+
+  it('один день серии переезжает отдельно, остальные дни остаются, «Вернуть» всё возвращает', () => {
+    const s = newState(at(8));
+    const id = addMeeting(s, at(8), { title: 'Планёрка', day: '2026-10-26', at: '10:00', until: '11:00', place: 'Зал', color: 'green', repeat: 'week' });
+    const copy = moveMeetingOnce(s, at(9), id, '2026-11-02', '15:00')!;
+    expect(meetingsOn(s, '2026-11-02').map((m) => [m.title, m.at, m.until, m.place, m.color, m.repeat])).toEqual([['Планёрка', '15:00', '16:00', 'Зал', 'green', undefined]]);
+    expect(meetingsOn(s, '2026-11-09').map((m) => m.at)).toEqual(['10:00']);
+    expect(findMeeting(s, id)!.skip).toEqual(['2026-11-02']);
+    // Дня, которого нет в серии, не перенести, и одиночное событие так не переносится.
+    expect(moveMeetingOnce(s, at(9), id, '2026-11-03', '15:00')).toBeNull();
+    expect(moveMeetingOnce(s, at(9), copy, '2026-11-02', '16:00')).toBeNull();
+    undoMoveOnce(s, id, '2026-11-02', copy);
+    expect(findMeeting(s, copy)).toBeUndefined();
+    expect(findMeeting(s, id)!.skip).toBeUndefined();
+    expect(meetingsOn(s, '2026-11-02').map((m) => m.at)).toEqual(['10:00']);
+  });
+
+  it('вся серия переезжает на новое время', () => {
+    const s = newState(at(8));
+    const id = addMeeting(s, at(8), { title: 'Планёрка', day: '2026-10-26', at: '10:00', until: '11:00', repeat: 'workday' });
+    moveMeeting(s, id, '09:15');
+    expect(meetingsOn(s, '2026-10-28').map((m) => [m.at, m.until])).toEqual([['09:15', '10:15']]);
+  });
+
+  it('повторяющаяся задача переезжает на новое время вместе с ждущей задачей', () => {
+    const s = newState(at(8));
+    const r = addRoutine(s, at(8), { title: 'Зарядка', questId: null, level: 1, estimateMin: 15, at: '07:00', repeat: { every: 'day' } });
+    expect(waitingOf(s, r)?.at).toBe('07:00');
+    const was = setRoutineAt(s, r, '18:30');
+    expect(was).toBe('07:00');
+    expect(findRoutine(s, r)!.at).toBe('18:30');
+    expect(waitingOf(s, r)!.at).toBe('18:30');
+    expect(agendaOf(s, '2026-10-24').find((x) => x.kind === 'routine')?.at).toBe('18:30');
+    expect(setRoutineAt(s, 'нет-такой', '10:00')).toBeUndefined();
+    expect(findTask(s, waitingOf(s, r)!.id)).toBeDefined();
+  });
+
+  it('перенос одного дня серии на телефоне и правка серии на компьютере сливаются', () => {
+    const base = newState(at(8));
+    const id = addMeeting(base, at(8), { title: 'Планёрка', day: '2026-10-26', at: '10:00', repeat: 'week' });
+    const local = JSON.parse(JSON.stringify(base)) as State;
+    const remote = JSON.parse(JSON.stringify(base)) as State;
+    local.touchedAt = at(9);
+    const copy = moveMeetingOnce(local, at(9), id, '2026-11-02', '15:00')!;
+    remote.touchedAt = at(10);
+    updateMeeting(remote, id, { title: 'Планёрка отдела', day: '2026-10-26', at: '10:00', repeat: 'week' });
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(findMeeting(m, id)).toMatchObject({ title: 'Планёрка отдела', skip: ['2026-11-02'] });
+    expect(meetingsOn(m, '2026-11-02').map((x) => [x.id, x.at])).toEqual([[copy, '15:00']]);
   });
 });

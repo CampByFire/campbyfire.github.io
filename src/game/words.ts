@@ -99,7 +99,7 @@ export function repeatName(r: Repeat): string {
   return `по ${days.map((d) => ON_WEEKDAY[d].slice(3)).join(', ').replace(/, ([^,]*)$/, ' и $1')}`;
 }
 
-/** Повторы встречи в том порядке, в каком их предлагает лист встречи. */
+/** Повторы события в том порядке, в каком их предлагает лист события. */
 export const MEETING_REPEATS: MeetingRepeat[] = ['day', 'workday', 'week', 'week2', 'month', 'year'];
 
 export const MEETING_REPEAT_NAME: Record<MeetingRepeat, string> = {
@@ -134,10 +134,10 @@ export function dayTitle(day: string, today: string): string {
   return `${wd[0].toUpperCase()}${wd.slice(1)}, ${date}`;
 }
 
-/** «1 встреча и 3 задачи», «2 встречи», «4 задачи»; пусто, если ничего. */
+/** «1 событие и 3 задачи», «2 события», «4 задачи»; пусто, если ничего. */
 export function agendaCount(meetings: number, tasks: number): string {
   const parts: string[] = [];
-  if (meetings) parts.push(`${meetings} ${plural(meetings, 'встреча', 'встречи', 'встреч')}`);
+  if (meetings) parts.push(`${meetings} ${plural(meetings, 'событие', 'события', 'событий')}`);
   if (tasks) parts.push(`${tasks} ${plural(tasks, 'задача', 'задачи', 'задач')}`);
   return parts.join(' и ');
 }

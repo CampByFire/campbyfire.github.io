@@ -142,7 +142,7 @@ function DayPlan({ ui }: { ui: Ui }) {
       {meetings.length > 0 && (
         <section class="group">
           <div class="group-head">
-            <h2 class="sc">Встречи сегодня</h2>
+            <h2 class="sc">События сегодня</h2>
             <button class="link-btn" onClick={() => openCalendar(ui, s.day)}>
               календарь
             </button>

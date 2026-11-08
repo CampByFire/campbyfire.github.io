@@ -572,6 +572,17 @@ export function updateRoutine(s: State, id: string, input: RoutineInput): void {
   if (moved) planRoutines(s, id);
 }
 
+/** Новое время повторяющейся задачи: ждущая в отряде задача переезжает вместе с ней. Возвращает прежнее время. */
+export function setRoutineAt(s: State, id: string, at: string | null): string | null | undefined {
+  const r = findRoutine(s, id);
+  if (!r) return undefined;
+  const was = r.at;
+  r.at = at;
+  const t = waitingOf(s, id);
+  if (t) t.at = at;
+  return was;
+}
+
 /** Больше не повторять. Ждущая задача остаётся в отряде обычной задачей. */
 export function stopRoutine(s: State, id: string): void {
   s.routines = s.routines.filter((r) => r.id !== id);

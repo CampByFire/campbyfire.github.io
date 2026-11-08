@@ -321,7 +321,7 @@ export function Camp({ ui }: { ui: Ui }) {
               </span>
             </button>
           )}
-          {/* Быстрая мысль, чтобы записать, не уходя из лагеря, и рядом ближайшая встреча. */}
+          {/* Быстрая мысль, чтобы записать, не уходя из лагеря, и рядом ближайшее событие. */}
           <div class="camp-book">
             <button class="chip camp-book-btn" aria-label="Записать мысль" title="Записать мысль" onClick={() => ui.open({ kind: 'thought' })}>
               <LIcon name="bulb" size={18} />
