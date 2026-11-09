@@ -2,6 +2,7 @@
 // GitHub не уходят, поэтому не тратят обращения к нему. Черновик живёт отдельно от заметок: его нет
 // в списках и поиске, пока игрок не нажмёт «Сохранить».
 import { parseMarkdown, toMarkdown } from './markdown';
+import { splitPath } from './model';
 
 const KEY = 'taskcraft-lager-drafts';
 
@@ -19,8 +20,8 @@ export interface Draft extends DraftText {
 /** Часть localStorage, которая нужна черновикам. */
 export type DraftStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
-/** У правки черновик по пути заметки, у новой статьи один на раздел. */
-export const draftKey = (slug: string, path?: string) => path ?? `new:${slug}`;
+/** У правки черновик по пути заметки, у новой статьи один на раздел или папку. */
+export const draftKey = (slug: string, path?: string, folder = '') => path ?? (folder ? `new:${slug}/${folder}` : `new:${slug}`);
 
 function readAll(store: DraftStorage): Record<string, Draft> {
   try {
@@ -58,17 +59,30 @@ export function putDraft(key: string, now: DraftText, base: DraftText, at: numbe
   writeAll(all, store);
 }
 
+/** Заметку перенесли в другую папку: черновик едет вместе с ней. */
+export function moveDraft(from: string, to: string, store: DraftStorage = localStorage): void {
+  const all = readAll(store);
+  if (!all[from] || from === to) return;
+  all[to] = all[from];
+  delete all[from];
+  writeAll(all, store);
+}
+
 export function dropDraft(key: string, store: DraftStorage = localStorage): void {
   const all = readAll(store);
   delete all[key];
   writeAll(all, store);
 }
 
-/** Черновики раздела, свежие сверху. path есть у правки заметки, у новой статьи его нет. */
-export function sectionDrafts(slug: string, store: DraftStorage = localStorage): (Draft & { key: string; path?: string })[] {
-  const newKey = draftKey(slug);
+/** Черновики заметок, которые лежат прямо в разделе или в его папке, свежие сверху. path есть у правки заметки, у новой статьи его нет. */
+export function sectionDrafts(slug: string, store: DraftStorage = localStorage, folder = ''): (Draft & { key: string; path?: string })[] {
+  const newKey = draftKey(slug, undefined, folder);
   return Object.entries(readAll(store))
-    .filter(([key]) => key === newKey || key.startsWith(`notes/${slug}/`))
+    .filter(([key]) => {
+      if (key === newKey) return true;
+      const s = splitPath(key);
+      return !!s && s.slug === slug && s.folder === folder;
+    })
     .map(([key, d]) => ({ ...d, key, ...(key === newKey ? {} : { path: key }) }))
     .sort((a, b) => b.at - a.at);
 }

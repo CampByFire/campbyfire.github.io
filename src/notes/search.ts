@@ -41,7 +41,9 @@ export function search(notes: Notes, query: string, limit = 50): Hit[] {
     for (const n of notes.notes(s.slug)) {
       const text = s.vid === 'stati' ? `${n.title}\n${plainText(n.body)}` : plainText(n.text);
       const sn = snippet(text, query);
-      if (sn) hits.push({ kind: 'note', path: n.path, slug: s.slug, where: s.title, title: s.vid === 'stati' ? n.title || 'Без названия' : '', snippet: sn });
+      const folder = n.folder ? notes.folder(s.slug, n.folder) : null;
+      const where = folder ? `${s.title} · ${folder.title}` : s.title;
+      if (sn) hits.push({ kind: 'note', path: n.path, slug: s.slug, where, title: s.vid === 'stati' ? n.title || 'Без названия' : '', snippet: sn });
     }
   }
   for (const d of notes.diary()) {

@@ -1,13 +1,15 @@
-// Листы Летописи: быстрая мысль, заметка или статья, запись дневника, новый раздел и его настройки.
+// Листы Летописи: быстрая мысль, заметка или статья, запись дневника, новый раздел и его настройки,
+// папка в разделе и перенос заметки или папки в другую папку.
 import { useState } from 'preact/hooks';
 import { formatDate } from '../game/time';
 import { diaryDay, sameEntry, type DiaryEntry } from '../notes/diary';
-import { draftKey, draftOutdated, dropDraft, loadDraft, putDraft } from '../notes/drafts';
-import { SECTION_ICONS, type SectionIcon, type SectionKind } from '../notes/model';
+import { notesCount } from '../game/words';
+import { draftKey, draftOutdated, dropDraft, loadDraft, moveDraft, putDraft } from '../notes/drafts';
+import { SECTION_ICONS, insideFolder, parentFolder, splitPath, type SectionIcon, type SectionKind } from '../notes/model';
 import type { Ui } from './App';
 import { LIcon } from './Icon';
 import { loadLocal, updateLocal } from './local';
-import { DIARY, HERO_NOTED } from './Notes';
+import { DIARY, HERO_NOTED, placeOf } from './Notes';
 import { Chips } from './parts';
 import { RichEditor, RichText } from './Rich';
 import { Sheet } from './Sheets';
@@ -82,12 +84,15 @@ export function ThoughtSheet({ ui, slug }: { ui: Ui; slug?: string }) {
   );
 }
 
-/** Заметка ленты или статья: открыть, поправить, удалить. Без path это новая статья. */
-export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: string }) {
+/** Заметка ленты или статья: открыть, поправить, перенести, удалить. Без path это новая статья в папке folder. */
+export function NoteSheet({ ui, slug, path, folder = '' }: { ui: Ui; slug: string; path?: string; folder?: string }) {
   const section = ui.notes.section(slug);
   const note = path ? ui.notes.note(path) : null;
   const stati = section?.vid === 'stati';
-  const key = draftKey(slug, path);
+  const key = draftKey(slug, path, folder);
+  // Перенести можно, если есть куда: в разделе есть папки или заметка лежит в папке.
+  const canMove = !!note && (!!note.folder || ui.notes.folders(slug).length > 0);
+  const move = () => path && ui.open({ kind: 'move', slug, path, what: 'note' });
   const [draft] = useState(() => loadDraft(key));
   const base = { title: note?.title ?? '', text: note ? (stati ? note.body : note.text).replace(/\n$/, '') : '' };
   const [title, setTitle] = useState(draft?.title ?? base.title);
@@ -111,7 +116,7 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
     if (!text.trim() && !title.trim()) return;
     // Если заметку удалили, а черновик остался, она запишется заново.
     if (path && note) ui.notes.saveNote(path, { title, text });
-    else ui.notes.addNote(slug, { title, text });
+    else ui.notes.addNote(slug, { title, text }, path ? (splitPath(path)?.folder ?? '') : folder);
     dropDraft(key);
     ui.close();
     if (!path) ui.toast(HERO_NOTED);
@@ -138,6 +143,14 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
         <h3 class="nread-title">{note.title || 'Без названия'}</h3>
         <RichText class="nread" text={note.body} sections />
         <p class="note nfile">{path}</p>
+        {canMove && (
+          <div class="actions">
+            <button class="act" onClick={move}>
+              <LIcon name="move" size={16} />
+              Перенести в папку…
+            </button>
+          </div>
+        )}
       </Sheet>
     );
   }
@@ -169,6 +182,12 @@ export function NoteSheet({ ui, slug, path }: { ui: Ui; slug: string; path?: str
         <>
           <p class="note nfile">{path}</p>
           <div class="actions">
+            {canMove && (
+              <button class="act" onClick={move}>
+                <LIcon name="move" size={16} />
+                Перенести в папку…
+              </button>
+            )}
             <button class="act act-danger" onClick={remove}>
               <LIcon name="trash" size={16} />
               Удалить заметку
@@ -255,7 +274,7 @@ export function SectionSheet({ ui, slug }: { ui: Ui; slug?: string }) {
   const remove = () => {
     if (!section) return;
     const n = ui.notes.notes(section.slug).length;
-    const what = n ? `Удалятся и все заметки в нём (${n}).` : 'Он пустой.';
+    const what = n ? `Удалятся и все заметки в нём и в его папках (${n}).` : ui.notes.folders(section.slug).length ? 'Заметок в нём нет, удалятся только папки.' : 'Он пустой.';
     if (!confirm(`Удалить раздел «${section.title}»? ${what} В истории репозитория они останутся.`)) return;
     ui.notes.deleteSection(section.slug);
     ui.openSection(null);
@@ -306,6 +325,161 @@ export function SectionSheet({ ui, slug }: { ui: Ui; slug?: string }) {
           </div>
         </>
       )}
+    </Sheet>
+  );
+}
+
+/** Новая папка или настройки папки: название, перенос и удаление. */
+export function FolderSheet({ ui, slug, parent, path }: { ui: Ui; slug: string; parent: string; path?: string }) {
+  const folder = path ? ui.notes.folder(slug, path) : null;
+  const [name, setName] = useState(folder?.title ?? '');
+  if (path && !folder) {
+    return (
+      <Sheet title="Папка" onClose={ui.close}>
+        <p class="note">Этой папки больше нет.</p>
+      </Sheet>
+    );
+  }
+  const save = () => {
+    if (!name.trim()) return;
+    if (folder) ui.notes.renameFolder(slug, folder.path, name);
+    else ui.notes.createFolder(slug, parent, name);
+    ui.close();
+    if (!folder) ui.toast('Папка создана');
+  };
+  const n = folder ? ui.notes.count(slug, folder.path) : 0;
+  const inner = folder ? ui.notes.folders(slug, folder.path).length : 0;
+  const up = folder ? parentFolder(folder.path) : '';
+  const upName = up ? (ui.notes.folder(slug, up)?.title ?? up) : (ui.notes.section(slug)?.title ?? slug);
+  const remove = (keep: boolean) => {
+    if (!folder) return;
+    if (!keep && n + inner > 0) {
+      const what = n ? `Удалятся и все заметки в ней (${n}).` : 'Заметок в ней нет, удалятся только вложенные папки.';
+      if (!confirm(`Удалить папку «${folder.title}» со всем, что в ней? ${what} В истории репозитория они останутся.`)) return;
+    }
+    ui.notes.deleteFolder(slug, folder.path, keep);
+    ui.openSection(placeOf(slug, up));
+    ui.toast(keep && n + inner > 0 ? `Папка удалена, всё из неё теперь в «${upName}»` : 'Папка удалена');
+  };
+  return (
+    <Sheet
+      title={folder ? 'Папка' : 'Новая папка'}
+      onClose={ui.close}
+      footer={
+        <button class="btn btn-gold btn-wide" disabled={!name.trim()} onClick={save}>
+          {folder ? 'Сохранить' : 'Создать'}
+        </button>
+      }
+    >
+      <label class="field">
+        <span class="field-label">Название</span>
+        <input class="input" value={name} maxLength={40} placeholder="Например, Проекты" onInput={(e) => setName(e.currentTarget.value)} />
+      </label>
+      {folder && (
+        <>
+          <p class="note">
+            {notesCount(n)}
+            {inner > 0 ? `, вложенных папок: ${inner}` : ''}
+          </p>
+          <p class="note nfile">notes/{slug}/{folder.path}/</p>
+          <div class="actions">
+            <button class="act" onClick={() => ui.open({ kind: 'move', slug, path: folder.path, what: 'folder' })}>
+              <LIcon name="move" size={16} />
+              Перенести папку…
+            </button>
+            {n + inner > 0 ? (
+              <>
+                <button class="act act-danger" onClick={() => remove(true)}>
+                  <LIcon name="trash" size={16} />
+                  Удалить папку, всё из неё в «{upName}»
+                </button>
+                <button class="act act-danger" onClick={() => remove(false)}>
+                  <LIcon name="trash" size={16} />
+                  Удалить папку со всем, что в ней…
+                </button>
+              </>
+            ) : (
+              <button class="act act-danger" onClick={() => remove(false)}>
+                <LIcon name="trash" size={16} />
+                Удалить папку
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </Sheet>
+  );
+}
+
+/**
+ * Куда перенести заметку или папку: сам раздел и все его папки деревом. Папку нельзя положить в неё саму
+ * и в её же вложенные. После переноса внизу сообщение с кнопкой «Вернуть».
+ */
+export function MoveSheet({ ui, slug, path, what }: { ui: Ui; slug: string; path: string; what: 'note' | 'folder' }) {
+  const section = ui.notes.section(slug);
+  const isNote = what === 'note';
+  const note = isNote ? ui.notes.note(path) : null;
+  const folder = isNote ? null : ui.notes.folder(slug, path);
+  if (!section || (!note && !folder)) {
+    return (
+      <Sheet title="Перенести" onClose={ui.close}>
+        <p class="note">{isNote ? 'Этой заметки больше нет.' : 'Этой папки больше нет.'}</p>
+      </Sheet>
+    );
+  }
+  const now = isNote ? (splitPath(path)?.folder ?? '') : parentFolder(path);
+  const places = [{ path: '', title: section.title, depth: 0 }, ...ui.notes.allFolders(slug).map((f) => ({ path: f.path, title: f.title, depth: f.path.split('/').length }))].filter(
+    (p) => isNote || !(p.path && insideFolder(p.path, path)),
+  );
+  const titleOf = (f: string) => (f ? (ui.notes.folder(slug, f)?.title ?? f) : section.title);
+  const go = (to: string) => {
+    if (to === now) return;
+    if (isNote) {
+      const moved = ui.notes.moveNote(path, to);
+      moveDraft(path, moved);
+      ui.close();
+      ui.toast(`Заметка теперь в «${titleOf(to)}»`, {
+        label: 'Вернуть',
+        run: () => moveDraft(moved, ui.notes.moveNote(moved, now)),
+      });
+      return;
+    }
+    const moved = ui.notes.moveFolder(slug, path, to);
+    if (moved === null) return;
+    ui.close();
+    // Если открыта сама папка (или что-то внутри неё), остаёмся там же на новом месте.
+    const was = placeOf(slug, path);
+    const open = ui.section;
+    if (open && (open === was || open.startsWith(`${was}/`))) ui.openSection(placeOf(slug, moved) + open.slice(was.length));
+    ui.toast(`Папка теперь в «${titleOf(to)}»`, {
+      label: 'Вернуть',
+      run: () => {
+        const back = ui.notes.moveFolder(slug, moved, now);
+        if (back !== null && open && (open === was || open.startsWith(`${was}/`))) ui.openSection(placeOf(slug, back) + open.slice(was.length));
+      },
+    });
+  };
+  const what1 = note ? (note.title ? `«${note.title}»` : 'заметку') : `папку «${folder?.title ?? ''}»`;
+  return (
+    <Sheet title="Перенести" onClose={ui.close}>
+      <p class="note">Куда перенести {what1}?</p>
+      <ul class="nsec-list nmove">
+        {places.map((p) => (
+          <li key={p.path || ':top'}>
+            <button
+              class="row nsec"
+              style={{ paddingLeft: `${12 + p.depth * 18}px` }}
+              aria-current={p.path === now ? 'location' : undefined}
+              disabled={p.path === now}
+              onClick={() => go(p.path)}
+            >
+              <LIcon name={p.path ? 'folder' : section.icon} size={20} class="nsec-ic" />
+              <span class="row-title">{p.title}</span>
+              {p.path === now && <span class="nsec-meta">сейчас здесь</span>}
+            </button>
+          </li>
+        ))}
+      </ul>
     </Sheet>
   );
 }

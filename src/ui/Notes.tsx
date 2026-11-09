@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { doneOn } from '../game/state';
 import { addDays, dayKey, formatClock, formatDate, formatDuration } from '../game/time';
-import { W } from '../game/words';
+import { W, notesCount } from '../game/words';
 import type { DiaryDay } from '../notes/diary';
 import { sectionDrafts } from '../notes/drafts';
 import { plainText } from '../notes/markdown';
-import type { Note, Section } from '../notes/model';
+import { parentFolder, type Note, type Section } from '../notes/model';
 import { search, type Hit } from '../notes/search';
 import type { Notes } from '../notes/notes';
 import type { Ui } from './App';
@@ -28,12 +28,32 @@ const KIND_NAME = { lenta: 'лента', stati: 'статьи' } as const;
 export const DIARY = ':diary';
 export const DAYS = ':days';
 
+/** Место в Летописи для ui.section: раздел или папка в нём, «раздел/папка/вложенная». */
+export const placeOf = (slug: string, folder = '') => (folder ? `${slug}/${folder}` : slug);
+
+export function splitPlace(place: string): { slug: string; folder: string } {
+  const i = place.indexOf('/');
+  return i < 0 ? { slug: place, folder: '' } : { slug: place.slice(0, i), folder: place.slice(i + 1) };
+}
+
+/** Куда ведёт «Назад»: из папки в ту, где она лежит, из раздела к списку разделов (null). */
+export function upPlace(place: string): string | null {
+  const i = place.lastIndexOf('/');
+  return i < 0 ? null : place.slice(0, i);
+}
+
 export function NotesScreen({ ui }: { ui: Ui }) {
-  const slug = ui.section;
-  if (slug === DAYS) return <DaysView ui={ui} />;
-  if (slug === DIARY) return <DiaryView ui={ui} />;
+  const place = ui.section;
+  if (place === DAYS) return <DaysView ui={ui} />;
+  if (place === DIARY) return <DiaryView ui={ui} />;
+  const { slug, folder } = splitPlace(place ?? '');
   const section = slug ? ui.notes.section(slug) : null;
-  if (section) return <SectionView ui={ui} section={section} />;
+  if (section) {
+    // Папку удалили (например, на другом устройстве): показываем ближайшую из тех, что остались.
+    let f = folder;
+    while (f && !ui.notes.folder(slug, f)) f = parentFolder(f);
+    return <SectionView key={placeOf(slug, f)} ui={ui} section={section} folder={f} />;
+  }
   return <SectionList ui={ui} />;
 }
 
@@ -154,47 +174,103 @@ function NotesState({ ui }: { ui: Ui }) {
   return <p class="note nstate">Всё сохранено в GitHub, в папках notes и diary репозитория.</p>;
 }
 
-function Back({ ui }: { ui: Ui }) {
+function Back({ ui, to = null, label = W.chronicle }: { ui: Ui; to?: string | null; label?: string }) {
   return (
-    <button class="nback" onClick={() => ui.openSection(null)}>
+    <button class="nback" onClick={() => ui.openSection(to)}>
       <LIcon name="back" size={18} />
-      {W.chronicle}
+      <span class="nback-text">{label}</span>
     </button>
   );
 }
 
-function SectionView({ ui, section }: { ui: Ui; section: Section }) {
-  const list = ui.notes.notes(section.slug);
+/** Раздел или папка в нём: папки, поле записи или «Новая статья», черновики и заметки. */
+function SectionView({ ui, section, folder }: { ui: Ui; section: Section; folder: string }) {
+  const { slug } = section;
+  const here = folder ? ui.notes.folder(slug, folder) : null;
+  const list = ui.notes.notesIn(slug, folder);
+  const subs = ui.notes.folders(slug, folder);
   const stati = section.vid === 'stati';
+  // Путь до этой папки: раздел, потом папки по очереди.
+  const crumbs = [{ place: slug, title: section.title }];
+  if (folder) {
+    const parts = folder.split('/');
+    parts.forEach((_, i) => {
+      const path = parts.slice(0, i + 1).join('/');
+      crumbs.push({ place: placeOf(slug, path), title: ui.notes.folder(slug, path)?.title ?? parts[i] });
+    });
+  }
+  const up = crumbs.length > 1 ? crumbs[crumbs.length - 2] : null;
   return (
     <div class="page">
       <div class="page-top">
-        <Back ui={ui} />
-        <button class="icon-btn" aria-label="Настроить раздел" onClick={() => ui.open({ kind: 'section', slug: section.slug })}>
-          <LIcon name="edit" size={19} />
-        </button>
+        <Back ui={ui} to={up?.place ?? null} label={up?.title ?? W.chronicle} />
+        <div class="page-tools">
+          <button class="icon-btn" aria-label="Новая папка" title="Новая папка" onClick={() => ui.open({ kind: 'folder', slug, parent: folder })}>
+            <LIcon name="folderPlus" size={20} />
+          </button>
+          <button
+            class="icon-btn"
+            aria-label={here ? 'Настроить папку' : 'Настроить раздел'}
+            title={here ? 'Настроить папку' : 'Настроить раздел'}
+            onClick={() => ui.open(here ? { kind: 'folder', slug, path: folder } : { kind: 'section', slug })}
+          >
+            <LIcon name="edit" size={19} />
+          </button>
+        </div>
       </div>
+      {crumbs.length > 2 && (
+        <nav class="ncrumbs" aria-label="Где эта папка">
+          <ol>
+            {crumbs.slice(0, -1).map((c) => (
+              <li key={c.place}>
+                <button class="ncrumb" onClick={() => ui.openSection(c.place)}>
+                  {c.title}
+                </button>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      )}
       <h1 class="page-title ntitle">
-        <LIcon name={section.icon} size={26} class="nsec-ic" />
-        {section.title}
+        <LIcon name={here ? 'folder' : section.icon} size={26} class="nsec-ic" />
+        {here ? here.title : section.title}
       </h1>
       {stati ? (
-        <button class="btn btn-ghost btn-wide" onClick={() => ui.open({ kind: 'note', slug: section.slug })}>
+        <button class="btn btn-ghost btn-wide" onClick={() => ui.open({ kind: 'note', slug, folder })}>
           <LIcon name="plus" size={18} />
           Новая статья
         </button>
       ) : (
-        <FeedInput ui={ui} slug={section.slug} />
+        <FeedInput ui={ui} slug={slug} folder={folder} />
+      )}
+      {subs.length > 0 && (
+        <section class="group nfolders">
+          <div class="group-head">
+            <h2 class="sc">Папки</h2>
+          </div>
+          <div class="nsec-list">
+            {subs.map((f) => (
+              <button key={f.path} class="row nsec" onClick={() => ui.openSection(placeOf(slug, f.path))}>
+                <LIcon name="folder" size={20} class="nsec-ic" />
+                <span class="row-title">{f.title}</span>
+                <span class="nsec-meta">{notesCount(ui.notes.count(slug, f.path))}</span>
+                <LIcon name="chevron" size={16} class="nsec-go" />
+              </button>
+            ))}
+          </div>
+        </section>
       )}
       <div class="nlist">
-        {sectionDrafts(section.slug).map((d) => (
-          <button key={d.key} class="ncard ndraft" onClick={() => ui.open({ kind: 'note', slug: section.slug, path: d.path })}>
+        {sectionDrafts(slug, localStorage, folder).map((d) => (
+          <button key={d.key} class="ncard ndraft" onClick={() => ui.open({ kind: 'note', slug, path: d.path, folder })}>
             <span class="ncard-date">Несохранённый черновик, {when(ui, d.at)}</span>
             {stati && <span class="ncard-title">{d.title || 'Без названия'}</span>}
             <span class="ncard-line">{plainText(d.text).split('\n')[0]}</span>
           </button>
         ))}
-        {list.length === 0 && <p class="note">{stati ? 'Статей пока нет.' : 'Здесь пока пусто. Первая запись появится сверху.'}</p>}
+        {list.length === 0 && subs.length === 0 && (
+          <p class="note">{here ? 'В папке пока пусто.' : stati ? 'Статей пока нет.' : 'Здесь пока пусто. Первая запись появится сверху.'}</p>
+        )}
         {list.map((n) => (stati ? <ArticleCard key={n.path} ui={ui} n={n} /> : <FeedCard key={n.path} ui={ui} n={n} />))}
       </div>
     </div>
@@ -202,8 +278,8 @@ function SectionView({ ui, section }: { ui: Ui; section: Section }) {
 }
 
 /** Поле ленты: пишешь и жмёшь «Записать», запись встаёт сверху. */
-function FeedInput({ ui, slug }: { ui: Ui; slug: string }) {
-  return <WriteBox ui={ui} label="Новая запись" placeholder="Что пришло в голову?" onSave={(text) => ui.notes.addNote(slug, { text })} />;
+function FeedInput({ ui, slug, folder }: { ui: Ui; slug: string; folder: string }) {
+  return <WriteBox ui={ui} label="Новая запись" placeholder="Что пришло в голову?" onSave={(text) => ui.notes.addNote(slug, { text }, folder)} />;
 }
 
 function WriteBox({ ui, label, placeholder, named, onSave }: { ui: Ui; label: string; placeholder: string; named?: boolean; onSave: (text: string, title: string) => void }) {

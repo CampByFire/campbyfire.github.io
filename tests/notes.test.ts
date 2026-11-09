@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { diaryDay, diaryEntry, diaryPath, diaryText, mergeDiary, parseDiary } from '../src/notes/diary';
-import { clearDrafts, draftKey, draftOutdated, dropDraft, loadDraft, putDraft, sectionDrafts, type DraftStorage } from '../src/notes/drafts';
-import { conflictPath, parseMeta, parseNote, slugify, stampName, stampTime } from '../src/notes/model';
+import { clearDrafts, draftKey, draftOutdated, dropDraft, loadDraft, moveDraft, putDraft, sectionDrafts, type DraftStorage } from '../src/notes/drafts';
+import { conflictPath, parseFolderMeta, parseMeta, parseNote, slugify, splitPath, stampName, stampTime } from '../src/notes/model';
 import { Notes, type NotesHost, type NotesStorage } from '../src/notes/notes';
 import { search } from '../src/notes/search';
 import { SAVE_PATH, fromBase64, toBase64, type Fetch } from '../src/sync/github';
@@ -347,6 +347,223 @@ describe('заметки в GitHub', () => {
   });
 });
 
+describe('папки в разделах', () => {
+  const idei = (notes: Notes) => notes.createSection({ title: 'Идеи', icon: 'bulb', vid: 'lenta' });
+
+  it('путь заметки в папке разбирается на раздел, папку и файл; старые пути лежат прямо в разделе', () => {
+    expect(splitPath('notes/idei/2026-11-04-0812.md')).toEqual({ slug: 'idei', folder: '', file: '2026-11-04-0812.md' });
+    expect(splitPath('notes/idei/proekty/lager/plan.md')).toEqual({ slug: 'idei', folder: 'proekty/lager', file: 'plan.md' });
+    expect(splitPath('diary/2026/2026-11-04.md')).toBeNull();
+    expect(parseNote('notes/idei/proekty/a.md', 'текст\n').folder).toBe('proekty');
+    expect(parseFolderMeta('idei', 'proekty/lager', null).title).toBe('lager');
+    expect(parseFolderMeta('idei', 'proekty', 'не json').title).toBe('proekty');
+    expect(parseFolderMeta('idei', 'proekty', '{"title":" Проекты "}').title).toBe('Проекты');
+  });
+
+  it('папка в папке: заметки видны в своей папке, а в разделе считаются все', () => {
+    const notes = make(fakeGitHub(), { host: host(false) });
+    const slug = idei(notes);
+    notes.addNote(slug, { text: 'сверху' });
+    const proekty = notes.createFolder(slug, '', 'Проекты');
+    const lager = notes.createFolder(slug, proekty, 'Лагерь');
+    expect([proekty, lager]).toEqual(['proekty', 'proekty/lager']);
+    notes.addNote(slug, { text: 'в проектах' }, proekty);
+    notes.addNote(slug, { text: 'в лагере' }, lager);
+    expect(notes.folders(slug).map((f) => f.title)).toEqual(['Проекты']);
+    expect(notes.folders(slug, proekty).map((f) => [f.path, f.title])).toEqual([['proekty/lager', 'Лагерь']]);
+    expect(notes.allFolders(slug).map((f) => f.path)).toEqual(['proekty', 'proekty/lager']);
+    expect(notes.notesIn(slug, '').map((n) => n.body)).toEqual(['сверху\n']);
+    expect(notes.notesIn(slug, lager).map((n) => n.body)).toEqual(['в лагере\n']);
+    expect(notes.notes(slug)).toHaveLength(3);
+    expect([notes.count(slug), notes.count(slug, proekty), notes.count(slug, lager)]).toEqual([3, 2, 1]);
+    expect(notes.folder(slug, 'netu')).toBeNull();
+    // Пустая папка тоже есть: в ней лежит её _papka.json.
+    const pusto = notes.createFolder(slug, '', 'Проекты');
+    expect(pusto).toBe('proekty-2');
+    expect(notes.folder(slug, pusto)?.title).toBe('Проекты');
+    expect(notes.count(slug, pusto)).toBe(0);
+  });
+
+  it('папки уходят в GitHub подпапками раздела, второе устройство их видит', async () => {
+    const gh = fakeGitHub();
+    const phone = make(gh);
+    const slug = idei(phone);
+    const lager = phone.createFolder(slug, phone.createFolder(slug, '', 'Проекты'), 'Лагерь');
+    phone.addNote(slug, { text: 'план' }, lager);
+    await phone.syncNow();
+    expect(JSON.parse(gh.files.get('notes/idei/proekty/_papka.json')!.text)).toEqual({ title: 'Проекты' });
+    expect(gh.files.get('notes/idei/proekty/lager/2026-11-04-0812.md')!.text).toBe('план\n');
+    expect(gh.commits).toContain('Лагерь: новая папка «Лагерь» (телефон)');
+    const pc = make(gh, { host: host(true, 'компьютер') });
+    await pc.syncNow();
+    expect(pc.allFolders('idei').map((f) => f.title)).toEqual(['Проекты', 'Лагерь']);
+    expect(pc.notesIn('idei', 'proekty/lager').map((n) => n.body)).toEqual(['план\n']);
+    // Повторная сверка не удаляет _papka.json, который пришёл из GitHub.
+    await pc.syncNow();
+    expect(pc.folder('idei', 'proekty')?.title).toBe('Проекты');
+  });
+
+  it('заметка переносится в папку и обратно: в GitHub новый файл, старый удалён, занятое имя получает -2', async () => {
+    const gh = fakeGitHub();
+    const notes = make(gh);
+    const slug = idei(notes);
+    const folder = notes.createFolder(slug, '', 'Проекты');
+    const a = notes.addNote(slug, { text: 'раз' });
+    const b = notes.addNote(slug, { text: 'два' }, folder);
+    await notes.syncNow();
+    expect(a).toBe('notes/idei/2026-11-04-0812.md');
+    expect(b).toBe('notes/idei/proekty/2026-11-04-0812.md');
+    const moved = notes.moveNote(a, folder);
+    expect(moved).toBe('notes/idei/proekty/2026-11-04-0812-2.md');
+    expect(notes.note(a)).toBeNull();
+    expect(notes.notesIn(slug, folder).map((n) => n.body).sort()).toEqual(['два\n', 'раз\n']);
+    await notes.syncNow();
+    expect(gh.files.has(a)).toBe(false);
+    expect(gh.files.get(moved)!.text).toBe('раз\n');
+    expect(notes.moveNote(moved, folder)).toBe(moved);
+    const back = notes.moveNote(moved, '');
+    // Имя файла едет как есть, вместе с -2.
+    expect(back).toBe('notes/idei/2026-11-04-0812-2.md');
+    await notes.syncNow();
+    expect(gh.files.get(back)!.text).toBe('раз\n');
+    expect(gh.files.has(moved)).toBe(false);
+    // У записи ленты время берётся из имени файла и после переноса то же.
+    expect(notes.note(back)?.at).toBe(T);
+  });
+
+  it('папка переносится со всем, что в ней; в саму себя и в свою вложенную нельзя', async () => {
+    const gh = fakeGitHub();
+    const notes = make(gh);
+    const slug = idei(notes);
+    const proekty = notes.createFolder(slug, '', 'Проекты');
+    const lager = notes.createFolder(slug, proekty, 'Лагерь');
+    const arhiv = notes.createFolder(slug, '', 'Архив');
+    notes.addNote(slug, { text: 'план' }, lager);
+    await notes.syncNow();
+    expect(notes.moveFolder(slug, proekty, proekty)).toBeNull();
+    expect(notes.moveFolder(slug, proekty, lager)).toBeNull();
+    expect(notes.moveFolder(slug, lager, proekty)).toBe(lager);
+    const moved = notes.moveFolder(slug, proekty, arhiv);
+    expect(moved).toBe('arhiv/proekty');
+    expect(notes.folder(slug, proekty)).toBeNull();
+    expect(notes.folder(slug, 'arhiv/proekty/lager')?.title).toBe('Лагерь');
+    expect(notes.notesIn(slug, 'arhiv/proekty/lager').map((n) => n.body)).toEqual(['план\n']);
+    await notes.syncNow();
+    expect([...gh.files.keys()].filter((p) => p.startsWith('notes/idei/proekty'))).toEqual([]);
+    expect(gh.files.get('notes/idei/arhiv/proekty/lager/2026-11-04-0812.md')!.text).toBe('план\n');
+  });
+
+  it('переименование папки правит только _papka.json', async () => {
+    const gh = fakeGitHub();
+    const notes = make(gh);
+    const slug = idei(notes);
+    const folder = notes.createFolder(slug, '', 'Проекты');
+    const path = notes.addNote(slug, { text: 'раз' }, folder);
+    await notes.syncNow();
+    const sha = gh.files.get(path)!.sha;
+    const commits = gh.commits.length;
+    notes.renameFolder(slug, folder, 'Дела');
+    notes.renameFolder(slug, folder, 'Дела');
+    await notes.syncNow();
+    expect(notes.folder(slug, folder)?.title).toBe('Дела');
+    expect(gh.files.get(path)!.sha).toBe(sha);
+    expect(gh.commits.slice(commits)).toEqual(['Лагерь: папка «Дела» (телефон)']);
+  });
+
+  it('удаление папки: можно поднять всё из неё на уровень выше, а можно удалить вместе с заметками', async () => {
+    const gh = fakeGitHub();
+    const notes = make(gh);
+    const slug = idei(notes);
+    const proekty = notes.createFolder(slug, '', 'Проекты');
+    const lager = notes.createFolder(slug, proekty, 'Лагерь');
+    const top = notes.addNote(slug, { text: 'сверху' });
+    notes.addNote(slug, { text: 'в проектах' }, proekty);
+    notes.addNote(slug, { text: 'в лагере' }, lager);
+    await notes.syncNow();
+    expect(notes.deleteFolder(slug, proekty, true)).toBe(2);
+    expect(notes.folder(slug, proekty)).toBeNull();
+    expect(notes.folders(slug).map((f) => [f.path, f.title])).toEqual([['lager', 'Лагерь']]);
+    expect(notes.notesIn(slug, '').map((n) => n.body).sort()).toEqual(['в проектах\n', 'сверху\n']);
+    expect(notes.note(top)?.body).toBe('сверху\n');
+    await notes.syncNow();
+    expect([...gh.files.keys()].sort()).toEqual([
+      'notes/idei/2026-11-04-0812-2.md',
+      'notes/idei/2026-11-04-0812.md',
+      'notes/idei/_razdel.json',
+      'notes/idei/lager/2026-11-04-0812.md',
+      'notes/idei/lager/_papka.json',
+    ]);
+    expect(notes.deleteFolder(slug, 'lager', false)).toBe(1);
+    expect(notes.count(slug)).toBe(2);
+    await notes.syncNow();
+    expect([...gh.files.keys()].some((p) => p.startsWith('notes/idei/lager/'))).toBe(false);
+    expect(gh.commits).toContain('Лагерь: папка удалена (телефон)');
+  });
+
+  it('удаление раздела уносит и его папки', async () => {
+    const gh = fakeGitHub();
+    const notes = make(gh);
+    const slug = idei(notes);
+    notes.addNote(slug, { text: 'глубоко' }, notes.createFolder(slug, notes.createFolder(slug, '', 'А'), 'Б'));
+    await notes.syncNow();
+    expect(notes.deleteSection(slug)).toBe(1);
+    expect(notes.sections()).toEqual([]);
+    await notes.syncNow();
+    expect(gh.files.size).toBe(0);
+  });
+
+  it('заметку перенесли на телефоне, а на компьютере в это время поправили: обе версии целы', async () => {
+    const gh = fakeGitHub();
+    const phone = make(gh);
+    const slug = idei(phone);
+    const folder = phone.createFolder(slug, '', 'Проекты');
+    const path = phone.addNote(slug, { text: 'мысль' });
+    await phone.syncNow();
+    const pc = make(gh, { host: host(true, 'компьютер') });
+    await pc.syncNow();
+    pc.saveNote(path, { text: 'мысль с компьютера' });
+    await pc.syncNow();
+    const moved = phone.moveNote(path, folder);
+    await phone.syncNow();
+    expect(phone.status.phase).toBe('ok');
+    expect(gh.files.get(moved)!.text).toBe('мысль\n');
+    expect(gh.files.get(path)!.text).toBe('мысль с компьютера\n');
+    expect(phone.note(path)?.body).toBe('мысль с компьютера\n');
+    expect(phone.pending).toBe(0);
+  });
+
+  it('папка, сделанная руками на GitHub, видна под своим именем; поиск говорит, в какой она папке', async () => {
+    const gh = fakeGitHub();
+    gh.write('notes/knigi/_razdel.json', '{"title":"Книги","icon":"book","vid":"stati"}');
+    gh.write('notes/knigi/fantastika/dyuna.md', '# Дюна\n\nПесок и черви\n');
+    const notes = make(gh);
+    await notes.syncNow();
+    expect(notes.folders('knigi')).toEqual([{ slug: 'knigi', path: 'fantastika', title: 'fantastika' }]);
+    expect(notes.notesIn('knigi', '')).toEqual([]);
+    notes.renameFolder('knigi', 'fantastika', 'Фантастика');
+    expect(search(notes, 'черви')).toMatchObject([{ kind: 'note', where: 'Книги · Фантастика', title: 'Дюна' }]);
+    // Перенос под новое имя (оно было занято) сохраняет название папки.
+    notes.createFolder('knigi', 'arhiv', 'fantastika');
+    expect(notes.moveFolder('knigi', 'fantastika', 'arhiv')).toBe('arhiv/fantastika-2');
+    expect(notes.folder('knigi', 'arhiv/fantastika-2')?.title).toBe('Фантастика');
+  });
+
+  it('заметки, сделанные прошлой версией, остаются прямо в разделе', () => {
+    const storage = memory();
+    storage.data = JSON.stringify({
+      v: 1,
+      syncedAt: null,
+      files: {
+        'notes/idei/_razdel.json': { text: '{"title":"Идеи","icon":"bulb","vid":"lenta"}\n', sha: 's1', dirty: false, rev: 1 },
+        'notes/idei/2026-11-04-0812.md': { text: 'старая\n', sha: 's2', dirty: false, rev: 1 },
+      },
+    });
+    const notes = make(fakeGitHub(), { host: host(false), storage });
+    expect(notes.folders('idei')).toEqual([]);
+    expect(notes.notesIn('idei', '').map((n) => [n.body, n.folder])).toEqual([['старая\n', '']]);
+  });
+});
+
 describe('дневник: файл дня', () => {
   it('день лежит в diary/<год>/; файл без папки года тоже читается', () => {
     expect(diaryPath('2026-11-04')).toBe('diary/2026/2026-11-04.md');
@@ -579,6 +796,19 @@ describe('черновики заметок', () => {
     expect(loadDraft('new:stati', store)).toEqual({ title: 'Поход', text: 'Лес', at: T });
     expect(sectionDrafts('stati', store).map((d) => [d.title, d.path])).toEqual([['Поход', undefined]]);
     expect(sectionDrafts('idei', store)).toEqual([]);
+  });
+
+  it('черновики папки видны только в ней, черновик едет вместе с перенесённой заметкой', () => {
+    const store = memory();
+    putDraft(draftKey('stati', undefined, 'proekty'), { title: 'План', text: 'шаги' }, EMPTY, T, store);
+    putDraft('notes/stati/proekty/plan.md', { title: 'План', text: 'новое' }, { title: 'План', text: 'старое' }, T + 1, store);
+    putDraft('notes/stati/verh.md', { title: 'Верх', text: 'новое' }, { title: 'Верх', text: 'старое' }, T, store);
+    expect(loadDraft('new:stati/proekty', store)?.title).toBe('План');
+    expect(sectionDrafts('stati', store, 'proekty').map((d) => d.key)).toEqual(['notes/stati/proekty/plan.md', 'new:stati/proekty']);
+    expect(sectionDrafts('stati', store).map((d) => d.key)).toEqual(['notes/stati/verh.md']);
+    moveDraft('notes/stati/verh.md', 'notes/stati/proekty/verh.md', store);
+    expect(loadDraft('notes/stati/verh.md', store)).toBeNull();
+    expect(loadDraft('notes/stati/proekty/verh.md', store)?.title).toBe('Верх');
   });
 
   it('стёртый текст выбрасывает черновик', () => {

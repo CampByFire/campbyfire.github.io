@@ -111,6 +111,88 @@
   font-weight: 700;
 }
 
+.nback {
+  min-width: 0;
+}
+
+.nback-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.page-tools {
+  display: flex;
+  flex: none;
+}
+
+/* ---------- папки ---------- */
+
+.ncrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin: -6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ncrumbs li {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.ncrumbs li + li::before {
+  content: '›';
+  padding: 0 2px;
+  color: var(--dim);
+}
+
+.ncrumb {
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 180px;
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ncrumbs li:first-child .ncrumb {
+  padding-left: 0;
+}
+
+.nfolders {
+  margin-top: 16px;
+}
+
+.nmove {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nmove li + li .row {
+  border-top: 1px solid var(--line);
+}
+
+/* Место, где заметка лежит сейчас: нажать нельзя, но прочитать надо. */
+.nmove .row:disabled {
+  opacity: 1;
+}
+
+.nmove .row:disabled .nsec-meta {
+  color: var(--gold);
+}
+
 .ntitle {
   display: flex;
   align-items: center;

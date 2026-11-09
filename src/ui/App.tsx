@@ -18,7 +18,7 @@ import { MagicLayers, SheetLayer } from './magic/layers';
 import { onSystemReduced, resolveMotion, systemReduced, type Motion } from './magic/mode';
 import { pageEnter, pageLeave } from './magic/spells';
 import { Notices } from './Notices';
-import { NotesScreen, useNotes } from './Notes';
+import { NotesScreen, upPlace, useNotes } from './Notes';
 import { Plan } from './Plan';
 import { Realm } from './Realm';
 import { Settings } from './Settings';
@@ -45,7 +45,10 @@ export interface Ui {
   notes: Notes;
   now: number;
   go(screen: Screen): void;
-  /** Открытый раздел Летописи (имя папки, ':diary' для дневника или ':days' для «Последних дней»); null, когда виден список разделов. */
+  /**
+   * Открытое место Летописи: раздел (имя его папки), папка в нём («раздел/папка/вложенная»), ':diary' для дневника
+   * или ':days' для «Последних дней»; null, когда виден список разделов.
+   */
   section: string | null;
   /** Открыть раздел Летописи (и саму Летопись) или вернуться к списку разделов. */
   openSection(slug: string | null): void;
@@ -312,7 +315,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
     });
   };
 
-  // «Назад» на телефоне закрывает знакомство или лист, сворачивает шторку задач дня, из раздела Летописи ведёт к списку разделов,
+  // «Назад» на телефоне закрывает знакомство или лист, сворачивает шторку задач дня, из папки Летописи ведёт в папку выше, из раздела к списку разделов,
   // из шкалы дня в Календаре к месяцу, с других разделов в Лагерь, и только из Лагеря без открытых листов выходит из приложения.
   const inSection = (screen === 'notes' && section !== null) || (screen === 'calendar' && calDay !== null);
   const shadeUp = screen === 'camp' && shade;
@@ -321,7 +324,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
     else if (sheetShown.current) (sheetBack() ?? closeSheet)();
     else if (shadeUp) setShade(false);
     else if (inSection && screen === 'calendar') ui.openDay(null);
-    else if (inSection) ui.openSection(null);
+    else if (inSection) ui.openSection(upPlace(section ?? ''));
     else if (screen !== 'camp') ui.go('camp');
   });
   return (

@@ -196,3 +196,30 @@ export async function seedGame(page: Page, state: unknown) {
     localStorage.setItem('taskcraft-lager-v1', json);
   }, JSON.stringify(state));
 }
+
+/** Летопись: новый раздел ленты, он сразу открывается. */
+export async function newSection(page: Page, title: string) {
+  await tab(page, 'Летопись').click();
+  await page.getByRole('button', { name: 'Новый раздел' }).click();
+  const make = sheet(page, 'Новый раздел');
+  await make.getByLabel('Название').fill(title);
+  await make.getByRole('button', { name: 'Создать' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+}
+
+/** Летопись: новая папка там, где сейчас открыт раздел или папка. */
+export async function newFolder(page: Page, title: string) {
+  await page.getByRole('button', { name: 'Новая папка' }).click();
+  const form = sheet(page, 'Новая папка');
+  await form.getByLabel('Название').fill(title);
+  await form.getByRole('button', { name: 'Создать' }).click();
+  await expect(form).toBeHidden();
+}
+
+/** Летопись: запись в поле ленты открытого раздела или папки. */
+export async function write(page: Page, text: string) {
+  // Через .screen: пока страница сменяется, её тающая копия тоже на экране.
+  await page.locator('.screen').getByLabel('Новая запись').fill(text);
+  await page.locator('.screen').getByRole('button', { name: 'Записать', exact: true }).click();
+  await expect(page.getByRole('button', { name: new RegExp(text) })).toBeVisible();
+}

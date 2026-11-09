@@ -76,7 +76,7 @@ import { Chips, LevelMark, QuestDot, TaskMeta, WeekdayPicker, questName } from '
 import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
 import { WipeSheet } from './Settings';
-import { DiarySheet, NoteSheet, SectionSheet, ThoughtSheet } from './NoteSheets';
+import { DiarySheet, FolderSheet, MoveSheet, NoteSheet, SectionSheet, ThoughtSheet } from './NoteSheets';
 import { SyncConflictSheet, SyncSheet } from './SyncPanel';
 import { setSheetBack } from './back';
 import { MeetingSheet, MoveMeetingSheet } from './MeetingSheet';
@@ -99,8 +99,10 @@ export type SheetState =
   | { kind: 'about' }
   | { kind: 'wipe' }
   | { kind: 'thought'; slug?: string }
-  | { kind: 'note'; slug: string; path?: string }
+  | { kind: 'note'; slug: string; path?: string; folder?: string }
   | { kind: 'section'; slug?: string }
+  | { kind: 'folder'; slug: string; parent?: string; path?: string }
+  | { kind: 'move'; slug: string; path: string; what: 'note' | 'folder' }
   | { kind: 'diary'; path: string; entry: DiaryEntry }
   | { kind: 'welcome' }
   | { kind: 'meeting'; meetingId?: string; day?: DayKey; at?: string }
@@ -143,7 +145,11 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
     case 'thought':
       return <ThoughtSheet ui={ui} slug={sheet.slug} />;
     case 'note':
-      return <NoteSheet key={sheet.path ?? sheet.slug} ui={ui} slug={sheet.slug} path={sheet.path} />;
+      return <NoteSheet key={sheet.path ?? `${sheet.slug}/${sheet.folder ?? ''}`} ui={ui} slug={sheet.slug} path={sheet.path} folder={sheet.folder} />;
+    case 'folder':
+      return <FolderSheet key={sheet.path ?? `+${sheet.parent ?? ''}`} ui={ui} slug={sheet.slug} parent={sheet.parent ?? ''} path={sheet.path} />;
+    case 'move':
+      return <MoveSheet key={sheet.path} ui={ui} slug={sheet.slug} path={sheet.path} what={sheet.what} />;
     case 'section':
       return <SectionSheet key={sheet.slug ?? ''} ui={ui} slug={sheet.slug} />;
     case 'diary':

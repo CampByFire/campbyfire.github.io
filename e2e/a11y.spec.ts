@@ -1,7 +1,7 @@
 // Доступность: проверка axe на главных экранах и листах, работа с клавиатуры.
 // Как звучит игра в VoiceOver и TalkBack, проверяется руками: docs/screen-reader-check.md.
 import { expect, test, type Page } from '@playwright/test';
-import { addTask, axe, openGame, openSettings, sheet, tab } from './helpers';
+import { addTask, axe, newFolder, newSection, openGame, openSettings, sheet, tab, write } from './helpers';
 
 test('axe не находит нарушений на экранах и в листах', async ({ page }) => {
   await openGame(page);
@@ -128,6 +128,36 @@ test('axe не находит нарушений в Летописи и её л�
   await page.getByRole('button', { name: /Последние дни/ }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Последние дни' })).toBeVisible();
   expect(await axe(page), 'Последние дни').toEqual([]);
+});
+
+test('axe не находит нарушений в папках Летописи и их листах', async ({ page }) => {
+  await openGame(page);
+  await newSection(page, 'Идеи');
+  await write(page, 'Искры');
+  await newFolder(page, 'Проекты');
+  expect(await axe(page), 'Раздел с папками').toEqual([]);
+  expect(await tooSmall(page), 'Раздел с папками').toEqual([]);
+  await page.getByRole('button', { name: /^Проекты/ }).click();
+  await newFolder(page, 'Сад');
+  await page.getByRole('button', { name: /^Сад/ }).click();
+  await expect(page.getByRole('navigation', { name: 'Где эта папка' })).toBeVisible();
+  expect(await axe(page), 'Вложенная папка').toEqual([]);
+  expect(await tooSmall(page), 'Вложенная папка').toEqual([]);
+
+  await page.getByRole('button', { name: 'Новая папка' }).click();
+  expect(await axe(page), 'Новая папка').toEqual([]);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Настроить папку' }).click();
+  await expect(sheet(page, 'Папка')).toBeVisible();
+  expect(await axe(page), 'Папка').toEqual([]);
+  expect(await tooSmall(page), 'Папка').toEqual([]);
+  await sheet(page, 'Папка').getByRole('button', { name: 'Перенести папку…' }).click();
+  await expect(sheet(page, 'Перенести')).toBeVisible();
+  expect(await axe(page), 'Перенести папку').toEqual([]);
+  expect(await tooSmall(page), 'Перенести папку').toEqual([]);
+  await page.keyboard.press('Escape');
+  // После закрытия листа фокус возвращается на кнопку, которая его открыла.
+  await expect(page.getByRole('button', { name: 'Настроить папку' })).toBeFocused();
 });
 
 test('с клавиатуры: лист ловит фокус, Escape возвращает его на кнопку', async ({ page }) => {

@@ -2,6 +2,8 @@
 //
 //   notes/<раздел>/_razdel.json   название, значок и вид раздела
 //   notes/<раздел>/<имя>.md       одна заметка: обычный Markdown
+//   notes/<раздел>/<папка>/…      папка внутри раздела: заметки и свои папки, сколько угодно вглубь
+//   notes/<раздел>/<папка>/_papka.json   название папки
 //
 // В ленте имя файла это дата и время записи (2026-11-04-0812.md), у статьи это её заголовок
 // латиницей (kak-ya-planiruyu.md), а сам заголовок стоит первой строкой «# …». Название раздела
@@ -16,6 +18,8 @@ export const SECTION_ICONS = ['bulb', 'book', 'feather', 'star', 'list', 'flag']
 export type SectionIcon = (typeof SECTION_ICONS)[number];
 
 export const META_FILE = '_razdel.json';
+/** Название папки внутри раздела; у самого раздела вместо него _razdel.json. */
+export const FOLDER_FILE = '_papka.json';
 
 export interface SectionMeta {
   title: string;
@@ -28,9 +32,20 @@ export interface Section extends SectionMeta {
   slug: string;
 }
 
+/** Папка внутри раздела. */
+export interface Folder {
+  /** Раздел, в котором она лежит. */
+  slug: string;
+  /** Путь от папки раздела: «proekty» или «proekty/lager». */
+  path: string;
+  title: string;
+}
+
 export interface Note {
   path: string;
   slug: string;
+  /** Папка внутри раздела; '' у заметки, которая лежит прямо в разделе. */
+  folder: string;
   text: string;
   /** Для статьи: заголовок из первой строки «# …». */
   title: string;
@@ -66,11 +81,38 @@ export function freeName(name: string, taken: (candidate: string) => boolean): s
 export const sectionDir = (slug: string) => `${NOTES_DIR}/${slug}`;
 export const metaPath = (slug: string) => `${sectionDir(slug)}/${META_FILE}`;
 
-/** Раздел и имя файла из пути notes/<slug>/<file>; null для файлов не из раздела. */
-export function splitPath(path: string): { slug: string; file: string } | null {
-  const m = path.match(/^notes\/([^/]+)\/([^/]+)$/);
-  return m ? { slug: m[1], file: m[2] } : null;
+/** Папка с заметками: сам раздел или папка внутри него. */
+export const folderDir = (slug: string, folder: string) => (folder ? `${sectionDir(slug)}/${folder}` : sectionDir(slug));
+export const folderMetaPath = (slug: string, folder: string) => `${folderDir(slug, folder)}/${FOLDER_FILE}`;
+
+/** Раздел, папка внутри него и имя файла из пути notes/<slug>/[<папка>/…]<file>; null для файлов не из раздела. */
+export function splitPath(path: string): { slug: string; folder: string; file: string } | null {
+  const m = path.match(/^notes\/([^/]+)\/(?:(.+)\/)?([^/]+)$/);
+  return m ? { slug: m[1], folder: m[2] ?? '', file: m[3] } : null;
 }
+
+/** Папка, в которой лежит папка: «a/b» → «a», «a» → ''. */
+export const parentFolder = (folder: string) => folder.slice(0, Math.max(0, folder.lastIndexOf('/')));
+
+/** Последняя часть пути папки: «a/b» → «b». */
+export const folderName = (folder: string) => folder.slice(folder.lastIndexOf('/') + 1);
+
+/** Папка folder лежит в папке parent (или это она сама). У раздела parent это ''. */
+export const insideFolder = (folder: string, parent: string) => !parent || folder === parent || folder.startsWith(`${parent}/`);
+
+/** Название папки из _papka.json; без файла или с испорченным файлом это имя самой папки. */
+export function parseFolderMeta(slug: string, path: string, text: string | null): Folder {
+  let title = '';
+  try {
+    const raw = (text ? JSON.parse(text) : null) as { title?: unknown } | null;
+    if (raw && typeof raw.title === 'string') title = raw.title.trim();
+  } catch {
+    title = '';
+  }
+  return { slug, path, title: title || folderName(path) };
+}
+
+export const folderMetaText = (title: string) => `${JSON.stringify({ title }, null, 2)}\n`;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -110,7 +152,7 @@ export function parseNote(path: string, text: string): Note {
   const m = text.match(/^#[ \t]+(.*)\r?\n?/);
   const title = m ? m[1].trim() : '';
   const body = m ? text.slice(m[0].length).replace(/^\s*\n/, '') : text;
-  return { path, slug: parts?.slug ?? '', text, title, body, at: stampTime(file) };
+  return { path, slug: parts?.slug ?? '', folder: parts?.folder ?? '', text, title, body, at: stampTime(file) };
 }
 
 /** Текст файла статьи: заголовок первой строкой, потом пустая строка и текст. */

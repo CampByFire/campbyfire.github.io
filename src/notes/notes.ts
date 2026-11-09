@@ -16,19 +16,27 @@ import type { DayKey } from '../game/types';
 import { DIARY_DIR, GitHub, GitHubError, NOTES_DIR, type Fetch } from '../sync/github';
 import { diaryDay, diaryEntry, diaryPath, diaryText, entryDay, entryTime, mergeDiary, parseDiary, sameEntry, sortEntries, type DiaryDay, type DiaryEntry } from './diary';
 import {
+  FOLDER_FILE,
   META_FILE,
   articleText,
   conflictPath,
   feedText,
+  folderDir,
+  folderMetaPath,
+  folderMetaText,
+  folderName,
   freeName,
+  insideFolder,
   metaPath,
   metaText,
+  parseFolderMeta,
   parseMeta,
   parseNote,
   sectionDir,
   slugify,
   splitPath,
   stampName,
+  type Folder,
   type Note,
   type Section,
   type SectionMeta,
@@ -114,10 +122,13 @@ export interface NotesOptions {
 }
 
 const isNoteFile = (path: string) => /\.md$/i.test(path);
-const isMetaFile = (path: string) => path.endsWith(`/${META_FILE}`);
+const isFolderFile = (path: string) => path.endsWith(`/${FOLDER_FILE}`);
+const isMetaFile = (path: string) => path.endsWith(`/${META_FILE}`) || isFolderFile(path);
 const isDiary = (path: string) => diaryDay(path) !== null;
-/** Какие файлы репозитория Летопись держит у себя: заметки, _razdel.json и дни дневника. */
+/** Какие файлы репозитория Летопись держит у себя: заметки, _razdel.json, _papka.json и дни дневника. */
 const isOurs = (path: string) => (path.startsWith(`${NOTES_DIR}/`) ? isNoteFile(path) || isMetaFile(path) : isDiary(path));
+
+const byTitle = (a: Folder, b: Folder) => a.title.localeCompare(b.title, 'ru') || a.path.localeCompare(b.path);
 
 export class Notes {
   status: NotesStatus;
@@ -177,14 +188,62 @@ export class Notes {
     return this.paths().some((p) => splitPath(p)?.slug === slug) ? this.meta(slug) : null;
   }
 
-  /** Заметки раздела: в ленте новые сверху, статьи по заголовку. */
+  /** Все заметки раздела вместе с его папками: в ленте новые сверху, статьи по заголовку. */
   notes(slug: string): Note[] {
+    return this.sortNotes(slug, () => true);
+  }
+
+  /** Заметки, которые лежат прямо в папке (без вложенных папок); '' это сам раздел. */
+  notesIn(slug: string, folder: string): Note[] {
+    return this.sortNotes(slug, (f) => f === folder);
+  }
+
+  /** Сколько заметок в папке вместе со всеми вложенными; '' это весь раздел. */
+  count(slug: string, folder = ''): number {
+    return this.paths().filter((p) => {
+      const s = isNoteFile(p) ? splitPath(p) : null;
+      return !!s && s.slug === slug && insideFolder(s.folder, folder);
+    }).length;
+  }
+
+  /** Папки прямо внутри папки parent ('' это сам раздел), по названию. */
+  folders(slug: string, parent = ''): Folder[] {
+    const names = new Set<string>();
+    for (const p of this.paths()) {
+      const s = splitPath(p);
+      if (!s || s.slug !== slug || !s.folder || s.folder === parent || !insideFolder(s.folder, parent)) continue;
+      names.add((parent ? s.folder.slice(parent.length + 1) : s.folder).split('/')[0]);
+    }
+    return [...names].map((n) => this.folderMeta(slug, parent ? `${parent}/${n}` : n)).sort(byTitle);
+  }
+
+  /** Все папки раздела вглубь, как в дереве: папка, потом то, что в ней. */
+  allFolders(slug: string, parent = ''): Folder[] {
+    return this.folders(slug, parent).flatMap((f) => [f, ...this.allFolders(slug, f.path)]);
+  }
+
+  /** Папка раздела, если в ней есть хоть один файл. */
+  folder(slug: string, path: string): Folder | null {
+    if (!path) return null;
+    const there = this.paths().some((p) => {
+      const s = splitPath(p);
+      return !!s && s.slug === slug && insideFolder(s.folder, path);
+    });
+    return there ? this.folderMeta(slug, path) : null;
+  }
+
+  private sortNotes(slug: string, pick: (folder: string) => boolean): Note[] {
     const list = this.paths()
-      .filter((p) => isNoteFile(p) && splitPath(p)?.slug === slug)
+      .filter((p) => {
+        const s = isNoteFile(p) ? splitPath(p) : null;
+        return !!s && s.slug === slug && pick(s.folder);
+      })
       .map((p) => parseNote(p, this.files[p].text));
     if (this.meta(slug).vid === 'stati') return list.sort((a, b) => (a.title || a.path).localeCompare(b.title || b.path, 'ru'));
     // Имена ленты это время записи: по ним и сортируем (без «.md», иначе 0812-2 встало бы после 0812).
-    const key = (n: Note) => n.path.replace(/\.md$/i, '');
+    // Сравниваются имена файлов, а не пути: так записи из разных папок тоже идут по времени. Путь
+    // только разводит одинаковые имена, а \0 меньше любого знака, поэтому 0812-2 всё равно новее 0812.
+    const key = (n: Note) => `${(splitPath(n.path)?.file ?? n.path).replace(/\.md$/i, '')}\0${n.path}`;
     return list.sort((a, b) => (key(a) < key(b) ? 1 : key(a) > key(b) ? -1 : 0));
   }
 
@@ -231,13 +290,14 @@ export class Notes {
     return paths.filter(isNoteFile).length;
   }
 
-  /** Новая заметка: в ленте имя по времени, у статьи по заголовку. Вернёт путь файла. */
-  addNote(slug: string, note: { title?: string; text: string }): string {
+  /** Новая заметка в разделе или в его папке: в ленте имя по времени, у статьи по заголовку. Вернёт путь файла. */
+  addNote(slug: string, note: { title?: string; text: string }, folder = ''): string {
     const section = this.meta(slug);
     const stati = section.vid === 'stati';
     const base = stati ? slugify(note.title ?? '', 'bez-nazvaniya') : stampName(this.now());
-    const name = freeName(base, (c) => this.taken(`${sectionDir(slug)}/${c}.md`, false));
-    const path = `${sectionDir(slug)}/${name}.md`;
+    const dir = folderDir(slug, folder);
+    const name = freeName(base, (c) => this.taken(`${dir}/${c}.md`, false));
+    const path = `${dir}/${name}.md`;
     // Первая заметка в папке, у которой нет _razdel.json (её сделали руками): раздел остаётся как был.
     this.put(path, stati ? articleText(note.title ?? '', note.text) : feedText(note.text));
     return path;
@@ -253,6 +313,82 @@ export class Notes {
   deleteNote(path: string): void {
     this.drop(path);
     this.changed();
+  }
+
+  // ---------- папки ----------
+
+  /** Новая папка в разделе или в другой папке; вернёт её путь от папки раздела. */
+  createFolder(slug: string, parent: string, title: string): string {
+    const t = title.trim();
+    const name = freeName(slugify(t, 'papka'), (c) => this.taken(folderDir(slug, parent ? `${parent}/${c}` : c), true));
+    const path = parent ? `${parent}/${name}` : name;
+    this.put(folderMetaPath(slug, path), folderMetaText(t || name));
+    return path;
+  }
+
+  /** Новое название папки: правится только _papka.json, сама папка и заметки на месте. */
+  renameFolder(slug: string, path: string, title: string): void {
+    const text = folderMetaText(title.trim() || folderName(path));
+    const meta = folderMetaPath(slug, path);
+    const rec = this.files[meta];
+    if (rec && !rec.deleted && rec.text === text) return;
+    this.put(meta, text);
+  }
+
+  /**
+   * Переносит заметку в другую папку того же раздела ('' это сам раздел). В GitHub это новый файл
+   * и удаление старого. Имя файла остаётся прежним, а если оно занято, добавится -2. Вернёт новый путь.
+   */
+  moveNote(path: string, folder: string): string {
+    const s = splitPath(path);
+    const rec = this.files[path];
+    if (!s || !rec || rec.deleted || s.folder === folder) return path;
+    const dir = folderDir(s.slug, folder);
+    const dot = s.file.lastIndexOf('.');
+    const base = dot > 0 ? s.file.slice(0, dot) : s.file;
+    const ext = dot > 0 ? s.file.slice(dot) : '';
+    const to = `${dir}/${freeName(base, (c) => this.taken(`${dir}/${c}${ext}`, false))}${ext}`;
+    this.relocate(path, to);
+    this.changed();
+    return to;
+  }
+
+  /**
+   * Переносит папку со всем, что в ней, в другую папку того же раздела ('' это сам раздел).
+   * Вернёт новый путь папки или null, если переносить некуда (в саму себя или в свою же вложенную).
+   */
+  moveFolder(slug: string, path: string, parent: string): string | null {
+    if (!path || (parent && insideFolder(parent, path))) return null;
+    if (path.slice(0, Math.max(0, path.lastIndexOf('/'))) === parent) return path;
+    const name = folderName(path);
+    const next = freeName(name, (c) => this.taken(folderDir(slug, parent ? `${parent}/${c}` : c), true));
+    const to = parent ? `${parent}/${next}` : next;
+    const title = this.folderMeta(slug, path).title;
+    const from = `${folderDir(slug, path)}/`;
+    const into = `${folderDir(slug, to)}/`;
+    for (const p of this.paths()) if (p.startsWith(from)) this.relocate(p, into + p.slice(from.length));
+    // У папки без своего _papka.json (её сделали руками) название это имя папки: если оно сменилось, запишем прежнее.
+    if (next !== name && !this.files[`${into}${FOLDER_FILE}`]) this.put(`${into}${FOLDER_FILE}`, folderMetaText(title));
+    this.changed();
+    return to;
+  }
+
+  /**
+   * Удаляет папку. keep: заметки и папки из неё переезжают на уровень выше, туда, где она лежала.
+   * Без keep удаляется всё, что в ней. Вернёт, сколько заметок было в папке вместе с вложенными.
+   */
+  deleteFolder(slug: string, path: string, keep: boolean): number {
+    if (!path) return 0;
+    const n = this.count(slug, path);
+    if (keep) {
+      const up = path.slice(0, Math.max(0, path.lastIndexOf('/')));
+      for (const note of this.notesIn(slug, path)) this.moveNote(note.path, up);
+      for (const f of this.folders(slug, path)) this.moveFolder(slug, f.path, up);
+    }
+    const prefix = `${folderDir(slug, path)}/`;
+    for (const p of this.paths()) if (p.startsWith(prefix)) this.drop(p);
+    this.changed();
+    return n;
   }
 
   /** Запись в дневник за сегодняшний (игровой) день: дописывается в файл дня. Вернёт путь файла. */
@@ -407,7 +543,7 @@ export class Notes {
       const rev = rec.rev;
       try {
         if (rec.deleted) {
-          if (rec.sha) await gh.deleteFile(repo, path, rec.sha, `Лагерь: ${isDiary(path) ? `день дневника ${diaryDay(path)} удалён` : isMetaFile(path) ? 'раздел удалён' : 'заметка удалена'} (${device})`);
+          if (rec.sha) await gh.deleteFile(repo, path, rec.sha, `Лагерь: ${isDiary(path) ? `день дневника ${diaryDay(path)} удалён` : isFolderFile(path) ? 'папка удалена' : isMetaFile(path) ? 'раздел удалён' : 'заметка удалена'} (${device})`);
           if (this.files[path] === rec && rec.rev === rev) delete this.files[path];
         } else {
           const text = rec.text;
@@ -442,6 +578,10 @@ export class Notes {
 
   private message(path: string, rec: FileRec, device: string): string {
     if (isDiary(path)) return `Лагерь: дневник, ${diaryDay(path)} (${device})`;
+    if (isFolderFile(path)) {
+      const title = parseFolderMeta('', path, rec.text).title;
+      return rec.sha ? `Лагерь: папка «${title}» (${device})` : `Лагерь: новая папка «${title}» (${device})`;
+    }
     if (isMetaFile(path)) {
       const title = parseMeta('', rec.text).title;
       return rec.sha ? `Лагерь: раздел «${title}» (${device})` : `Лагерь: новый раздел «${title}» (${device})`;
@@ -452,6 +592,20 @@ export class Notes {
   private meta(slug: string): Section {
     const f = this.files[metaPath(slug)];
     return parseMeta(slug, f && !f.deleted ? f.text : null);
+  }
+
+  private folderMeta(slug: string, path: string): Folder {
+    const f = this.files[folderMetaPath(slug, path)];
+    return parseFolderMeta(slug, path, f && !f.deleted ? f.text : null);
+  }
+
+  /** Файл переезжает на новый путь: там появляется новый файл, а старый удаляется (переноса в GitHub нет). */
+  private relocate(from: string, to: string): void {
+    const rec = this.files[from];
+    if (!rec || rec.deleted || from === to) return;
+    const there = this.files[to];
+    this.files[to] = { text: rec.text, sha: there?.sha ?? null, dirty: true, rev: (there?.rev ?? 0) + 1 };
+    this.drop(from);
   }
 
   /** Пути живых файлов (без удалённых здесь). */
