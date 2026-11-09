@@ -220,9 +220,26 @@ test('по месяцу ходят стрелками, день листаетс
   await expectNoSideScroll(page);
 });
 
+/**
+ * Где дело, когда оно встало на место. Дело ставим в середину шкалы: у нижнего края его может закрыть
+ * сообщение внизу экрана (например, «Разбойник в отряде»), и мышь возьмёт сообщение, а не дело.
+ * Сразу после нового дела шкала ещё может ехать, поэтому ждём, пока оно перестанет двигаться.
+ */
+async function steadyBox(ev: ReturnType<Page['locator']>) {
+  await ev.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  let prev = await ev.boundingBox();
+  for (let i = 0; i < 40; i++) {
+    await ev.page().waitForTimeout(50);
+    const box = await ev.boundingBox();
+    if (box && prev && box.x === prev.x && box.y === prev.y && box.height === prev.height) return box;
+    prev = box;
+  }
+  return prev!;
+}
+
 /** Протащить дело мышью на dy пикселей вниз (вверх, если меньше нуля). */
 async function dragMouse(page: Page, ev: ReturnType<Page['locator']>, dy: number) {
-  const box = (await ev.boundingBox())!;
+  const box = await steadyBox(ev);
   const x = box.x + box.width / 2;
   const y = box.y + Math.min(12, box.height / 2);
   await page.mouse.move(x, y);
@@ -233,7 +250,7 @@ async function dragMouse(page: Page, ev: ReturnType<Page['locator']>, dy: number
 
 /** Долгое нажатие пальцем и протаскивание на dy пикселей, как на телефоне. */
 async function dragTouch(page: Page, ev: ReturnType<Page['locator']>, dy: number, holdMs = 600) {
-  const box = (await ev.boundingBox())!;
+  const box = await steadyBox(ev);
   const x = Math.round(box.x + box.width / 2);
   const y = Math.round(box.y + Math.min(12, box.height / 2));
   const cdp = await page.context().newCDPSession(page);
