@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { doneOn } from '../game/state';
 import { addDays, dayKey, formatClock, formatDate, formatDuration } from '../game/time';
-import { W, notesCount } from '../game/words';
-import type { DiaryDay } from '../notes/diary';
+import { W, entriesCount, notesCount } from '../game/words';
+import { addTag, diaryTags, filterDiary, textTags, type DiaryDay } from '../notes/diary';
 import { sectionDrafts } from '../notes/drafts';
 import { plainText } from '../notes/markdown';
 import { parentFolder, type Note, type Section } from '../notes/model';
@@ -12,6 +12,7 @@ import { search, type Hit } from '../notes/search';
 import type { Notes } from '../notes/notes';
 import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
+import { Chips } from './parts';
 import { RichText } from './Rich';
 
 export function useNotes(notes: Notes): void {
@@ -282,7 +283,22 @@ function FeedInput({ ui, slug, folder }: { ui: Ui; slug: string; folder: string 
   return <WriteBox ui={ui} label="Новая запись" placeholder="Что пришло в голову?" onSave={(text) => ui.notes.addNote(slug, { text }, folder)} />;
 }
 
-function WriteBox({ ui, label, placeholder, named, onSave }: { ui: Ui; label: string; placeholder: string; named?: boolean; onSave: (text: string, title: string) => void }) {
+function WriteBox({
+  ui,
+  label,
+  placeholder,
+  named,
+  tags = [],
+  onSave,
+}: {
+  ui: Ui;
+  label: string;
+  placeholder: string;
+  named?: boolean;
+  /** Метки, которые можно дописать одним нажатием (у дневника). */
+  tags?: string[];
+  onSave: (text: string, title: string) => void;
+}) {
   const [title, setTitle] = useState('');
   const [text, setText] = useState('');
   const box = useRef<HTMLTextAreaElement>(null);
@@ -309,9 +325,29 @@ function WriteBox({ ui, label, placeholder, named, onSave }: { ui: Ui; label: st
           if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) save();
         }}
       />
+      <TagAdd tags={tags} text={text} onAdd={(tag) => {
+        setText(addTag(text, tag));
+        box.current?.focus();
+      }} />
       <button class="btn btn-gold" disabled={!text.trim()} onClick={save}>
         Записать
       </button>
+    </div>
+  );
+}
+
+/** Метки дневника, которых ещё нет в тексте: нажатие дописывает метку в конец. */
+function TagAdd({ tags, text, onAdd }: { tags: string[]; text: string; onAdd: (tag: string) => void }) {
+  const have = textTags(text);
+  const left = tags.filter((t) => !have.includes(t));
+  if (!left.length) return null;
+  return (
+    <div class="chips ntag-add" role="group" aria-label="Добавить метку">
+      {left.map((t) => (
+        <button key={t} type="button" class="chipbtn ntag" aria-label={`Добавить метку ${t}`} onClick={() => onAdd(t)}>
+          #{t}
+        </button>
+      ))}
     </div>
   );
 }
@@ -351,7 +387,13 @@ function dayName(ui: Ui, day: string): string {
 
 /** Дневник: поле на сегодня, ниже дни, новые сверху. В каждом дне записи по времени. */
 function DiaryView({ ui }: { ui: Ui }) {
-  const days = ui.notes.diary();
+  const all = ui.notes.diary();
+  const tags = diaryTags(all);
+  const [picked, setTag] = useState('');
+  // Метку могли убрать из всех записей (в том числе на другом устройстве): тогда фильтра нет.
+  const tag = tags.some((t) => t.tag === picked) ? picked : '';
+  const days = filterDiary(all, tag);
+  const found = days.reduce((n, d) => n + d.entries.length, 0);
   return (
     <div class="page">
       <div class="page-top">
@@ -361,9 +403,35 @@ function DiaryView({ ui }: { ui: Ui }) {
         <LIcon name="feather" size={26} class="nsec-ic" />
         Дневник
       </h1>
-      <WriteBox ui={ui} label="Запись в дневник" placeholder="Как прошёл день?" named onSave={(text, title) => ui.notes.addDiary(text, title)} />
+      <WriteBox
+        ui={ui}
+        label="Запись в дневник"
+        placeholder="Как прошёл день? Метки пишутся так: #работа"
+        named
+        tags={tags.map((t) => t.tag)}
+        onSave={(text, title) => ui.notes.addDiary(text, title)}
+      />
+      {tags.length > 0 && (
+        <div class="ntags">
+          <Chips
+            label="Метки"
+            sr="Показать записи с меткой"
+            value={tag}
+            options={[
+              { value: '', label: 'Все', sr: 'все записи' },
+              ...tags.map((t) => ({ value: t.tag, label: `#${t.tag}`, mark: String(t.count), sr: `#${t.tag}, ${entriesCount(t.count)}` })),
+            ]}
+            onChange={setTag}
+          />
+          {tag && (
+            <p class="note" role="status">
+              С меткой #{tag}: {entriesCount(found)}.
+            </p>
+          )}
+        </div>
+      )}
       <div class="nlist">
-        {days.length === 0 && <p class="note">Здесь пока пусто. Каждый день ляжет в репозиторий отдельным файлом, записи в нём по времени.</p>}
+        {all.length === 0 && <p class="note">Здесь пока пусто. Каждый день ляжет в репозиторий отдельным файлом, записи в нём по времени. Записи можно метить словами с решёткой, например #работа или #сны, и потом смотреть их отдельно.</p>}
         {days.map((d) => (
           <DiaryDayBlock key={d.path} ui={ui} d={d} />
         ))}

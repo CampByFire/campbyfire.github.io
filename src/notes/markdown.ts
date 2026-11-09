@@ -292,9 +292,12 @@ export function inlineMarkdown(list: Inline[], br = '\n'): string {
     .join('');
 }
 
-/** Строка, которая иначе прочлась бы как заголовок, список или цитата: знак в начале экранируется. */
+/**
+ * Строка, которая иначе прочлась бы как заголовок, список или цитата: знак в начале экранируется.
+ * Решётка экранируется, только если за ней пробел (это заголовок): метка вроде #работа остаётся как есть.
+ */
 function guardStart(line: string): string {
-  return line.replace(/^(\s*)([#>+-]|\d+(?=[.)]))/, (_, sp: string, mark: string) => (/\d/.test(mark) ? `${sp}${mark}\\` : `${sp}\\${mark}`));
+  return line.replace(/^(\s*)(#{1,6}(?=[ \t]|$)|[>+-]|\d+(?=[.)]))/, (_, sp: string, mark: string) => (/\d/.test(mark) ? `${sp}${mark}\\` : `${sp}\\${mark}`));
 }
 
 const guardLines = (text: string) => text.split('\n').map(guardStart).join('\n');

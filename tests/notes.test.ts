@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { diaryDay, diaryEntry, diaryPath, diaryText, mergeDiary, parseDiary } from '../src/notes/diary';
+import { addTag, diaryDay, diaryEntry, diaryPath, diaryTags, diaryText, entryTags, filterDiary, mergeDiary, parseDiary, textTags } from '../src/notes/diary';
+import { parseMarkdown, toMarkdown } from '../src/notes/markdown';
 import { clearDrafts, draftKey, draftOutdated, dropDraft, loadDraft, moveDraft, putDraft, sectionDrafts, type DraftStorage } from '../src/notes/drafts';
 import { conflictPath, parseFolderMeta, parseMeta, parseNote, slugify, splitPath, stampName, stampTime } from '../src/notes/model';
 import { Notes, type NotesHost, type NotesStorage } from '../src/notes/notes';
@@ -561,6 +562,67 @@ describe('папки в разделах', () => {
     const notes = make(fakeGitHub(), { host: host(false), storage });
     expect(notes.folders('idei')).toEqual([]);
     expect(notes.notesIn('idei', '').map((n) => [n.body, n.folder])).toEqual([['старая\n', '']]);
+  });
+});
+
+describe('метки в дневнике', () => {
+  const day = (entries: ReturnType<typeof diaryEntry>[], d = '2026-11-04') => ({ day: d, path: diaryPath(d), entries });
+
+  it('метки берутся из текста и названия: маленькими буквами, без повторов, цвет и ссылки не метки', () => {
+    expect(textTags('Созвон #Работа и #сны, снова #работа.')).toEqual(['работа', 'сны']);
+    expect(textTags('#идеи_на_потом в начале строки\nи #план-б в конце')).toEqual(['идеи_на_потом', 'план-б']);
+    expect(textTags('<span style="color:#ef6b5e">красное</span> #ff8800 #abc #2026')).toEqual([]);
+    expect(textTags('ссылка https://site.ru/a#якорь и почта a#b')).toEqual([]);
+    expect(textTags('## Заголовок и # не метка')).toEqual([]);
+    expect(entryTags(diaryEntry('08:12', 'текст', 'Сон #сны'))).toEqual(['сны']);
+  });
+
+  it('список меток: частые первыми, фильтр оставляет только записи с меткой', () => {
+    const days = [
+      day([diaryEntry('08:12', 'утро #работа'), diaryEntry('22:00', 'летал #сны')]),
+      day([diaryEntry('09:00', 'планёрка #работа #важное')], '2026-11-03'),
+      day([diaryEntry('10:00', 'без меток')], '2026-11-02'),
+    ];
+    expect(diaryTags(days)).toEqual([
+      { tag: 'работа', count: 2 },
+      { tag: 'важное', count: 1 },
+      { tag: 'сны', count: 1 },
+    ]);
+    expect(filterDiary(days, 'работа').map((d) => [d.day, d.entries.map((e) => e.time)])).toEqual([
+      ['2026-11-04', ['08:12']],
+      ['2026-11-03', ['09:00']],
+    ]);
+    expect(filterDiary(days, '')).toBe(days);
+  });
+
+  it('метка дописывается в конец текста один раз', () => {
+    expect(addTag('', 'сны')).toBe('#сны ');
+    expect(addTag('Летал над лесом  ', 'сны')).toBe('Летал над лесом #сны ');
+    expect(addTag('Летал #сны', 'сны')).toBe('Летал #сны');
+  });
+
+  it('метки живут в тексте записи: файл дня тот же, что у прошлой версии, и сливается как раньше', async () => {
+    const gh = fakeGitHub();
+    const phone = make(gh);
+    const path = phone.addDiary('Созвон #работа', 'Планёрка');
+    await phone.syncNow();
+    expect(gh.files.get(path)!.text).toBe('## 08:12 Планёрка\n\nСозвон #работа\n');
+    const pc = make(gh, { host: host(true, 'компьютер'), now: T + 60_000 });
+    await pc.syncNow();
+    pc.addDiary('Видел море #сны');
+    await pc.syncNow();
+    phone.addDiary('Ещё одна #работа');
+    await phone.syncNow();
+    expect(diaryTags(phone.diary())).toEqual([
+      { tag: 'работа', count: 2 },
+      { tag: 'сны', count: 1 },
+    ]);
+    expect(search(phone, '#сны')).toMatchObject([{ kind: 'diary' }]);
+  });
+
+  it('метка в начале строки не портится при сохранении из редактора, а заголовок по-прежнему экранируется', () => {
+    expect(toMarkdown(parseMarkdown('#работа сегодня'))).toBe('#работа сегодня');
+    expect(toMarkdown([{ t: 'p', c: [{ t: 'text', v: '# не заголовок' }] }])).toBe('\\# не заголовок');
   });
 });
 

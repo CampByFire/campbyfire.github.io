@@ -160,6 +160,22 @@ test('axe не находит нарушений в папках Летопис�
   await expect(page.getByRole('button', { name: 'Настроить папку' })).toBeFocused();
 });
 
+test('axe не находит нарушений в дневнике с метками и фильтром', async ({ page }) => {
+  await openGame(page);
+  await tab(page, 'Летопись').click();
+  await page.getByRole('button', { name: /^Дневник/ }).click();
+  const box = page.locator('.screen').getByLabel('Запись в дневник');
+  await box.fill('Утро #сны');
+  await page.locator('.screen').getByRole('button', { name: 'Записать', exact: true }).click();
+  await box.fill('Вечер');
+  await expect(page.getByRole('group', { name: 'Добавить метку' })).toBeVisible();
+  expect(await axe(page), 'Дневник с метками').toEqual([]);
+  expect(await tooSmall(page), 'Дневник с метками').toEqual([]);
+  await page.getByRole('radiogroup', { name: 'Показать записи с меткой' }).getByRole('radio', { name: /#сны/ }).click();
+  await expect(page.getByText('С меткой #сны: 1 запись.')).toBeVisible();
+  expect(await axe(page), 'Дневник по метке').toEqual([]);
+});
+
 test('с клавиатуры: лист ловит фокус, Escape возвращает его на кнопку', async ({ page }) => {
   await openGame(page);
   const add = tab(page, 'Добавить задачу');

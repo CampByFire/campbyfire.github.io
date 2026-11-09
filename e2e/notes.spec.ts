@@ -193,6 +193,52 @@ test('дневник: у записи есть название, оно видн
   await expectNoSideScroll(page);
 });
 
+test('дневник: метки в тексте, быстрые метки под полем и фильтр по метке', async ({ page }) => {
+  const gh = await fakeGitHub(page);
+  await openGame(page);
+  await connectGitHub(page);
+  await tab(page, 'Летопись').click();
+  await page.getByRole('button', { name: /^Дневник/ }).click();
+  const box = page.locator('.screen').getByLabel('Запись в дневник');
+  const write = page.locator('.screen').getByRole('button', { name: 'Записать', exact: true });
+  // Пока меток нет, фильтра тоже нет.
+  await expect(page.getByRole('radiogroup', { name: 'Показать записи с меткой' })).toHaveCount(0);
+  await box.fill('Планёрка затянулась #работа');
+  await write.click();
+  await box.fill('Летал над лесом #сны');
+  await write.click();
+
+  // Знакомая метка дописывается кнопкой под полем; уже написанной там нет.
+  await box.fill('Сдал отчёт');
+  const add = page.getByRole('group', { name: 'Добавить метку' });
+  await expect(add.getByRole('button')).toHaveText(['#работа', '#сны']);
+  await add.getByRole('button', { name: 'Добавить метку работа' }).click();
+  await expect(box).toHaveValue('Сдал отчёт #работа ');
+  await expect(add.getByRole('button')).toHaveText(['#сны']);
+  await expect(box).toBeFocused();
+  await write.click();
+
+  // Фильтр: частые метки первыми, выбранная показывает только свои записи.
+  const filter = page.getByRole('radiogroup', { name: 'Показать записи с меткой' });
+  await expect(filter.getByRole('radio')).toHaveCount(3);
+  await expect(filter.getByRole('radio').nth(1)).toHaveAccessibleName('#работа, 2 записи');
+  await expect(filter.getByRole('radio').nth(2)).toHaveAccessibleName('#сны, 1 запись');
+  await expect(filter.getByRole('radio', { name: 'все записи' })).toHaveAttribute('aria-checked', 'true');
+  await filter.getByRole('radio', { name: /#сны/ }).click();
+  await expect(page.getByText('С меткой #сны: 1 запись.')).toBeVisible();
+  await expect(page.locator('.screen .nday .ncard')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /Летал над лесом/ })).toBeVisible();
+  await filter.getByRole('radio', { name: /#работа/ }).click();
+  await expect(page.locator('.screen .nday .ncard')).toHaveCount(2);
+  await filter.getByRole('radio', { name: 'все записи' }).click();
+  await expect(page.locator('.screen .nday .ncard')).toHaveCount(3);
+  await expectNoSideScroll(page);
+
+  // В файле дня метки это просто текст записи.
+  await page.clock.runFor(3000);
+  await expect.poll(() => gh.notes.get('diary/2026/2026-10-23.md')?.text).toContain('Сдал отчёт #работа\n');
+});
+
 test('оформление: жирный и свой цвет в записи ленты ложатся в Markdown; поиск находит запись', async ({ page }) => {
   const gh = await fakeGitHub(page);
   await openGame(page);

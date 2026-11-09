@@ -36,6 +36,46 @@ export function diaryEntry(time: string, text: string, title = ''): DiaryEntry {
 /** Одна и та же запись: совпали время, название и текст. */
 export const sameEntry = (a: DiaryEntry, b: DiaryEntry) => a.time === b.time && (a.title ?? '') === (b.title ?? '') && a.text.trim() === b.text.trim();
 
+// Метки записей: #работа, #сны, #идеи_на_потом. Пишутся прямо в тексте или в названии, как в Obsidian,
+// поэтому в файле ничего нового нет. Перед решёткой не буква и не знак из ссылки или цвета
+// (color:#e0a050, адрес#якорь), в метке хотя бы одна буква, а цвет вида #ff8800 меткой не считается.
+const TAG = /(^|[^\p{L}\p{N}_&/#:="'\\-])#([\p{L}\p{N}_][\p{L}\p{N}_-]*)/gu;
+const HEX = /^(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
+
+/** Метки в тексте: без решётки, маленькими буквами, без повторов, по порядку появления. */
+export function textTags(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(TAG)) {
+    const tag = m[2].replace(/-+$/, '').toLowerCase();
+    if (!/\p{L}/u.test(tag) || HEX.test(tag) || out.includes(tag)) continue;
+    out.push(tag);
+  }
+  return out;
+}
+
+/** Метки записи из названия и текста. */
+export const entryTags = (e: DiaryEntry): string[] => textTags(`${e.title ?? ''}\n${e.text}`);
+
+/** Все метки дневника и сколько записей с каждой: частые первыми, при равенстве по алфавиту. */
+export function diaryTags(days: DiaryDay[]): { tag: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const d of days) for (const e of d.entries) for (const t of entryTags(e)) counts.set(t, (counts.get(t) ?? 0) + 1);
+  return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag, 'ru'));
+}
+
+/** Только записи с меткой tag; дни без таких записей пропадают. Пустая метка: всё как есть. */
+export function filterDiary(days: DiaryDay[], tag: string): DiaryDay[] {
+  if (!tag) return days;
+  return days.map((d) => ({ ...d, entries: d.entries.filter((e) => entryTags(e).includes(tag)) })).filter((d) => d.entries.length > 0);
+}
+
+/** Дописать метку в конец текста: «текст #работа». Если она уже есть, текст не меняется. */
+export function addTag(text: string, tag: string): string {
+  if (textTags(text).includes(tag)) return text;
+  const body = text.replace(/\s+$/, '');
+  return `${body}${body ? ' ' : ''}#${tag} `;
+}
+
 export interface DiaryDay {
   day: DayKey;
   path: string;

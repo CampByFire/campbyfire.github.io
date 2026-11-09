@@ -223,6 +223,22 @@
   min-width: 130px;
 }
 
+/* ---------- метки дневника ---------- */
+
+/* Быстрые метки под полем записи: нажатие дописывает метку в текст. */
+.ntag-add {
+  align-self: stretch;
+}
+
+.ntag {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.ntags {
+  margin-top: 14px;
+}
+
 .nlist {
   margin-top: 16px;
   display: flex;
