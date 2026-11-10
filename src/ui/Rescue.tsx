@@ -3,7 +3,7 @@ import { useRef, useState } from 'preact/hooks';
 import { browserStorage, isNewerSave, parseSave, type Store } from '../game/store';
 import type { Sync } from '../sync/sync';
 import { saveFile, today } from './files';
-import { errorReport } from './report';
+import { ISSUES_URL, errorReport, newIssueUrl } from './report';
 
 /** Сохранение в браузере не открылось. Пока игрок не выберет, что делать, поверх него ничего не пишется. */
 export function Recovery({ store, sync, onDone }: { store: Store; sync: Sync; onDone: () => void }) {
@@ -80,7 +80,13 @@ export function Recovery({ store, sync, onDone }: { store: Store; sync: Sync; on
         )}
       </div>
       {error && <p class="note note-error">{error}</p>}
-      <p class="note">Скачанный файл можно отправить тому, кто дал тебе ссылку на Лагерь: возможно, игру получится достать.</p>
+      <p class="note">
+        Если игру не получается вернуть,{' '}
+        <a href={ISSUES_URL} target="_blank" rel="noopener noreferrer">
+          напиши о проблеме на GitHub
+        </a>
+        . Сам файл туда не выкладывай: записи там видят все, а в файле вся твоя игра.
+      </p>
       <input
         ref={file}
         type="file"
@@ -123,12 +129,15 @@ export function Crash({ error }: { error: unknown }) {
     <div class="rescue">
       <h1 class="page-title">Что-то сломалось</h1>
       <p class="page-sub">
-        В Лагере случилась ошибка. Игра сохранена до последнего действия, с ней всё в порядке. Перезапусти приложение. Если ошибка повторяется, скопируй
-        отчёт и отправь тому, кто дал тебе ссылку на Лагерь.
+        В Лагере случилась ошибка. Игра сохранена до последнего действия, с ней всё в порядке. Перезапусти приложение. Если ошибка повторяется,
+        сообщи о ней на GitHub: отчёт уже будет вставлен, останется написать, что ты делал.
       </p>
       <div class="btns btns-col">
         <button class="btn btn-gold" onClick={() => location.reload()}>
           Перезапустить
+        </button>
+        <button class="btn btn-ghost" onClick={() => window.open(newIssueUrl(report), '_blank', 'noopener,noreferrer')}>
+          Сообщить о проблеме
         </button>
         <button class="btn btn-ghost" onClick={copy}>
           {copied ? 'Отчёт скопирован' : 'Скопировать отчёт'}

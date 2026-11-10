@@ -18,3 +18,12 @@ export function errorReport(error: unknown): string {
     ...stack,
   ].join('\n');
 }
+
+/** Куда игроки пишут о проблемах: раздел Issues репозитория Лагеря. */
+export const ISSUES_URL = 'https://github.com/CampByFire/campbyfire.github.io/issues';
+
+/** Новая запись в Issues, в которую уже вставлен отчёт: игроку остаётся рассказать, что он делал. */
+export function newIssueUrl(report: string): string {
+  const body = `Что я делал, когда это случилось:\n\n\n<details><summary>Отчёт</summary>\n\n\`\`\`\n${report}\n\`\`\`\n</details>\n`;
+  return `${ISSUES_URL}/new?title=${encodeURIComponent('Ошибка в Лагере')}&body=${encodeURIComponent(body)}`;
+}

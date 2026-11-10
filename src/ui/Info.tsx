@@ -28,6 +28,7 @@ import { LEVEL_HINT } from '../game/words';
 import { BUILD, VERSION } from '../version';
 import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
+import { ISSUES_URL } from './report';
 import type { GameIcon } from './icons';
 import { Sheet } from './Sheets';
 
@@ -197,7 +198,7 @@ export function AboutSheet({ ui }: { ui: Ui }) {
   return (
     <Sheet title="О приложении" onClose={ui.close}>
       <p class="note">
-        Лагерь у костра, версия {VERSION} от {BUILD}. Это закрытая бета: что-то может работать не так, как задумано.
+        Лагерь у костра, версия {VERSION} от {BUILD}.
       </p>
 
       <div class="rule-title">Где хранится игра</div>
@@ -212,9 +213,11 @@ export function AboutSheet({ ui }: { ui: Ui }) {
 
       <div class="rule-title">Вопросы и ошибки</div>
       <p class="note">
-        Пиши тому, кто дал тебе ссылку на Лагерь. Если что-то сломалось, на экране ошибки есть кнопка «Скопировать отчёт»: в отчёте версия, браузер и
-        текст ошибки, а самой игры и токена в нём нет.
+        Пиши в {link(ISSUES_URL, 'раздел Issues на GitHub')}, для этого нужен аккаунт GitHub. Если что-то сломалось, на экране ошибки есть кнопка
+        «Сообщить о проблеме»: она откроет новую запись, где уже вставлен отчёт. В отчёте версия, браузер и текст ошибки, а самой игры и токена в нём
+        нет.
       </p>
+      <p class="note">Записи в Issues видят все. Не выкладывай туда копию игры, заметки и токен.</p>
 
       {lockRemembered() && (
         <>
