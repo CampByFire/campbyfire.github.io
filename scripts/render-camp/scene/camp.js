@@ -429,25 +429,81 @@ async function buildProps() {
 
 const BODY = /_(Arm|Leg|Body|Head|Eyes|Jaw|Skull)/;
 
+/**
+ * Герои: у каждого класса три облика. Первый (без буквы) прежний, «-b» и «-c» собраны из снаряжения,
+ * которое лежит в той же модели выключенным. Плащ (cape) есть у всех: приложение красит его в цвет похода.
+ */
 const CHARS = {
   rogue: {
     file: `${ADV}/Rogue_Hooded.glb`,
-    show: ['Rogue_Cape', 'Knife'],
+    cape: 'Rogue_Cape',
+    show: ['Knife'],
+    work: ['Use_Item', 0.55],
+  },
+  'rogue-b': {
+    file: `${ADV}/Rogue.glb`,
+    cape: 'Rogue_Cape',
+    show: ['2H_Crossbow'],
+    work: ['2H_Ranged_Reload', 0.5],
+  },
+  'rogue-c': {
+    file: `${ADV}/Rogue_Hooded.glb`,
+    cape: 'Rogue_Cape',
+    show: ['1H_Crossbow', 'Knife_Offhand'],
     work: ['Use_Item', 0.55],
   },
   barbarian: {
     file: `${ADV}/Barbarian.glb`,
-    show: ['Barbarian_Hat', 'Barbarian_Cape', '2H_Axe'],
+    cape: 'Barbarian_Cape',
+    show: ['Barbarian_Hat', '2H_Axe'],
     work: ['2H_Melee_Attack_Chop', 0.32],
+  },
+  'barbarian-b': {
+    file: `${ADV}/Barbarian.glb`,
+    cape: 'Barbarian_Cape',
+    show: ['1H_Axe', 'Barbarian_Round_Shield'],
+    work: ['1H_Melee_Attack_Chop', 0.32],
+  },
+  'barbarian-c': {
+    file: `${ADV}/Barbarian.glb`,
+    cape: 'Barbarian_Cape',
+    show: ['Barbarian_Hat', 'Mug', '1H_Axe_Offhand'],
+    work: ['Interact', 0.6],
   },
   mage: {
     file: `${ADV}/Mage.glb`,
-    show: ['Mage_Hat', 'Mage_Cape', '2H_Staff'],
+    cape: 'Mage_Cape',
+    show: ['Mage_Hat', '2H_Staff'],
+    work: ['Spellcasting', 0.5],
+  },
+  'mage-b': {
+    file: `${ADV}/Mage.glb`,
+    cape: 'Mage_Cape',
+    show: ['1H_Wand', 'Spellbook_open'],
+    work: ['Spellcasting', 0.5],
+  },
+  'mage-c': {
+    file: `${ADV}/Mage.glb`,
+    cape: 'Mage_Cape',
+    show: ['Mage_Hat', '1H_Wand', 'Spellbook'],
     work: ['Spellcasting', 0.5],
   },
   knight: {
     file: `${ADV}/Knight.glb`,
-    show: ['Knight_Helmet', 'Knight_Cape', '1H_Sword', 'Round_Shield'],
+    cape: 'Knight_Cape',
+    show: ['Knight_Helmet', '1H_Sword', 'Round_Shield'],
+    work: ['Interact', 0.6],
+  },
+  'knight-b': {
+    file: `${ADV}/Knight.glb`,
+    cape: 'Knight_Cape',
+    show: ['2H_Sword'],
+    work: ['Interact', 0.6],
+  },
+  'knight-c': {
+    file: `${ADV}/Knight.glb`,
+    cape: 'Knight_Cape',
+    show: ['Knight_Helmet', '1H_Sword', 'Rectangle_Shield'],
     work: ['Interact', 0.6],
   },
 };
@@ -479,7 +535,7 @@ async function makeCharacter(who, pose) {
   } else {
     const c = CHARS[who];
     file = c.file;
-    show = c.show;
+    show = [c.cape, ...c.show];
     [clipName, t] = pose === 'work' ? c.work : POSES[pose];
   }
   const g = await load(file);
@@ -519,6 +575,34 @@ catcher.position.y = 0.003;
 catcher.receiveShadow = true;
 
 // ---------- снимки ----------
+
+const depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
+
+/**
+ * Плащ отдельным слоем: белый, с тем же светом и тенями, а тело и бревно только заслоняют его.
+ * Приложение умножает этот слой на цвет похода и кладёт поверх фигуры.
+ */
+function capeShot(ch, capeName, others) {
+  const saved = [];
+  let found = false;
+  for (const root of [ch, ...others]) {
+    root.traverse((o) => {
+      if (!o.isMesh || !o.visible) return;
+      saved.push([o, o.material]);
+      if (root === ch && o.name === capeName) {
+        found = true;
+        o.material = o.material.clone();
+        o.material.map = null;
+        o.material.color.set(0xffffff);
+      } else {
+        o.material = depthOnly;
+      }
+    });
+  }
+  const url = found ? shot(true) : null;
+  for (const [o, m] of saved) o.material = m;
+  return url;
+}
 
 function shot(transparent) {
   renderer.setClearColor(0x000000, transparent ? 0 : 1);
@@ -601,9 +685,11 @@ async function renderSprite(spot, who, pose, light) {
   scene.add(catcher);
   const url = shot(true);
   scene.remove(catcher);
+  const capeName = CHARS[who]?.cape;
+  const cape = capeName ? capeShot(ch, capeName, keep) : null;
   world.remove(ch);
   allWorld();
-  return { url, head };
+  return { url, head, cape };
 }
 
 /** Для проверки на глаз: вся поляна с фигурами сразу. */
@@ -641,6 +727,7 @@ window.camp = {
   renderPreview,
   project,
   bbox,
+  heroes: Object.keys(CHARS),
   spots: SPOTS,
   chest: CHEST,
   messenger: MESSENGER,

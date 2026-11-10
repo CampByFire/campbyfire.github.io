@@ -1,7 +1,7 @@
 // Магия: заклинания не держат игру, сила магии выбирается в Настройках и помнится на этом устройстве.
 // Идёт на телефоне со всей магией и на телефоне с «Уменьшить движение» в системе, где магия спокойная.
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { addTask, at, openGame, openSettings, setTime, sheet, tab, toast, unlock } from './helpers';
+import { addTask, at, openGame, openSettings, setTime, sheet, tab, toast } from './helpers';
 
 /** Ошибки страницы и предупреждения магии. Их не должно быть ни одного. */
 function watchErrors(page: Page): string[] {
@@ -49,7 +49,7 @@ async function reloadWithXp(page: Page, xp: number) {
   });
   await page.evaluate((xp) => sessionStorage.setItem('e2e-xp', String(xp)), xp);
   await page.reload();
-  await unlock(page);
+  await expect(page.locator('.app')).toBeVisible();
 }
 
 test('заклинания не держат кнопки: следующее нажатие можно делать сразу', async ({ page }) => {
@@ -133,7 +133,7 @@ test('сила магии выбирается в Настройках и пом
   await expect(page.getByText('Никакого движения')).toBeVisible();
 
   await page.reload();
-  await unlock(page);
+  await expect(page.locator('.app')).toBeVisible();
   await expect(html).toHaveAttribute('data-motion', 'off');
   await openSettings(page);
   await expect(magic.getByRole('radio', { name: 'Без анимаций' })).toBeChecked();

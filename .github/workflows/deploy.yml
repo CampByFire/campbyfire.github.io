@@ -1,6 +1,5 @@
 # Сборка и публикация на GitHub Pages при каждом пуше в main. Сайт не обновится, если упали тесты
-# логики или автотесты экранов на собранном сайте. Если задан секрет LAGER_PASSWORD, сайт закрыт
-# паролем; без него публикуется открытым (как добавить пароль, сказано в README).
+# логики или автотесты экранов на собранном сайте.
 name: Публикация
 
 on:
@@ -26,26 +25,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Пароль сайта
-        env:
-          LAGER_PASSWORD: ${{ secrets.LAGER_PASSWORD }}
-        run: |
-          if [ -z "$LAGER_PASSWORD" ]; then
-            echo "::warning::Пароль сайта не задан, сайт публикуется открытым. Чтобы закрыть его: Settings → Secrets and variables → Actions → New repository secret, имя LAGER_PASSWORD."
-            echo "LAGER_PUBLIC=1" >> "$GITHUB_ENV"
-          fi
       - run: npm ci
       - run: npm test
       - name: Сборка
-        env:
-          LAGER_PASSWORD: ${{ secrets.LAGER_PASSWORD }}
         run: npm run build
       - name: Браузер для автотестов
         run: npx playwright install --with-deps --only-shell chromium
-      # Отчёт и трассы не выкладываются: в них виден введённый пароль сайта. Что упало, видно в логе шага.
+      # Что упало, видно в логе шага.
       - name: Автотесты экранов
-        env:
-          LAGER_PASSWORD: ${{ secrets.LAGER_PASSWORD }}
         run: npm run e2e
       - uses: actions/upload-pages-artifact@v5
         with:

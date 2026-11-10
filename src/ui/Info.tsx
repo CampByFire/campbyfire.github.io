@@ -167,27 +167,6 @@ export function RulesSheet({ ui }: { ui: Ui }) {
   );
 }
 
-const LOCK_KEY = 'taskcraft-lager-key';
-
-function lockRemembered(): boolean {
-  try {
-    return !!localStorage.getItem(LOCK_KEY);
-  } catch {
-    return false;
-  }
-}
-
-function forgetLock(): void {
-  if (!confirm('Забыть пароль на этом устройстве? При следующем открытии сайт спросит его снова. Игра останется на месте.')) return;
-  try {
-    localStorage.removeItem(LOCK_KEY);
-    sessionStorage.removeItem(LOCK_KEY);
-  } catch {
-    // Нечего забывать.
-  }
-  location.reload();
-}
-
 const link = (href: string, text: string) => (
   <a href={href} target="_blank" rel="noopener noreferrer">
     {text}
@@ -218,18 +197,6 @@ export function AboutSheet({ ui }: { ui: Ui }) {
         нет.
       </p>
       <p class="note">Записи в Issues видят все. Не выкладывай туда копию игры, заметки и токен.</p>
-
-      {lockRemembered() && (
-        <>
-          <div class="rule-title">Пароль сайта</div>
-          <p class="note">Пароль запомнен на этом устройстве, поэтому сайт его не спрашивает.</p>
-          <div class="btns btns-one">
-            <button class="btn btn-ghost btn-sm" onClick={forgetLock}>
-              Забыть пароль на этом устройстве
-            </button>
-          </div>
-        </>
-      )}
 
       <div class="rule-title">Авторы и лицензии</div>
       <ul class="credits-list note">

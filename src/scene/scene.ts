@@ -13,6 +13,17 @@ export interface Sprite {
   lit?: boolean;
   /** Макушка фигуры: над ней встаёт номер задачи. */
   head?: [number, number];
+  /** Плащ героя отдельным белым слоем: его красят в цвет похода и кладут поверх фигуры, см. ui/tint.ts. */
+  cape?: Layer;
+}
+
+/** Часть картинки фигуры: файл и его прямоугольник в пикселях полной картинки. */
+export interface Layer {
+  file: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 interface CampManifest {
@@ -34,6 +45,15 @@ export const [SCENE_W, SCENE_H] = SCENE.size;
 
 export function spriteKey(spot: string, who: string, pose: string): string {
   return `${spot}/${who}/${pose}`;
+}
+
+/** Буквы обликов героя в именах картинок: «rogue», «rogue-b», «rogue-c». */
+const LOOK_SUFFIX = ['', '-b', '-c'];
+
+/** Картинка героя в его облике. Если такой облик не снят, берётся первый. */
+export function heroKey(spot: string, cls: string, look: number, pose: string): string {
+  const key = spriteKey(spot, `${cls}${LOOK_SUFFIX[look] ?? ''}`, pose);
+  return SCENE.sprites[key] ? key : spriteKey(spot, cls, pose);
 }
 
 export function assetUrl(file: string): string {

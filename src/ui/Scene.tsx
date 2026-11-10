@@ -4,10 +4,11 @@ import { plural } from '../game/time';
 import type { CampView, Tone } from '../game/view';
 import type { Task } from '../game/types';
 import { CLASS_NAME, UNDEAD_NAME } from '../game/words';
-import { SCENE, SCENE_H, SCENE_W, assetUrl, pct, spriteKey, type Sprite } from '../scene/scene';
+import { SCENE, SCENE_H, SCENE_W, assetUrl, heroKey, pct, spriteKey, type Sprite } from '../scene/scene';
 import { LIcon } from './Icon';
 import { numLook } from './parts';
 import { pick, preloadMask, type Pickable } from './pick';
+import { tinted, tintedNow } from './tint';
 
 interface Figure {
   key: string;
@@ -20,7 +21,7 @@ interface Figure {
   task: Task;
   n: number;
   tone: Tone;
-  /** Цвет знамени похода: в него красится номер. */
+  /** Цвет знамени похода: в него красятся номер и плащ героя. */
   color?: string;
   extra?: preact.ComponentChildren;
   pulse?: boolean;
@@ -46,7 +47,7 @@ export function Scene(p: {
 
   if (v.ring) {
     const spot = 'ring';
-    const art = spriteKey(spot, v.ring.cls, v.ring.pose);
+    const art = heroKey(spot, v.ring.cls, v.ring.look, v.ring.pose);
     figures.push({
       key: `ring-${v.ring.task.id}`,
       spot,
@@ -64,7 +65,7 @@ export function Scene(p: {
   }
   for (const f of v.seats) {
     const spot = `seat${f.seat}`;
-    const art = spriteKey(spot, f.cls, f.pose);
+    const art = heroKey(spot, f.cls, f.look, f.pose);
     figures.push({
       key: `seat-${f.task.id}`,
       spot,
@@ -201,10 +202,21 @@ function feetOf(f: Figure): number {
 
 function SpriteImg({ s, undead, f }: { s: Sprite; undead: boolean; f?: Figure }) {
   const life = f ? lifeOf(f, s) : null;
+  // Плащ героя в цвет похода: пока перекрашенная картинка готовится, видна обычная.
+  const color = s.cape ? f?.color : undefined;
+  const [, redraw] = useState(0);
+  useEffect(() => {
+    if (!color || tintedNow(s, color)) return;
+    let live = true;
+    void tinted(s, color).then((url) => live && url && redraw((n) => n + 1));
+    return () => {
+      live = false;
+    };
+  }, [s.file, color]);
   return (
     <img
       class={`fig${undead ? ' fig-undead' : ''}${s.lit ? ' fig-lit' : ''}${life ? ` ${life.cls}` : ''}`}
-      src={assetUrl(s.file)}
+      src={(color && tintedNow(s, color)) || assetUrl(s.file)}
       alt=""
       draggable={false}
       data-task={f?.task.id}

@@ -26,7 +26,7 @@ export function registerServiceWorker(): void {
       })
       .catch(() => undefined);
   };
-  // После ввода пароля игра запускается, когда страница уже загружена.
+  // Страница могла уже загрузиться к этому моменту: тогда события load не будет.
   if (document.readyState === 'complete') register();
   else window.addEventListener('load', register, { once: true });
 }

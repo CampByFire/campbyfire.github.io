@@ -1,11 +1,8 @@
 /// <reference types="node" />
-// Общее для автотестов экранов: открыть игру в нужный момент, войти по паролю, если сайт собран с ним.
+// Общее для автотестов экранов: открыть игру в нужный момент.
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { expect, type Locator, type Page } from '@playwright/test';
-
-/** Сайт собран с паролем: тогда перед игрой страница входа. */
-export const LOCKED = readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8').includes('id="lock"');
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -25,21 +22,7 @@ export async function openGame(page: Page, { time = at(9), intro = false }: { ti
     });
   }
   await page.goto('./');
-  await unlock(page);
-}
-
-/** Ввести пароль сайта, если спрашивают. Пароль запоминается, после перезагрузки его уже не спросят. */
-export async function unlock(page: Page) {
-  const app = page.locator('.app');
-  if (!LOCKED) return expect(app).toBeVisible();
-  const form = page.locator('#lock-form');
-  await expect(form.or(app)).toBeVisible();
-  if (await app.isVisible()) return;
-  const password = process.env.LAGER_PASSWORD;
-  if (!password) throw new Error('Сайт в dist/ собран с паролем: задай LAGER_PASSWORD, чтобы тесты могли войти');
-  await page.getByLabel('Пароль').fill(password);
-  await page.getByRole('button', { name: 'Войти' }).click();
-  await expect(app).toBeVisible();
+  await expect(page.locator('.app')).toBeVisible();
 }
 
 /** Кнопка меню внизу экрана. */

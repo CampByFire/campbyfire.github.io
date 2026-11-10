@@ -23,7 +23,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: CI,
   retries: CI ? 1 : 0,
-  // Только в консоль. В html-отчёте и трассах виден введённый пароль сайта, их не выкладываем из CI.
+  // Только в консоль: что упало, видно в логе.
   reporter: 'list',
   use: {
     baseURL: `http://localhost:${PORT}/`,

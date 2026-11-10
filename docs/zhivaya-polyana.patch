@@ -1,0 +1,507 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index ee6548b..2f802fd 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -1,6 +1,6 @@
+ # AGENTS.md: Лагерь у костра
+ 
+-Инструкции для ИИ-агентов, которые работают с кодом «Лагеря у костра» (проект Taskcraft). Файл описывает версию 0.10.1. Он должен лежать в корне репозитория рядом с `package.json`.
++Инструкции для ИИ-агентов, которые работают с кодом «Лагеря у костра» (проект Taskcraft). Файл описывает версию 0.10.2. Он должен лежать в корне репозитория рядом с `package.json`.
+ 
+ ## Что это
+ 
+@@ -102,7 +102,7 @@ npm run e2e          # автотесты экранов; проверяют dis
+ 
+ ## Версии и релизы
+ 
+-- Версия в `package.json` (сейчас 0.10.1), она видна в Настройках → «О приложении» и в отчёте об ошибке. Поднимай её в каждом релизе.
++- Версия в `package.json` (сейчас 0.10.2), она видна в Настройках → «О приложении» и в отчёте об ошибке. Поднимай её в каждом релизе.
+ - `CHANGELOG.md` в корне репозитория, новая версия сверху: заголовок `## X.Y.Z, коротко о главном`, дальше разделы по надобности: «Игроку», «Доступность», «Сохранение», «Сайт», «Правила», «Проверки», «Прочее». Пункты пишутся для игрока, простыми предложениями. В «Сохранении» всегда сказано, менялся ли формат и откроет ли игру прошлая версия. В «Проверках» сказано, какие тесты добавлены и сколько их теперь.
+ - Бета-релиз выкладывается в общую папку проекта, в `lager/beta-X.Y.Z/`, тремя файлами:
+   - `taskcraft-lager-X.Y.Z.zip`: весь проект в папке `taskcraft-lager/`, с `.github/`, без `node_modules/`, `dist/`, `test-results/` и других путей из `.gitignore`;
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index a66a16a..0a85252 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,5 +1,27 @@
+ # Что нового
+ 
++## 0.10.2, живая поляна
++
++Игроку
++
++- Лагерь теперь живёт и тогда, когда ты ничего не нажимаешь. Спутники у костра дышат, спящие дышат медленнее, у каждого свой темп.
++- Тот, кто сейчас у огня, плавно покачивается за работой, а после «Готово» радостно подпрыгивает. Нежить на дороге качается.
++- Костёр горит: над нарисованным пламенем пляшут языки огня и поднимается дымок. Пока костёр не разожжён, их нет.
++- Днём через поляну плывут тени облаков. Вечером и ночью у палатки светит и подрагивает фонарь.
++- В спокойной магии и без анимаций всё это выключено, поляна стоит неподвижно, как раньше.
++
++Доступность
++
++- Новые слои скрыты от диктора и не ловят нажатий. Номера над фигурами не двигаются, нажимать по ним и по фигурам можно как раньше.
++
++Сохранение
++
++- Сохранение не менялось, прошлая версия откроет игру как есть.
++
++Проверки
++
++- Автотесты логики не менялись. Тесты экранов по дню, магии, фигурам и доступности проходят со всей магией и со спокойной.
++
+ ## 0.10.1, Лагерь открыт для всех
+ 
+ Игроку
+diff --git a/README.md b/README.md
+index abd3aea..6ce0072 100644
+--- a/README.md
++++ b/README.md
+@@ -215,7 +215,7 @@ notes/idei/proekty/sad/2026-11-05-0930.md   запись в папке внут
+ 
+ - Настройки → «Магия»: «Вся», «Спокойная» (без частиц, полётов и сдвигов, только мягкий наплыв) или «Без анимаций». Пока ничего не выбрано, решает система: при «Уменьшить движение» магия спокойная. Выбор лежит в настройках устройства (`taskcraft-lager-device`) и в сохранение игры не попадает.
+ - Слои магии поверх приложения не ловят нажатий и скрыты от экранного диктора. Числа наверху (золото, уровень, мана) магия только на время показывает прежними, пока до них летят монеты и звёзды, а настоящее значение всегда в разметке.
+-- Что есть: искра под пальцем, листы, смена разделов, цена смены похода, «Позвать к огню», «Готово», привал, новый уровень, искры над костром и светлячки ночью; разжигание тлеющего лагеря, нежить встаёт и упокаивается, письмо вестника, новый спутник, «Отпустить» и «Вернуть», Второе дыхание, вечер и ночь наплывом, отбой, выполненный проект, покупка в лавке и печать на странице пароля.
++- Что есть: искра под пальцем, листы, смена разделов, цена смены похода, «Позвать к огню», «Готово», привал, новый уровень, искры над костром и светлячки ночью, живая поляна (отряд дышит, языки пламени и дымок, тени облаков днём, фонарь в сумерках); разжигание тлеющего лагеря, нежить встаёт и упокаивается, письмо вестника, новый спутник, «Отпустить» и «Вернуть», Второе дыхание, вечер и ночь наплывом, отбой, выполненный проект, покупка в лавке и печать на странице пароля.
+ 
+ ## Как устроено
+ 
+diff --git a/package-lock.json b/package-lock.json
+index 7879afa..f0f7b1b 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,12 +1,12 @@
+ {
+   "name": "taskcraft-lager",
+-  "version": "0.10.1",
++  "version": "0.10.2",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "taskcraft-lager",
+-      "version": "0.10.1",
++      "version": "0.10.2",
+       "license": "UNLICENSED",
+       "dependencies": {
+         "@fontsource/alegreya-sans": "5.3.0",
+diff --git a/package.json b/package.json
+index 626bf1f..2aecfeb 100644
+--- a/package.json
++++ b/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "taskcraft-lager",
+   "private": true,
+-  "version": "0.10.1",
++  "version": "0.10.2",
+   "type": "module",
+   "scripts": {
+     "dev": "vite --host",
+diff --git a/src/ui/Scene.tsx b/src/ui/Scene.tsx
+index 851753b..b63bcf0 100644
+--- a/src/ui/Scene.tsx
++++ b/src/ui/Scene.tsx
+@@ -165,6 +165,10 @@ export function Scene(p: {
+       {v.extraRoad > 0 && <div class="road-fog" aria-hidden="true" style={{ left: pct(ROAD_FOG[0], SCENE_W), top: pct(ROAD_FOG[1], SCENE_H) }} />}
+       {/* Воздух для магии: копии фигур тают поверх новых мест. Потом угли над костром и светлячки ночью. */}
+       <div class="scene-fx" aria-hidden="true" />
++      {/* Живая поляна: тени облаков днём, фонарь в сумерках, языки пламени и дымок. */}
++      {v.light === 'day' ? <CloudShadows /> : <Lantern />}
++      <Flame />
++      <Smoke />
+       <Embers />
+       {v.light === 'night' && <Fireflies />}
+       {sorted.map((f) => (
+@@ -196,19 +200,93 @@ function feetOf(f: Figure): number {
+ }
+ 
+ function SpriteImg({ s, undead, f }: { s: Sprite; undead: boolean; f?: Figure }) {
++  const life = f ? lifeOf(f, s) : null;
+   return (
+     <img
+-      class={`fig${undead ? ' fig-undead' : ''}${s.lit ? ' fig-lit' : ''}`}
++      class={`fig${undead ? ' fig-undead' : ''}${s.lit ? ' fig-lit' : ''}${life ? ` ${life.cls}` : ''}`}
+       src={assetUrl(s.file)}
+       alt=""
+       draggable={false}
+       data-task={f?.task.id}
+       data-art={f?.art}
+-      style={{ left: pct(s.x, SCENE_W), top: pct(s.y, SCENE_H), width: pct(s.w, SCENE_W) }}
++      style={{ left: pct(s.x, SCENE_W), top: pct(s.y, SCENE_H), width: pct(s.w, SCENE_W), ...life?.style }}
+     />
+   );
+ }
+ 
++/** Сколько секунд длится один вдох или шаг в каждой позе: от и до. */
++const LIFE: Record<string, [string, number, number]> = {
++  sit: ['life-sit', 3.6, 4.8],
++  lie: ['life-lie', 5.2, 6.4],
++  work: ['life-work', 1.9, 1.9],
++  cheer: ['life-cheer', 0.75, 0.75],
++  stand: ['life-sway', 4.6, 6.2],
++};
++
++/**
++ * Жизнь фигуры: сидящие дышат, спящие дышат медленно, тот, кто у огня, работает или радуется, нежить качается.
++ * Фигура движется вокруг точки, где стоит, поэтому ноги и бревно остаются на месте. У каждой свой темп,
++ * он считается из её картинки: отряд не дышит строем, а после перерисовки никто не сбивается.
++ */
++function lifeOf(f: Figure, s: Sprite): { cls: string; style: Record<string, string> } | null {
++  const kind = LIFE[f.art.split('/')[2] ?? ''];
++  const spot = SCENE.spots[f.spot];
++  if (!kind || !spot) return null;
++  let h = 0;
++  for (let i = 0; i < f.art.length; i++) h = (h * 31 + f.art.charCodeAt(i)) % 997;
++  const k = h / 997;
++  const d = kind[1] + (kind[2] - kind[1]) * k;
++  return {
++    cls: kind[0],
++    style: {
++      transformOrigin: `${pct(spot[0] - s.x, s.w)} ${pct(spot[1] - s.y, s.h)}`,
++      '--ld': `${d.toFixed(2)}s`,
++      '--ldl': `${(-d * ((h % 89) / 89)).toFixed(2)}s`,
++    },
++  };
++}
++
++/** Тени облаков днём: два мягких пятна медленно плывут через поляну. Только CSS. */
++function CloudShadows() {
++  return (
++    <div class="clouds" aria-hidden="true">
++      <i />
++      <i class="c2" />
++    </div>
++  );
++}
++
++/** Где в картинке пламя костра и фонарь у палатки, в точках сцены. */
++const FLAME: [number, number] = [SCENE.fire[0] - 2, SCENE.fire[1] - 12];
++const LANTERN: [number, number] = [222, 240];
++
++/** Языки пламени поверх нарисованного костра: гранёные, как сама сцена, и каждый пляшет в своём темпе. */
++function Flame() {
++  return (
++    <div class="flame" aria-hidden="true" style={{ left: pct(FLAME[0], SCENE_W), top: pct(FLAME[1], SCENE_H) }}>
++      <i class="f1" />
++      <i class="f2" />
++      <i class="f3" />
++    </div>
++  );
++}
++
++/** Дымок над костром: клубы поднимаются, растут и тают. */
++function Smoke() {
++  return (
++    <div class="smoke" aria-hidden="true" style={{ left: pct(FLAME[0], SCENE_W), top: pct(FLAME[1] - 62, SCENE_H) }}>
++      {[0, 1, 2, 3].map((i) => (
++        <i key={i} style={{ '--dl': `${(-i * 1.9).toFixed(1)}s`, '--dx': `${i % 2 ? 90 : -40}%` }} />
++      ))}
++    </div>
++  );
++}
++
++/** Фонарь у палатки вечером и ночью: тёплый огонёк подрагивает. */
++function Lantern() {
++  return <div class="lantern" aria-hidden="true" style={{ left: pct(LANTERN[0], SCENE_W), top: pct(LANTERN[1], SCENE_H) }} />;
++}
++
+ /** Угли над костром: днём их меньше. Только CSS, без JavaScript. */
+ function Embers() {
+   const [fx, fy] = SCENE.fire;
+diff --git a/src/ui/magic/magic.css b/src/ui/magic/magic.css
+index 0c7bf71..8ef1da2 100644
+--- a/src/ui/magic/magic.css
++++ b/src/ui/magic/magic.css
+@@ -662,15 +662,282 @@
+   color: #ffe9b0;
+ }
+ 
++/* ---------- живая поляна: отряд дышит, костёр горит, плывут тени облаков ---------- */
++
++/* Фигура движется вокруг точки, где стоит (её ставит Scene), темп у каждой свой: --ld и --ldl. */
++.fig.life-sit {
++  animation: life-breathe var(--ld, 4s) ease-in-out var(--ldl, 0s) infinite;
++}
++
++.fig.life-lie {
++  animation: life-sleep var(--ld, 5.6s) ease-in-out var(--ldl, 0s) infinite;
++}
++
++.fig.life-work {
++  animation: life-work var(--ld, 1.9s) ease-in-out infinite alternate;
++}
++
++.fig.life-cheer {
++  animation: life-cheer var(--ld, 0.75s) ease-in-out infinite alternate;
++}
++
++.fig.life-sway {
++  animation: life-sway var(--ld, 5s) ease-in-out var(--ldl, 0s) infinite;
++}
++
++/* Копия фигуры, которую уносит заклинание, не дышит: её ведёт магия. */
++.fig.fig-ghost {
++  animation: none;
++}
++
++@keyframes life-breathe {
++  0%,
++  100% {
++    transform: scale(1, 1);
++  }
++  45% {
++    transform: scale(0.994, 1.022);
++  }
++}
++
++@keyframes life-sleep {
++  0%,
++  100% {
++    transform: scale(1, 1);
++  }
++  40%,
++  55% {
++    transform: scale(1.012, 1.03);
++  }
++}
++
++/* Работа: плавный наклон к делу и обратно, без рывков. Ходит туда и обратно, поэтому шва в цикле нет. */
++@keyframes life-work {
++  from {
++    transform: rotate(-0.7deg) scale(1, 1);
++  }
++  to {
++    transform: rotate(0.8deg) scale(1.004, 1.014);
++  }
++}
++
++@keyframes life-cheer {
++  from {
++    transform: translateY(0) scale(1.012, 0.985);
++  }
++  to {
++    transform: translateY(-3.5%) scale(0.992, 1.02);
++  }
++}
++
++/* Нежить качается неровно: долгий крен в одну сторону и рывок в другую. */
++@keyframes life-sway {
++  0%,
++  100% {
++    transform: rotate(-1.4deg);
++  }
++  42% {
++    transform: rotate(1.3deg);
++  }
++  50% {
++    transform: rotate(0.5deg);
++  }
++  58% {
++    transform: rotate(1.6deg);
++  }
++}
++
++/* Тени облаков: только днём, поверх фигур и под номерами. */
++.clouds {
++  position: absolute;
++  inset: 0;
++  overflow: hidden;
++  pointer-events: none;
++  mix-blend-mode: multiply;
++}
++
++.clouds i {
++  position: absolute;
++  left: 0;
++  top: 4%;
++  width: 78%;
++  aspect-ratio: 1.7;
++  border-radius: 50%;
++  background:
++    radial-gradient(ellipse at 34% 46%, rgba(24, 44, 40, 0.52), rgba(24, 44, 40, 0) 60%),
++    radial-gradient(ellipse at 66% 58%, rgba(24, 44, 40, 0.46), rgba(24, 44, 40, 0) 54%);
++  animation: cloud-drift 52s linear -14s infinite;
++}
++
++.clouds i.c2 {
++  top: 52%;
++  width: 60%;
++  animation-duration: 74s;
++  animation-delay: -41s;
++}
++
++@keyframes cloud-drift {
++  from {
++    transform: translate(-105%, -12%);
++  }
++  to {
++    transform: translate(170%, 14%);
++  }
++}
++
++/* Языки пламени: гранёные, как сама сцена. Точка костра внизу посередине. */
++.flame {
++  position: absolute;
++  width: 6.4%;
++  aspect-ratio: 0.72;
++  transform: translate(-50%, -100%);
++  pointer-events: none;
++  mix-blend-mode: screen;
++}
++
++.flame i {
++  position: absolute;
++  inset: 0;
++  transform-origin: 50% 100%;
++  animation: flame-dance 0.9s ease-in-out infinite;
++}
++
++.flame .f1 {
++  background: linear-gradient(0deg, rgba(255, 150, 40, 0.75), rgba(255, 96, 24, 0.55));
++  clip-path: polygon(50% 0, 82% 62%, 66% 100%, 30% 100%, 16% 58%);
++}
++
++.flame .f2 {
++  background: linear-gradient(0deg, rgba(255, 214, 110, 0.8), rgba(255, 168, 56, 0.6));
++  clip-path: polygon(38% 26%, 62% 70%, 52% 100%, 26% 100%, 20% 66%);
++  animation-duration: 0.67s;
++  animation-delay: -0.3s;
++}
++
++.flame .f3 {
++  background: linear-gradient(0deg, rgba(255, 236, 170, 0.85), rgba(255, 190, 80, 0.6));
++  clip-path: polygon(64% 38%, 80% 76%, 68% 100%, 48% 100%, 46% 70%);
++  animation-duration: 0.53s;
++  animation-delay: -0.2s;
++}
++
++@keyframes flame-dance {
++  0%,
++  100% {
++    transform: scale(1, 0.86) skewX(0deg);
++    opacity: 0.85;
++  }
++  30% {
++    transform: scale(0.94, 1.12) skewX(-5deg);
++    opacity: 1;
++  }
++  62% {
++    transform: scale(1.05, 0.96) skewX(4deg);
++    opacity: 0.75;
++  }
++  82% {
++    transform: scale(0.97, 1.06) skewX(-2deg);
++    opacity: 0.95;
++  }
++}
++
++/* Дымок: клубы поднимаются от пламени, растут и тают. Ночью его почти не видно. */
++.smoke {
++  position: absolute;
++  width: 5.2%;
++  aspect-ratio: 1;
++  transform: translate(-50%, -50%);
++  pointer-events: none;
++}
++
++.smoke i {
++  position: absolute;
++  inset: 0;
++  border-radius: 50%;
++  background: radial-gradient(circle, rgba(236, 232, 222, 0.5), rgba(236, 232, 222, 0) 68%);
++  opacity: 0;
++  animation: smoke-up 7.6s linear infinite;
++  animation-delay: var(--dl, 0s);
++}
++
++.scene.light-night .smoke i {
++  background: radial-gradient(circle, rgba(170, 176, 200, 0.3), rgba(170, 176, 200, 0) 68%);
++}
++
++@keyframes smoke-up {
++  0% {
++    transform: translate(0, 0) scale(0.5);
++    opacity: 0;
++  }
++  12% {
++    opacity: 0.9;
++  }
++  55% {
++    opacity: 0.55;
++  }
++  100% {
++    transform: translate(var(--dx, 60%), -420%) scale(2.6);
++    opacity: 0;
++  }
++}
++
++/* Фонарь у палатки: тёплое пятно света вечером и ночью. */
++.lantern {
++  position: absolute;
++  width: 30%;
++  aspect-ratio: 1;
++  transform: translate(-50%, -50%);
++  border-radius: 50%;
++  background: radial-gradient(circle, rgba(255, 232, 170, 1) 0, rgba(255, 196, 96, 0.8) 9%, rgba(255, 164, 64, 0.42) 28%, rgba(255, 140, 44, 0.14) 48%, rgba(255, 130, 40, 0) 68%);
++  mix-blend-mode: screen;
++  pointer-events: none;
++  animation: lantern-flicker 3.7s ease-in-out infinite;
++}
++
++@keyframes lantern-flicker {
++  0%,
++  100% {
++    opacity: 0.85;
++    transform: translate(-50%, -50%) scale(1);
++  }
++  22% {
++    opacity: 1;
++    transform: translate(-50%, -50%) scale(1.06);
++  }
++  31% {
++    opacity: 0.7;
++    transform: translate(-50%, -50%) scale(0.96);
++  }
++  64% {
++    opacity: 0.95;
++    transform: translate(-50%, -50%) scale(1.03);
++  }
++  78% {
++    opacity: 0.78;
++    transform: translate(-50%, -50%) scale(0.98);
++  }
++}
++
++/* Пока костёр тлеет, ни пламени, ни дыма. */
++.scene.is-unlit .flame,
++.scene.is-unlit .smoke {
++  display: none;
++}
++
+ /* ---------- Спокойная магия ---------- */
+ 
+ [data-motion='calm'] .embers,
+ [data-motion='calm'] .fireflies,
++[data-motion='calm'] .clouds,
++[data-motion='calm'] .flame,
++[data-motion='calm'] .smoke,
+ [data-motion='calm'] .chip-mana.is-regen::after {
+   display: none;
+ }
+ 
+ [data-motion='calm'] .scene-fire,
++[data-motion='calm'] .fig,
++[data-motion='calm'] .lantern,
+ [data-motion='calm'] .num.is-pulse,
+ [data-motion='calm'] .zz,
+ [data-motion='calm'] .chip-mana .mana-gem {
+@@ -694,6 +961,9 @@
+ }
+ 
+ [data-motion='off'] .embers,
+-[data-motion='off'] .fireflies {
++[data-motion='off'] .fireflies,
++[data-motion='off'] .clouds,
++[data-motion='off'] .flame,
++[data-motion='off'] .smoke {
+   display: none;
+ }

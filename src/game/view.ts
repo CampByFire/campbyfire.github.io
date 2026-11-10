@@ -9,10 +9,15 @@ import { CLASS_BY_LEVEL, type ClassId } from './words';
 export type Tone = 'today' | 'evening' | 'undead' | 'current';
 export type Pose = 'sit' | 'work' | 'cheer' | 'lie';
 
+/** Сколько обликов у каждого класса: снаряжение и головной убор разные, класс тот же. */
+export const LOOKS = 3;
+
 export interface SeatFigure {
   seat: number;
   task: Task;
   cls: ClassId;
+  /** Облик героя, 0…LOOKS-1: свой у каждой задачи и не меняется, пока задача жива. */
+  look: number;
   pose: Pose;
   tone: Tone;
 }
@@ -48,7 +53,7 @@ export interface CampView {
   done: Task[];
   undead: Task[];
   inbox: number;
-  ring: { task: Task; cls: ClassId; pose: Pose } | null;
+  ring: { task: Task; cls: ClassId; look: number; pose: Pose } | null;
   seats: SeatFigure[];
   extraSeated: number;
   road: RoadFigure[];
@@ -62,6 +67,11 @@ function hash(s: string): number {
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
+}
+
+/** Облик героя задачи: считается из её номера в сохранении, поэтому одинаков на всех устройствах. */
+export function lookOf(taskId: string): number {
+  return hash(`look:${taskId}`) % LOOKS;
 }
 
 /** Место у костра: своё по задаче, занятое уступает следующему. Спутник не прыгает между тиками. */
@@ -127,8 +137,8 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
 
   const cheer = cheerTaskId ? plan.find((t) => t.id === cheerTaskId) ?? null : null;
   let ring: CampView['ring'] = null;
-  if (cheer) ring = { task: cheer, cls: CLASS_BY_LEVEL[cheer.level], pose: 'cheer' };
-  else if (cur && !asleep) ring = { task: cur, cls: CLASS_BY_LEVEL[cur.level], pose: running ? 'work' : 'sit' };
+  if (cheer) ring = { task: cheer, cls: CLASS_BY_LEVEL[cheer.level], look: lookOf(cheer.id), pose: 'cheer' };
+  else if (cur && !asleep) ring = { task: cur, cls: CLASS_BY_LEVEL[cur.level], look: lookOf(cur.id), pose: running ? 'work' : 'sit' };
 
   // После отбоя у костра спят те, кого оставили на завтра.
   const tomorrow = addDays(s.day, 1);
@@ -140,7 +150,7 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
   for (const t of seated) {
     const seat = seatMap.get(t.id);
     if (seat === undefined) continue;
-    seats.push({ seat, task: t, cls: CLASS_BY_LEVEL[t.level], pose: sleepy ? 'lie' : 'sit', tone: tones.get(t.id) ?? 'today' });
+    seats.push({ seat, task: t, cls: CLASS_BY_LEVEL[t.level], look: lookOf(t.id), pose: sleepy ? 'lie' : 'sit', tone: tones.get(t.id) ?? 'today' });
   }
 
   const road = undead.slice(0, ROAD_SPOTS).map((t, spot) => {

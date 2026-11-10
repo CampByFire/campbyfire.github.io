@@ -89,12 +89,12 @@ if (mode === 'preview') {
   mkdirSync(outDir, { recursive: true });
   const figs = [
     ['ring', 'mage', 'work'],
-    ['seat0', 'rogue', 'sit'],
-    ['seat1', 'barbarian', 'sit'],
-    ['seat2', 'knight', 'sit'],
-    ['seat3', 'rogue', 'sit'],
-    ['seat4', 'mage', 'sit'],
-    ['seat5', 'barbarian', 'sit'],
+    ['seat0', 'rogue-b', 'sit'],
+    ['seat1', 'barbarian-c', 'sit'],
+    ['seat2', 'knight-b', 'sit'],
+    ['seat3', 'rogue-c', 'sit'],
+    ['seat4', 'mage-b', 'sit'],
+    ['seat5', 'barbarian-b', 'sit'],
     ['road0', 'skeleton-minion', 'stand'],
     ['road1', 'skeleton-warrior', 'stand'],
     ['road2', 'skeleton-mage', 'stand'],
@@ -163,9 +163,10 @@ for (const light of ['day', 'evening', 'night']) {
   console.log('background', light);
 }
 
-const classes = ['rogue', 'barbarian', 'mage', 'knight'];
+// Герои со всеми обликами: «rogue», «rogue-b», «rogue-c» и так далее.
+const heroes = await page.evaluate(() => window.camp.heroes);
 const jobs = [];
-for (const c of classes) {
+for (const c of heroes) {
   for (const pose of ['work', 'sit', 'cheer']) jobs.push(['ring', c, pose, 'day']);
   for (let i = 0; i < 6; i++) {
     jobs.push([`seat${i}`, c, 'sit', 'day']);
@@ -181,7 +182,15 @@ for (const [spot, who, pose, light] of jobs) {
   const c = await crop(png(d.url));
   const file = `${spot}-${who}-${pose}.webp`;
   writeFileSync(join(OUT_DIR, file), c.out);
-  manifest.sprites[`${spot}/${who}/${pose}`] = { file, x: c.x, y: c.y, w: c.w, h: c.h, head: d.head, ...(light === 'night' ? { lit: true } : {}) };
+  // Плащ героя отдельным белым слоем: приложение красит его в цвет похода.
+  let cape;
+  if (d.cape) {
+    const k = await crop(png(d.cape));
+    const cf = `${spot}-${who}-${pose}-cape.webp`;
+    writeFileSync(join(OUT_DIR, cf), k.out);
+    cape = { file: cf, x: k.x, y: k.y, w: k.w, h: k.h };
+  }
+  manifest.sprites[`${spot}/${who}/${pose}`] = { file, x: c.x, y: c.y, w: c.w, h: c.h, head: d.head, ...(light === 'night' ? { lit: true } : {}), ...(cape ? { cape } : {}) };
   process.stdout.write('.');
 }
 console.log();
