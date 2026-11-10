@@ -165,6 +165,10 @@ export function Scene(p: {
       {v.extraRoad > 0 && <div class="road-fog" aria-hidden="true" style={{ left: pct(ROAD_FOG[0], SCENE_W), top: pct(ROAD_FOG[1], SCENE_H) }} />}
       {/* Воздух для магии: копии фигур тают поверх новых мест. Потом угли над костром и светлячки ночью. */}
       <div class="scene-fx" aria-hidden="true" />
+      {/* Живая поляна: тени облаков днём, фонарь в сумерках, языки пламени и дымок. */}
+      {v.light === 'day' ? <CloudShadows /> : <Lantern />}
+      <Flame />
+      <Smoke />
       <Embers />
       {v.light === 'night' && <Fireflies />}
       {sorted.map((f) => (
@@ -196,17 +200,91 @@ function feetOf(f: Figure): number {
 }
 
 function SpriteImg({ s, undead, f }: { s: Sprite; undead: boolean; f?: Figure }) {
+  const life = f ? lifeOf(f, s) : null;
   return (
     <img
-      class={`fig${undead ? ' fig-undead' : ''}${s.lit ? ' fig-lit' : ''}`}
+      class={`fig${undead ? ' fig-undead' : ''}${s.lit ? ' fig-lit' : ''}${life ? ` ${life.cls}` : ''}`}
       src={assetUrl(s.file)}
       alt=""
       draggable={false}
       data-task={f?.task.id}
       data-art={f?.art}
-      style={{ left: pct(s.x, SCENE_W), top: pct(s.y, SCENE_H), width: pct(s.w, SCENE_W) }}
+      style={{ left: pct(s.x, SCENE_W), top: pct(s.y, SCENE_H), width: pct(s.w, SCENE_W), ...life?.style }}
     />
   );
+}
+
+/** Сколько секунд длится один вдох или шаг в каждой позе: от и до. */
+const LIFE: Record<string, [string, number, number]> = {
+  sit: ['life-sit', 3.6, 4.8],
+  lie: ['life-lie', 5.2, 6.4],
+  work: ['life-work', 1.9, 1.9],
+  cheer: ['life-cheer', 0.75, 0.75],
+  stand: ['life-sway', 4.6, 6.2],
+};
+
+/**
+ * Жизнь фигуры: сидящие дышат, спящие дышат медленно, тот, кто у огня, работает или радуется, нежить качается.
+ * Фигура движется вокруг точки, где стоит, поэтому ноги и бревно остаются на месте. У каждой свой темп,
+ * он считается из её картинки: отряд не дышит строем, а после перерисовки никто не сбивается.
+ */
+function lifeOf(f: Figure, s: Sprite): { cls: string; style: Record<string, string> } | null {
+  const kind = LIFE[f.art.split('/')[2] ?? ''];
+  const spot = SCENE.spots[f.spot];
+  if (!kind || !spot) return null;
+  let h = 0;
+  for (let i = 0; i < f.art.length; i++) h = (h * 31 + f.art.charCodeAt(i)) % 997;
+  const k = h / 997;
+  const d = kind[1] + (kind[2] - kind[1]) * k;
+  return {
+    cls: kind[0],
+    style: {
+      transformOrigin: `${pct(spot[0] - s.x, s.w)} ${pct(spot[1] - s.y, s.h)}`,
+      '--ld': `${d.toFixed(2)}s`,
+      '--ldl': `${(-d * ((h % 89) / 89)).toFixed(2)}s`,
+    },
+  };
+}
+
+/** Тени облаков днём: два мягких пятна медленно плывут через поляну. Только CSS. */
+function CloudShadows() {
+  return (
+    <div class="clouds" aria-hidden="true">
+      <i />
+      <i class="c2" />
+    </div>
+  );
+}
+
+/** Где в картинке пламя костра и фонарь у палатки, в точках сцены. */
+const FLAME: [number, number] = [SCENE.fire[0] - 2, SCENE.fire[1] - 12];
+const LANTERN: [number, number] = [222, 240];
+
+/** Языки пламени поверх нарисованного костра: гранёные, как сама сцена, и каждый пляшет в своём темпе. */
+function Flame() {
+  return (
+    <div class="flame" aria-hidden="true" style={{ left: pct(FLAME[0], SCENE_W), top: pct(FLAME[1], SCENE_H) }}>
+      <i class="f1" />
+      <i class="f2" />
+      <i class="f3" />
+    </div>
+  );
+}
+
+/** Дымок над костром: клубы поднимаются, растут и тают. */
+function Smoke() {
+  return (
+    <div class="smoke" aria-hidden="true" style={{ left: pct(FLAME[0], SCENE_W), top: pct(FLAME[1] - 62, SCENE_H) }}>
+      {[0, 1, 2, 3].map((i) => (
+        <i key={i} style={{ '--dl': `${(-i * 1.9).toFixed(1)}s`, '--dx': `${i % 2 ? 90 : -40}%` }} />
+      ))}
+    </div>
+  );
+}
+
+/** Фонарь у палатки вечером и ночью: тёплый огонёк подрагивает. */
+function Lantern() {
+  return <div class="lantern" aria-hidden="true" style={{ left: pct(LANTERN[0], SCENE_W), top: pct(LANTERN[1], SCENE_H) }} />;
 }
 
 /** Угли над костром: днём их меньше. Только CSS, без JavaScript. */
