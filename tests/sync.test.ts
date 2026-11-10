@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HOUR, MINUTE } from '../src/game/rules';
 import { addQuest, addRoutine, addTask, complete, findTask, newState, pause, rateSpheres, removeQuest, settle, start, updateTask } from '../src/game/state';
 import { mergeGames } from '../src/game/merge';
+import { addPrize, buyPrize, goalOf, prizesOf, purchasesOf, refund, removePrize, setGoal, updatePrize } from '../src/game/shop';
 import { Store, type Storage } from '../src/game/store';
 import type { State } from '../src/game/types';
 import { SAVE_PATH, fromBase64, toBase64, type Fetch } from '../src/sync/github';
@@ -578,11 +579,11 @@ describe('слияние версий', () => {
   it('строка «когда начну» с одного устройства и время с другого не теряются', () => {
     const { base, local, remote, id } = pair();
     local.touchedAt = at(9);
-    updateTask(local, id, { cue: 'Когда налью кофе, открою документ' });
+    updateTask(local, id, { cue: 'Когда налью чай, открою документ' });
     remote.touchedAt = at(10);
     updateTask(remote, id, { at: '15:00' });
     const m = mergeGames(base, local, remote, at(10, 5));
-    expect(findTask(m, id)!.cue).toBe('Когда налью кофе, открою документ');
+    expect(findTask(m, id)!.cue).toBe('Когда налью чай, открою документ');
     expect(findTask(m, id)!.at).toBe('15:00');
   });
 
@@ -639,5 +640,129 @@ describe('слияние версий', () => {
     expect(m.quests.some((q) => q.id === fresh)).toBe(true);
     void local;
     void remote;
+  });
+});
+
+describe('лавка с двух устройств', () => {
+  /** Общая версия с золотом и двумя наградами на полке. */
+  function pair(gold = 500) {
+    const base = newState(at(8));
+    base.hero.gold = gold;
+    const tea = addPrize(base, at(8), { title: 'Чай', price: 60 })!;
+    const cafe = addPrize(base, at(8), { title: 'Кафе', price: 300 })!;
+    const copy = () => JSON.parse(JSON.stringify(base)) as State;
+    return { base, local: copy(), remote: copy(), tea, cafe };
+  }
+
+  it('покупки с обоих устройств остаются, золото уходит за обе', () => {
+    const { base, local, remote, tea, cafe } = pair();
+    local.touchedAt = at(9);
+    buyPrize(local, at(9), tea);
+    remote.touchedAt = at(10);
+    buyPrize(remote, at(10), cafe);
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(m.hero.gold).toBe(500 - 60 - 300);
+    expect(purchasesOf(m).map((b) => b.title)).toEqual(['Чай', 'Кафе']);
+  });
+
+  it('покупка здесь и золото за дело там складываются', () => {
+    const { base, local, remote, tea } = pair(100);
+    const work = base.quests[0].id;
+    local.touchedAt = at(9);
+    buyPrize(local, at(9), tea);
+    remote.touchedAt = at(10);
+    const t = addTask(remote, at(10), { title: 'Отчёт', questId: work, level: 2 });
+    complete(remote, at(10), t);
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(m.hero.gold).toBe(100 - 60 + 50);
+    expect(purchasesOf(m)).toHaveLength(1);
+  });
+
+  it('возвращённая на одном устройстве покупка уходит и на другом, золото возвращается один раз', () => {
+    const { base, tea } = pair();
+    const b = buyPrize(base, at(8, 30), tea)!;
+    const local = JSON.parse(JSON.stringify(base)) as State;
+    const remote = JSON.parse(JSON.stringify(base)) as State;
+    local.touchedAt = at(9);
+    refund(local, b.id);
+    const m = mergeGames(base, local, remote, at(10));
+    expect(purchasesOf(m)).toEqual([]);
+    expect(m.hero.gold).toBe(500);
+    expect('purchases' in m).toBe(false);
+  });
+
+  it('одно и то же золото, потраченное без связи на двух устройствах, уходит в минус, а покупки обе на месте', () => {
+    const { base, local, remote, cafe } = pair(300);
+    local.touchedAt = at(9);
+    buyPrize(local, at(9), cafe);
+    remote.touchedAt = at(10);
+    buyPrize(remote, at(10), cafe);
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(m.hero.gold).toBe(-300);
+    expect(purchasesOf(m)).toHaveLength(2);
+  });
+
+  it('новые награды с обеих сторон остаются, правки одной награды берутся по полям', () => {
+    const { base, local, remote, tea, cafe } = pair();
+    local.touchedAt = at(9);
+    addPrize(local, at(9), { title: 'Кино', price: 800 });
+    updatePrize(local, tea, { title: 'Чай с пирожным', price: 60 });
+    remote.touchedAt = at(10);
+    addPrize(remote, at(10), { title: 'Книга', price: 1500 });
+    updatePrize(remote, tea, { title: 'Чай', price: 90 });
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(prizesOf(m).map((p) => p.title).sort()).toEqual(['Кафе', 'Кино', 'Книга', 'Чай с пирожным']);
+    expect(prizesOf(m).find((p) => p.id === tea)).toMatchObject({ title: 'Чай с пирожным', price: 90 });
+    expect(prizesOf(m).some((p) => p.id === cafe)).toBe(true);
+  });
+
+  it('убранная награда уходит, если её с тех пор не меняли, а покупки остаются', () => {
+    const { base, local, remote, tea } = pair();
+    buyPrize(local, at(9), tea);
+    local.touchedAt = at(9);
+    removePrize(remote, tea);
+    remote.touchedAt = at(10);
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(prizesOf(m).some((p) => p.id === tea)).toBe(false);
+    expect(purchasesOf(m).map((b) => b.title)).toEqual(['Чай']);
+  });
+
+  it('цель берётся оттуда, где её меняли, а цель на убранную награду снимается', () => {
+    const { base, local, remote, tea, cafe } = pair();
+    local.touchedAt = at(9);
+    setGoal(local, cafe);
+    const m = mergeGames(base, local, remote, at(10));
+    expect(goalOf(m)?.id).toBe(cafe);
+
+    remote.touchedAt = at(10);
+    removePrize(remote, cafe);
+    const gone = mergeGames(base, local, remote, at(10, 5));
+    expect(gone.goalId).toBeUndefined();
+    expect(prizesOf(gone).map((p) => p.id)).toEqual([tea]);
+  });
+
+  it('без общей версии награды и покупки с обеих сторон остаются', () => {
+    const { local, remote, tea, cafe } = pair();
+    local.touchedAt = at(9);
+    buyPrize(local, at(9), tea);
+    addPrize(local, at(9), { title: 'Кино', price: 800 });
+    remote.touchedAt = at(10);
+    buyPrize(remote, at(10), cafe);
+    const m = mergeGames(null, local, remote, at(10, 5));
+    expect(prizesOf(m).map((p) => p.title)).toEqual(['Чай', 'Кафе', 'Кино']);
+    expect(purchasesOf(m).map((b) => b.title)).toEqual(['Чай', 'Кафе']);
+  });
+
+  it('игра без лавки после слияния остаётся без её полей', () => {
+    const base = newState(at(8));
+    const local = JSON.parse(JSON.stringify(base)) as State;
+    const remote = JSON.parse(JSON.stringify(base)) as State;
+    local.touchedAt = at(9);
+    addTask(local, at(9), { title: 'Отчёт', questId: base.quests[0].id, level: 1 });
+    for (const m of [mergeGames(base, local, remote, at(10)), mergeGames(null, local, remote, at(10))]) {
+      expect('prizes' in m).toBe(false);
+      expect('purchases' in m).toBe(false);
+      expect('goalId' in m).toBe(false);
+    }
   });
 });

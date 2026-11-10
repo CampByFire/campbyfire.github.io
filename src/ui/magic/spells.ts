@@ -8,6 +8,7 @@ import { EASE, L, anim, aside, calm, cast, countUp, fxNode, hold, mark, off, pt,
 import {
   $,
   $$,
+  esc,
   bump,
   cardIn,
   dissolve,
@@ -627,3 +628,46 @@ export function kindle(xp: number): void {
     await s.wait(700);
   });
 }
+
+// ---------- Лавка ----------
+
+/**
+ * Покупка в лавке: монеты из кошеля летят к награде, число в кошеле сбегает вниз, над ним всплывает цена,
+ * а награда вспыхивает звёздами. id: награда, goldBefore: золото до покупки.
+ */
+export function spend(id: string, goldBefore: number, price: number): void {
+  cast(async (s) => {
+    // Прежний экран: кнопка «Купить» ещё на месте, после покупки она может пропасть.
+    const btn = $(`[data-buy="${esc(id)}"]`);
+    const to = btn ? pt(btn) : null;
+    await s.frame();
+    const purse = $('[data-magic="purse"]');
+    const n = $('[data-magic="purse-n"]', purse);
+    if (calm() || !purse || !n) return;
+    hold(n, goldBefore);
+    const from = pt(purse, 0.12, 0.5);
+    const [nx, ny] = pt(n.parentElement ?? n, 1, 0.5);
+    floatText(nx + 30, ny, `−${price.toLocaleString('ru-RU')}`, { c: '#ffe08a', g: 'rgba(241,196,90,.7)', dur: 900, dy: -22 });
+    countUp(n, goldBefore, 600);
+    bump(purse, 1.03, { dur: 260 });
+    if (!to) return;
+    flight(from, to, {
+      n: Math.max(4, Math.min(12, Math.round(price / 60))),
+      kind: 'coin',
+      size: [3.8, 5],
+      stagger: 34,
+      life: 520,
+      arc: 0.28,
+      lift: 0.16,
+      trail: 0,
+      spin: 10,
+      onLast: () => {
+        flare(to[0], to[1], 110, { dur: 520, peak: 0.75 });
+        burst(to[0], to[1], { n: 22, kind: 'star', pal: 'gold', speed: [120, 230], spread: Math.PI, gravity: 260, drag: 0.8, life: [650, 900], size: [1.8, 3.2], tw: 2.5 });
+        glint(to[0], to[1] - 6, { s: 1.1 });
+      },
+    });
+    await s.wait(1200);
+  });
+}
+

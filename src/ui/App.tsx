@@ -22,10 +22,11 @@ import { NotesScreen, upPlace, useNotes } from './Notes';
 import { Plan } from './Plan';
 import { Realm } from './Realm';
 import { Settings } from './Settings';
+import { Shop } from './Shop';
 import { Sheets, type SheetState } from './Sheets';
 import { useSync } from './SyncPanel';
 
-export type Screen = 'camp' | 'plan' | 'realm' | 'notes' | 'settings' | 'calendar';
+export type Screen = 'camp' | 'plan' | 'realm' | 'notes' | 'settings' | 'calendar' | 'shop';
 
 export interface ToastAction {
   label: string;
@@ -336,6 +337,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
         {screen === 'notes' && <NotesScreen ui={ui} />}
         {screen === 'settings' && <Settings ui={ui} />}
         {screen === 'calendar' && <CalendarScreen ui={ui} />}
+        {screen === 'shop' && <Shop ui={ui} />}
       </main>
       <Notices ui={ui} covered={covered} />
       <nav class="tabbar" aria-label="Разделы" inert={covered}>

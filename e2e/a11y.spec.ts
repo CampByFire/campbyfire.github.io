@@ -23,6 +23,30 @@ test('axe не находит нарушений на экранах и в ли�
   expect(await axe(page), 'Правила').toEqual([]);
 });
 
+test('axe не находит нарушений в Лавке и листе награды', async ({ page }) => {
+  await openGame(page);
+  await addTask(page, 'Сдать отчёт', { quest: 'Работа', size: '1 ч' });
+  await page.getByRole('button', { name: /Разжечь костёр/ }).click();
+  await page.locator('.topbar').getByRole('button', { name: /^Лавка/ }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Лавка' })).toBeVisible();
+  expect(await axe(page), 'Пустая лавка').toEqual([]);
+  expect(await tooSmall(page), 'Пустая лавка').toEqual([]);
+  await page.getByRole('button', { name: /^Серия сериала/ }).click();
+  await page.getByRole('button', { name: /^Вещь из списка желаний/ }).click();
+  expect(await axe(page), 'Лавка с наградами').toEqual([]);
+  expect(await tooSmall(page), 'Лавка с наградами').toEqual([]);
+  await page.locator('.prizes').getByRole('button', { name: /^Серия сериала/ }).click();
+  const card = sheet(page, 'Награда');
+  await card.getByRole('button', { name: 'Копить на это' }).click();
+  expect(await axe(page), 'Награда').toEqual([]);
+  expect(await tooSmall(page), 'Награда').toEqual([]);
+  // Tab не уходит из листа, Escape закрывает его и возвращает фокус на награду.
+  await page.keyboard.press('Escape');
+  await expect(card).toBeHidden();
+  await expect(page.locator('.prizes').getByRole('button', { name: /^Серия сериала/ })).toBeFocused();
+  expect(await axe(page), 'Лавка с целью').toEqual([]);
+});
+
 /** Кнопки и поля на экране и в открытом листе, которые меньше 44×44. Пустой список, если всё в порядке. */
 const tooSmall = (page: Page) =>
   page.evaluate(() =>

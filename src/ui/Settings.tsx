@@ -83,6 +83,10 @@ export function Settings({ ui }: { ui: Ui }) {
           <div class="hero-gold">
             <GIcon name="coins" size={15} />
             {s.hero.gold.toLocaleString('ru-RU')} золота в сундуке
+            <button class="link-btn hero-shop" onClick={() => ui.go('shop')}>
+              В лавку
+              <LIcon name="chevron" size={15} />
+            </button>
           </div>
         </div>
       </div>

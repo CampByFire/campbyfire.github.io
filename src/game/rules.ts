@@ -118,3 +118,39 @@ export const RESTED_AFTER_DAYS = 2;
 export const RESTED_TASKS = 3;
 /** Опыт сверху за дело отдохнувшего героя, долей от обычного: вдвое. */
 export const RESTED_XP_BONUS = 1;
+
+/** Цена награды в лавке: не меньше и не больше этого. */
+export const PRIZE_PRICE_MIN = 5;
+export const PRIZE_PRICE_MAX = 99_995;
+/** Цена награды кратна этому: золото за дела приходит такими же шагами. */
+export const PRIZE_PRICE_STEP = 5;
+/** Название награды не длиннее стольких знаков. */
+export const PRIZE_TITLE_MAX = 60;
+
+/**
+ * Идеи наград для лавки. Цены подобраны к золоту за дела: маленькая радость стоит двух-трёх коротких
+ * задач, средняя примерно дня дел, большая недели, мечта месяца.
+ */
+export type PrizeTier = 'small' | 'medium' | 'big' | 'dream';
+export type PrizeIdea = 'tea' | 'feed' | 'treat' | 'episode' | 'game' | 'cafe' | 'delivery' | 'movie' | 'lazy' | 'book' | 'wish' | 'dayoff';
+export const PRIZE_IDEAS: readonly { id: PrizeIdea; tier: PrizeTier; price: number }[] = [
+  { id: 'feed', tier: 'small', price: 50 },
+  { id: 'tea', tier: 'small', price: 60 },
+  { id: 'treat', tier: 'small', price: 80 },
+  { id: 'episode', tier: 'medium', price: 150 },
+  { id: 'game', tier: 'medium', price: 200 },
+  { id: 'cafe', tier: 'medium', price: 300 },
+  { id: 'delivery', tier: 'medium', price: 400 },
+  { id: 'movie', tier: 'big', price: 800 },
+  { id: 'lazy', tier: 'big', price: 1000 },
+  { id: 'book', tier: 'big', price: 1500 },
+  { id: 'wish', tier: 'dream', price: 4000 },
+  { id: 'dayoff', tier: 'dream', price: 5000 },
+];
+
+/** Привычный темп считается по стольким последним дням с делами. */
+export const PACE_DAYS = 14;
+/** Меньше стольких дней с делами, и темп ещё неизвестен. */
+export const PACE_MIN_DAYS = 3;
+/** В истории лавки видно столько последних покупок. */
+export const PURCHASES_SHOWN = 30;

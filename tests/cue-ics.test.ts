@@ -10,8 +10,8 @@ const URL = 'https://igor.github.io/lager/';
 describe('когда начну', () => {
   it('пустая строка не сохраняется, правка меняет и убирает её', () => {
     const s = newState(at(8));
-    const id = addTask(s, at(8), { title: 'Отчёт', questId: s.quests[0].id, day: s.day, cue: '  Когда налью кофе, открою документ ' });
-    expect(findTask(s, id)!.cue).toBe('Когда налью кофе, открою документ');
+    const id = addTask(s, at(8), { title: 'Отчёт', questId: s.quests[0].id, day: s.day, cue: '  Когда налью чай, открою документ ' });
+    expect(findTask(s, id)!.cue).toBe('Когда налью чай, открою документ');
     updateTask(s, id, { cue: '   ' });
     expect(findTask(s, id)!.cue).toBeUndefined();
     expect(findTask(s, addTask(s, at(8), { title: 'Б', questId: null, cue: '' }))!.cue).toBeUndefined();

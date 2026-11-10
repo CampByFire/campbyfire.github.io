@@ -80,6 +80,7 @@ import { DiarySheet, FolderSheet, MoveSheet, NoteSheet, SectionSheet, ThoughtShe
 import { SyncConflictSheet, SyncSheet } from './SyncPanel';
 import { setSheetBack } from './back';
 import { MeetingSheet, MoveMeetingSheet } from './MeetingSheet';
+import { PrizeSheet } from './Shop';
 
 export type SheetState =
   | { kind: 'add'; questId?: string | null; day?: DayKey | null; period?: PeriodKey | null }
@@ -106,7 +107,8 @@ export type SheetState =
   | { kind: 'diary'; path: string; entry: DiaryEntry }
   | { kind: 'welcome' }
   | { kind: 'meeting'; meetingId?: string; day?: DayKey; at?: string }
-  | { kind: 'moveMeeting'; meetingId: string; day: DayKey; at: string };
+  | { kind: 'moveMeeting'; meetingId: string; day: DayKey; at: string }
+  | { kind: 'prize'; prizeId?: string };
 
 export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
   switch (sheet.kind) {
@@ -156,6 +158,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <DiarySheet key={`${sheet.path}|${sheet.entry.time}|${sheet.entry.title ?? ''}|${sheet.entry.text}`} ui={ui} path={sheet.path} entry={sheet.entry} />;
     case 'welcome':
       return <WelcomeSheet ui={ui} />;
+    case 'prize':
+      return <PrizeSheet key={sheet.prizeId ?? '+'} ui={ui} prizeId={sheet.prizeId} />;
     case 'moveMeeting':
       return <MoveMeetingSheet ui={ui} meetingId={sheet.meetingId} day={sheet.day} at={sheet.at} />;
     case 'meeting':
@@ -423,7 +427,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
           class="input"
           value={cue}
           onInput={(e) => setCue(e.currentTarget.value)}
-          placeholder="Например, когда налью кофе, открою документ"
+          placeholder="Например, когда налью чай, открою документ"
           maxLength={140}
           aria-describedby="cue-hint"
         />

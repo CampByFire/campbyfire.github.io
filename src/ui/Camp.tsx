@@ -19,9 +19,10 @@ import {
 } from '../game/state';
 import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatTimer, formatTimerSeconds, minutesOfDay } from '../game/time';
 import { meetingsOn } from '../game/calendar';
+import { canBuy, goalOf, shortOf, unlockedBy } from '../game/shop';
 import type { State, Task } from '../game/types';
 import { campView, type CampView, type Tone } from '../game/view';
-import { CLASS_AT, CLASS_BY_LEVEL, SHIFT_NAME, W } from '../game/words';
+import { CLASS_AT, CLASS_BY_LEVEL, SHIFT_NAME, W, goldText } from '../game/words';
 import { SCENE, SCENE_H, SCENE_W, assetUrl } from '../scene/scene';
 import type { Ui } from './App';
 import { openCalendar, tomorrowNews } from './Calendar';
@@ -513,7 +514,7 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
         <span class="sr-only">{`${formatDate(s.day)}, ${formatClock(now)}, ${SHIFT_NAME[v.asleep ? 'night' : v.shift]}`}</span>
       </div>
       <SyncBadge ui={ui} />
-      <div class="chip chip-gold" data-magic="gold">
+      <button class="chip chip-gold" data-magic="gold" title={W.shop} onClick={() => ui.go('shop')}>
         <GIcon name="coins" size={17} />
         <span aria-hidden="true" data-magic="gold-n" data-v={s.hero.gold}>
           {s.hero.gold.toLocaleString('ru-RU')}
@@ -524,8 +525,8 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
             {lvl.level}
           </span>
         </span>
-        <span class="sr-only">{`${W.gold}: ${s.hero.gold}, уровень героя ${lvl.level}`}</span>
-      </div>
+        <span class="sr-only">{`${W.shop}. ${W.gold}: ${s.hero.gold}, уровень героя ${lvl.level}`}</span>
+      </button>
       <div class={`chip chip-mana${v.onBreak ? ' is-regen' : ''}`} data-magic="mana">
         <span class="mana-gem" aria-hidden="true" />
         <span class="bar" aria-hidden="true">
@@ -655,6 +656,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           {r.undead && <span class="rw rw-lair">нежить упокоена{r.reward.undeadXp ? `, +${r.reward.undeadXp} опыта сверху` : ''}</span>}
           {r.reward.restedXp ? <span class="rw rw-lair">отдохнувший герой: +{r.reward.restedXp} опыта</span> : null}
         </div>
+        <ShopHint ui={ui} gain={r.reward.gold} />
         {next ? (
           <>
             <div class="next">
@@ -923,6 +925,28 @@ function SecondWind({ ui }: { ui: Ui }) {
       <GIcon name="heart" size={15} />
       {W.secondWind}: ужин или прогулка, +30 маны
     </button>
+  );
+}
+
+/**
+ * Строка про лавку после «Готово»: на что теперь хватает золота, а если копят на цель, сколько до неё осталось.
+ * Пока в лавке нет наград, строки нет.
+ */
+function ShopHint({ ui, gain }: { ui: Ui; gain: number }) {
+  const s = ui.store.state;
+  const fresh = unlockedBy(s, gain);
+  const goal = goalOf(s);
+  const text = fresh ? `Теперь хватает на «${fresh.title}»` : goal && !canBuy(s, goal) ? `До «${goal.title}» осталось ${goldText(shortOf(s, goal))}` : null;
+  if (!text) return null;
+  return (
+    <div class={`shop-hint${fresh ? ' is-ready' : ''}`} data-magic="shop-hint">
+      <LIcon name="star" size={15} class="ic-gold" />
+      <span class="shop-hint-text">{text}</span>
+      <button class="link-btn" onClick={() => ui.go('shop')}>
+        В лавку
+        <LIcon name="chevron" size={15} />
+      </button>
+    </div>
   );
 }
 

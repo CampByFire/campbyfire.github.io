@@ -9,8 +9,9 @@
 // приростами обеих сторон. Задачи, походы, повторяющиеся задачи и встречи сливаются поштучно: добавленные
 // с обеих сторон остаются, удалённое на одной стороне уходит, если на другой его с тех пор не трогали.
 import { MANA_MAX } from './rules';
+import { tidyShop } from './shop';
 import { settle, tidyRoutines } from './state';
-import type { Current, DayLog, Meeting, Quest, Rating, Routine, State, Task } from './types';
+import type { Current, DayLog, Meeting, Prize, Purchase, Quest, Rating, Routine, State, Task } from './types';
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
 
@@ -172,6 +173,9 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
     out.routines = unionById(l.routines, r.routines, localWins);
     setMeetings(out, unionById(l.meetings ?? [], r.meetings ?? [], localWins));
     out.ratings = mergeRatings(l.ratings, r.ratings);
+    out.prizes = unionById(l.prizes ?? [], r.prizes ?? [], localWins);
+    out.purchases = byTime(unionById(l.purchases ?? [], r.purchases ?? [], localWins));
+    tidyShop(out);
     out.log = {};
     for (const day of new Set([...Object.keys(l.log), ...Object.keys(r.log)])) {
       const a = l.log[day];
@@ -204,10 +208,23 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   // Бонус отдохнувшего героя: сколько дел с ним осталось, считается по меньшему, чтобы два устройства не дали его дважды.
   out.rested = mergeRested(b.rested, l.rested, r.rested, localWins);
   if (!out.rested) delete out.rested;
+  // Лавка: награды сливаются поштучно, как сферы. Покупка не правится, поэтому покупки с обеих сторон остаются,
+  // а возвращённая на одной стороне уходит. Золото за них уже сложено приростами выше: если оба устройства
+  // без связи потратили одно и то же золото, оно уйдёт в минус и вернётся с новыми делами.
+  out.prizes = mergeById<Prize>(b.prizes ?? [], l.prizes ?? [], r.prizes ?? [], (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
+  out.purchases = byTime(mergeById<Purchase>(b.purchases ?? [], l.purchases ?? [], r.purchases ?? [], (_, y) => y, localWins));
+  out.goalId = pick(b.goalId, l.goalId, r.goalId, localWins);
+  if (out.goalId === undefined) delete out.goalId;
+  tidyShop(out);
   // Таймер не может стоять на задаче, которой больше нет.
   if (out.current && !out.tasks.some((t) => t.id === out.current!.taskId)) out.current = null;
   tidyRoutines(out);
   return out;
+}
+
+/** Покупки лежат по времени, старые сверху, с какого бы устройства ни пришли. */
+function byTime(list: Purchase[]): Purchase[] {
+  return list.sort((a, c) => a.at - c.at || (a.id < c.id ? -1 : a.id > c.id ? 1 : 0));
 }
 
 /** Встречи календаря: пустой список не сохраняется, как и в самой игре. */

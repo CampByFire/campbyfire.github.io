@@ -1,6 +1,6 @@
 // Все слова мира в одном месте: экраны берут названия только отсюда.
 import { periodEnd, periodKind, periodOf, periodStart, shiftPeriod, type PeriodKey, type PeriodKind } from './period';
-import type { UndeadRank } from './rules';
+import type { PrizeIdea, PrizeTier, UndeadRank } from './rules';
 import { parseDay, plural, type Shift } from './time';
 import type { Level, MeetingRepeat, QuestKind, QuestPreset, RateEvery, Repeat } from './types';
 
@@ -223,6 +223,7 @@ export const W = {
   realm: 'Королевство',
   chronicle: 'Летопись',
   settings: 'Настройки',
+  shop: 'Лавка',
   calendar: 'Календарь',
   gold: 'Золото',
   mana: 'Мана',
@@ -260,3 +261,47 @@ export const W = {
   notWorking: 'Нет, был перерыв',
   later: 'позже',
 } as const;
+
+/** Идеи наград для лавки: то, чем люди обычно радуют себя. Игрок берёт их как есть или пишет свои. */
+export const PRIZE_IDEA_NAME: Record<PrizeIdea, string> = {
+  feed: '15 минут ленты без вины',
+  tea: 'Чашка любимого чая',
+  treat: 'Что-нибудь вкусное',
+  episode: 'Серия сериала',
+  game: 'Час любимой игры',
+  cafe: 'Кафе',
+  delivery: 'Заказать еду',
+  movie: 'Кино или вечер с фильмом',
+  lazy: 'Вечер без дел',
+  book: 'Новая книга или игра',
+  wish: 'Вещь из списка желаний',
+  dayoff: 'Выходной только для себя',
+};
+
+export const PRIZE_TIER_NAME: Record<PrizeTier, string> = {
+  small: 'Маленькие радости',
+  medium: 'За хороший день',
+  big: 'За хорошую неделю',
+  dream: 'Мечты',
+};
+
+/** «150 золота»: число с пробелами между тысячами. Минус настоящий, а не дефис. */
+export function goldText(n: number): string {
+  return `${n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('ru-RU')} золота`;
+}
+
+/**
+ * Сколько это в делах: по привычному темпу игрока (золота за день с делами), а пока темп
+ * неизвестен, в коротких задачах. perTask: золото за задачу I уровня.
+ */
+export function priceHint(price: number, pace: number | null, perTask: number): string {
+  if (!pace) {
+    const n = Math.max(1, Math.ceil(price / perTask));
+    return `Как ${n} ${plural(n, 'задача', 'задачи', 'задач')} до получаса.`;
+  }
+  const days = price / pace;
+  if (days < 0.4) return 'В твоём темпе это меньше половины дня дел.';
+  if (days < 0.75) return 'В твоём темпе это примерно полдня дел.';
+  const n = Math.round(days);
+  return `В твоём темпе это примерно ${n} ${plural(n, 'день', 'дня', 'дней')} дел.`;
+}
