@@ -271,6 +271,12 @@ export interface State {
   purchases?: Purchase[];
   /** Награда, на которую игрок копит. Нет поля, значит цели нет. */
   goalId?: string;
+  /**
+   * Календарь «Лагерь» в Google, куда устройства ставят напоминания (id календаря). Лежит в игре,
+   * чтобы телефон и компьютер писали в один календарь, а не завели по своему. Нет поля: Google не
+   * подключали. Версия 0.11.1 и раньше поле не знает и не теряет.
+   */
+  googleCalendar?: string;
   settledAt: number;
   log: Record<DayKey, DayLog>;
   settings: Settings;

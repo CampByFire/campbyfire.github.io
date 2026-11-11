@@ -29,6 +29,9 @@ jobs:
       - run: npm test
       - name: Сборка
         run: npm run build
+        env:
+          # OAuth-ключ Google Календаря (не секрет): Settings → Secrets and variables → Actions → Variables.
+          LAGER_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
       - name: Браузер для автотестов
         run: npx playwright install --with-deps --only-shell chromium
       # Что упало, видно в логе шага.

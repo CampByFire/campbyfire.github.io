@@ -10,7 +10,10 @@ import './ui/notes.css';
 import { render } from 'preact';
 import { Store } from './game/store';
 import { Notes } from './notes/notes';
+import { GoogleCalendar } from './sync/gcal';
 import { Sync } from './sync/sync';
+import { reminderOptions } from './ui/local';
+import { GOOGLE_CLIENT_ID } from './version';
 import { askPersistentStorage, registerServiceWorker } from './ui/pwa';
 import { blockTouchMenu } from './ui/noselect';
 import { Root } from './ui/Root';
@@ -20,7 +23,14 @@ blockTouchMenu();
 const store = new Store();
 const sync = new Sync(store);
 const notes = new Notes(sync);
-render(<Root store={store} sync={sync} notes={notes} />, document.getElementById('app')!);
+const google = new GoogleCalendar(store, { options: () => reminderOptions(store.now(), store.state), buildClientId: GOOGLE_CLIENT_ID });
+// Вернулись после входа в Google: токен забран, адрес очищается, чтобы токен не остался в истории.
+const back = google.takeRedirect(location.hash);
+if (back) {
+  google.flash = back;
+  history.replaceState(null, '', location.pathname + location.search);
+}
+render(<Root store={store} sync={sync} notes={notes} google={google} />, document.getElementById('app')!);
 
 if (import.meta.env.PROD) {
   registerServiceWorker();

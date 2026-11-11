@@ -164,7 +164,7 @@ export async function fakeGitHub(page: Page) {
 export async function connectGitHub(page: Page) {
   await openSettings(page);
   await page.getByLabel('Токен GitHub').fill('good');
-  await page.getByRole('button', { name: 'Подключить' }).click();
+  await page.getByRole('button', { name: 'Подключить', exact: true }).click();
   await expect(toast(page)).toHaveText('GitHub подключён');
 }
 
@@ -205,4 +205,76 @@ export async function write(page: Page, text: string) {
   await page.locator('.screen').getByLabel('Новая запись').fill(text);
   await page.locator('.screen').getByRole('button', { name: 'Записать', exact: true }).click();
   await expect(page.getByRole('button', { name: new RegExp(text) })).toBeVisible();
+}
+
+/** Событие в поддельном Google Календаре. */
+export interface FakeGEvent {
+  id: string;
+  status: string;
+  summary: string;
+  start: { date?: string; dateTime?: string };
+  reminders: { overrides: { minutes: number }[] };
+}
+
+/**
+ * Поддельный Google: вход на accounts.google.com сразу возвращает на страницу Лагеря с токеном (как
+ * настоящий после «Продолжить»), а Calendar API на www.googleapis.com держит календари в памяти. Удалённые
+ * события он помнит по id, как настоящий. Токен, выданный при входе, живёт, пока его не сменят в token.
+ */
+export async function fakeGoogle(page: Page) {
+  const g = {
+    token: 'ya29.e2e',
+    logins: [] as URL[],
+    cals: new Map<string, Map<string, FakeGEvent>>(),
+    /** Живые события всех календарей по названию. */
+    live: () => [...g.cals.values()].flatMap((c) => [...c.values()]).filter((e) => e.status !== 'cancelled').map((e) => e.summary).sort(),
+  };
+  let n = 0;
+  await page.route('https://accounts.google.com/**', async (route) => {
+    const url = new URL(route.request().url());
+    g.logins.push(url);
+    const q = url.searchParams;
+    const back = `${q.get('redirect_uri')}#access_token=${g.token}&token_type=Bearer&expires_in=3599&state=${q.get('state')}&scope=${encodeURIComponent(q.get('scope') ?? '')}`;
+    await route.fulfill({ status: 302, headers: { location: back } });
+  });
+  await page.route('https://www.googleapis.com/**', async (route) => {
+    const req = route.request();
+    const headers = { 'access-control-allow-origin': '*' };
+    const json = (body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', headers, body: body === null ? '' : JSON.stringify(body) });
+    if (req.headers().authorization !== `Bearer ${g.token}`) return json({ error: { code: 401, message: 'Invalid Credentials' } }, 401);
+    const path = decodeURIComponent(new URL(req.url()).pathname.replace('/calendar/v3', ''));
+    const method = req.method();
+    const body = req.postData() ? JSON.parse(req.postData()!) : null;
+    let m: RegExpExecArray | null;
+    if (path === '/calendars' && method === 'POST') {
+      const id = `cal${++n}@group.calendar.google.com`;
+      g.cals.set(id, new Map());
+      return json({ id, summary: body.summary });
+    }
+    if ((m = /^\/calendars\/([^/]+)$/.exec(path)) && method === 'DELETE') return g.cals.delete(m[1]) ? json(null, 204) : json({ error: { code: 404 } }, 404);
+    if ((m = /^\/calendars\/([^/]+)\/events(?:\/([^/]+))?$/.exec(path))) {
+      const cal = g.cals.get(m[1]);
+      if (!cal) return json({ error: { code: 404 } }, 404);
+      const id = m[2];
+      if (method === 'GET') return json({ items: [...cal.values()] });
+      if (method === 'POST') {
+        if (cal.has(body.id)) return json({ error: { code: 409 } }, 409);
+        cal.set(body.id, body);
+        return json(body);
+      }
+      if (method === 'PUT') {
+        if (!cal.has(id!)) return json({ error: { code: 404 } }, 404);
+        cal.set(id!, body);
+        return json(body);
+      }
+      if (method === 'DELETE') {
+        const e = cal.get(id!);
+        if (!e || e.status === 'cancelled') return json({ error: { code: 410 } }, 410);
+        e.status = 'cancelled';
+        return json(null, 204);
+      }
+    }
+    return json({ error: { code: 400 } }, 400);
+  });
+  return g;
 }

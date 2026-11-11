@@ -1,5 +1,7 @@
 // Что помнит само устройство, а не игра: подсказки, знакомство, когда делали копию, сила магии.
 // В сохранение и в GitHub это не попадает.
+import type { IcsOptions } from '../game/ics';
+import type { State } from '../game/types';
 import type { Motion } from './magic/mode';
 
 const KEY = 'taskcraft-lager-device';
@@ -12,7 +14,7 @@ export interface Local {
   /** Знакомство пройдено или пропущено. */
   introDone: boolean;
   /** До какого времени молчит подсказка. */
-  quiet: Partial<Record<'ios' | 'backup' | 'token' | 'rate', number>>;
+  quiet: Partial<Record<'ios' | 'backup' | 'token' | 'rate' | 'google', number>>;
   /** Сила магии, выбранная в Настройках. Пока не выбрана, решает настройка системы «Уменьшить движение». */
   magic?: Motion;
   /** Нежить, которая уже вставала на дороге у этого устройства: второй раз она из земли не поднимается. */
@@ -54,6 +56,22 @@ export function clearLocal(): void {
   } catch {
     // Нечего забывать.
   }
+}
+
+/** Утренний костёр для напоминаний: выбранный на этом устройстве или по началу работы из распорядка. */
+export function remindOf(now: number, s: State): NonNullable<Local['remind']> {
+  return loadLocal(now).remind ?? { morning: s.settings.workStart, days: 'work' };
+}
+
+/** Адрес Лагеря без «#…» и «?…»: ссылка в напоминаниях и адрес возврата после входа в Google. */
+export function appUrl(): string {
+  return `${location.origin}${location.pathname}`;
+}
+
+/** Что ставить в календарь с этого устройства. */
+export function reminderOptions(now: number, s: State): IcsOptions {
+  const r = remindOf(now, s);
+  return { morning: r.morning, morningDays: r.days, url: appUrl() };
 }
 
 export function updateLocal(now: number, patch: (l: Local) => void): Local {

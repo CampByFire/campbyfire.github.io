@@ -176,6 +176,9 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
     out.prizes = unionById(l.prizes ?? [], r.prizes ?? [], localWins);
     out.purchases = byTime(unionById(l.purchases ?? [], r.purchases ?? [], localWins));
     tidyShop(out);
+    // Календарь в Google: если он есть только с одной стороны, остаётся он.
+    out.googleCalendar = localWins ? (l.googleCalendar ?? r.googleCalendar) : (r.googleCalendar ?? l.googleCalendar);
+    if (out.googleCalendar === undefined) delete out.googleCalendar;
     out.log = {};
     for (const day of new Set([...Object.keys(l.log), ...Object.keys(r.log)])) {
       const a = l.log[day];
@@ -215,6 +218,9 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   out.purchases = byTime(mergeById<Purchase>(b.purchases ?? [], l.purchases ?? [], r.purchases ?? [], (_, y) => y, localWins));
   out.goalId = pick(b.goalId, l.goalId, r.goalId, localWins);
   if (out.goalId === undefined) delete out.goalId;
+  // Календарь в Google: если оба устройства завели свой, остаётся один, а второе устройство уберёт лишний.
+  out.googleCalendar = pick(b.googleCalendar, l.googleCalendar, r.googleCalendar, localWins);
+  if (out.googleCalendar === undefined) delete out.googleCalendar;
   tidyShop(out);
   // Таймер не может стоять на задаче, которой больше нет.
   if (out.current && !out.tasks.some((t) => t.id === out.current!.taskId)) out.current = null;

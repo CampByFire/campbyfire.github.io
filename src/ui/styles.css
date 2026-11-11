@@ -1717,6 +1717,15 @@ button.sheet-grip:focus-visible {
   color: var(--red-text);
 }
 
+/* Подраздел внутри группы Настроек, например «Google Календарь» в «Напоминаниях». */
+.sub-head {
+  margin: 18px 0 4px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--text);
+}
+
 .steps {
   margin: 8px 0 12px;
   padding-left: 22px;

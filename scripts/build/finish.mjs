@@ -1,5 +1,6 @@
 // Последний шаг сборки (после vite build), всё в dist/:
-// 1. Вписывает в страницу Content-Security-Policy.
+// 1. Вписывает в страницу Content-Security-Policy. Запросы только к своему сайту, GitHub и Google Calendar API;
+//    вход в Google это переход на его страницу, а не запрос, поэтому accounts.google.com здесь не нужен.
 // 2. Собирает service worker со списком всех файлов, чтобы игра работала без сети.
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -21,7 +22,7 @@ const csp = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
-  "connect-src 'self' https://api.github.com",
+  "connect-src 'self' https://api.github.com https://www.googleapis.com",
   "worker-src 'self'",
   "manifest-src 'self'",
   "base-uri 'self'",

@@ -9,6 +9,7 @@ import { downloadGame } from './files';
 import { LIcon } from './Icon';
 import { loadLocal, updateLocal, type Local } from './local';
 import { useUpdateReady } from './pwa';
+import { loginGoogle, useGoogle } from './GooglePanel';
 import { TOKEN_WARN_DAYS, tokenDaysLeft } from './SyncPanel';
 
 const DAY_MS = 24 * 60 * 60_000;
@@ -26,6 +27,7 @@ interface Notice {
 export function Notices({ ui, covered }: { ui: Ui; covered: boolean }) {
   const { store, sync, now } = ui;
   const update = useUpdateReady();
+  useGoogle(ui.google);
   const [, redraw] = useState(0);
   const local = loadLocal(now);
   const hush = (key: keyof Local['quiet'], days: number) => {
@@ -77,6 +79,13 @@ export function Notices({ ui, covered }: { ui: Ui; covered: boolean }) {
             : 'Срок токена GitHub закончился: игра больше не сохраняется в GitHub. Замени токен.',
         action: { label: 'Заменить', run: () => ui.open({ kind: 'sync' }) },
         close: () => hush('token', left > 3 ? 3 : 1),
+      };
+    }
+    if (ui.google.waiting && !quiet('google')) {
+      return {
+        text: 'Новые напоминания ждут входа в Google: он действует около часа.',
+        action: { label: 'Войти', run: () => loginGoogle(ui.google) },
+        close: () => hush('google', 1),
       };
     }
     if (isIos() && !isStandalone() && !quiet('ios')) {

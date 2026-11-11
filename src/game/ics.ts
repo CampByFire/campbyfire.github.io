@@ -82,20 +82,24 @@ function meetingRule(m: Meeting): string | undefined {
   return `${rule};UNTIL=${m.repeatUntil.replace(/-/g, '')}${m.at ? 'T235959' : ''}`;
 }
 
-interface Ev {
-  uid: string;
-  /** Начало «20261105T093000» или, для события на весь день, «20261105». */
-  start: string;
+/** Одно событие календаря: из него собираются и файл, и события Google Календаря. */
+export interface CalEntry {
+  /** Постоянный ключ: «morning», «task-…», «routine-…», «meeting-…». По нему событие обновляется, а не задваивается. */
+  key: string;
+  /** Первый день. */
+  day: DayKey;
+  /** Начало в минутах от полуночи; null: событие на весь день. */
+  start: number | null;
   /** Длина в минутах; у события на весь день не нужна. */
   min: number;
-  allDay?: boolean;
   title: string;
   note: string;
   place?: string;
+  /** Правило повтора без «RRULE:», как в файле календаря. */
   rule?: string;
-  /** Пропущенные дни серии, в том же виде, что и start. */
-  except?: string[];
-  /** За сколько минут до начала звонит будильник. */
+  /** Пропущенные дни серии. */
+  except?: DayKey[];
+  /** За сколько минут до начала напомнить. */
   alarm: number;
 }
 
@@ -108,16 +112,19 @@ export function calendarEvents(s: State, o: IcsOptions): { morning: boolean; tas
   return { morning, tasks, routines, meetings };
 }
 
-export function buildIcs(s: State, now: number, o: IcsOptions): string {
-  const evs: Ev[] = [];
+/** Все события календаря одним списком. */
+export function calendarEntries(s: State, o: IcsOptions): CalEntry[] {
+  const evs: CalEntry[] = [];
   const link = `Открыть Лагерь: ${o.url}`;
+  const what = calendarEvents(s, o);
   if (o.morning !== null) {
     const rule: Repeat = o.morningDays === 'all' ? { every: 'day' } : { every: 'days', days: s.settings.workDays };
     const first = nextRepeat(rule, s.day);
     if (first) {
       evs.push({
-        uid: `morning@${s.gameId}.lager`,
-        start: local(first, o.morning),
+        key: 'morning',
+        day: first,
+        start: o.morning,
         min: 15,
         title: 'Разжечь костёр',
         note: `Утро в Лагере: позови к огню первую задачу дня. Сбор отряда по желанию.\n${link}`,
@@ -126,10 +133,11 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
       });
     }
   }
-  for (const t of calendarEvents(s, o).tasks) {
+  for (const t of what.tasks) {
     evs.push({
-      uid: `task-${t.id}@${s.gameId}.lager`,
-      start: local(t.day!, minutesOf(t.at!)!),
+      key: `task-${t.id}`,
+      day: t.day!,
+      start: minutesOf(t.at!)!,
       min: estimateOf(t) ?? EVENT_MIN,
       title: t.title,
       note: t.cue ? `${t.cue}\n${link}` : link,
@@ -141,8 +149,9 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
     const first = at !== null ? nextRepeat(r.repeat, s.day) : null;
     if (at === null || !first) continue;
     evs.push({
-      uid: `routine-${r.id}@${s.gameId}.lager`,
-      start: local(first, at),
+      key: `routine-${r.id}`,
+      day: first,
+      start: at,
       min: r.estimateMin ?? EVENT_MIN,
       title: r.title,
       note: r.cue ? `${r.cue}\n${link}` : link,
@@ -150,35 +159,40 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
       alarm: REMIND_BEFORE_MIN,
     });
   }
-  for (const m of calendarEvents(s, o).meetings) {
+  for (const m of what.meetings) {
     const at = m.at ? minutesOf(m.at) : null;
     const end = m.until ? minutesOf(m.until) : null;
-    const dayStamp = (day: DayKey) => (at === null ? day.replace(/-/g, '') : local(day, at));
     const first = nextMeetingDay(m, s.day)!;
     evs.push({
-      uid: `meeting-${m.id}@${s.gameId}.lager`,
-      start: dayStamp(first),
+      key: `meeting-${m.id}`,
+      day: first,
+      start: at,
       min: at !== null && end !== null && end > at ? end - at : MEETING_MIN,
-      allDay: at === null,
       title: m.title,
       note: link,
       place: m.place,
       rule: meetingRule(m),
-      except: m.skip?.filter((d) => d > first).map(dayStamp),
+      except: m.skip?.filter((d) => d > first),
       alarm: at === null ? ALL_DAY_REMIND_HOURS * 60 : MEETING_REMIND_MIN,
     });
   }
+  return evs;
+}
+
+export function buildIcs(s: State, now: number, o: IcsOptions): string {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Taskcraft//Lager//RU', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:Лагерь'];
   const stamp = utc(now);
-  for (const e of evs) {
+  for (const e of calendarEntries(s, o)) {
+    const allDay = e.start === null;
+    const stampOf = (day: DayKey) => (e.start === null ? day.replace(/-/g, '') : local(day, e.start));
     lines.push(
       'BEGIN:VEVENT',
-      `UID:${e.uid}`,
+      `UID:${e.key}@${s.gameId}.lager`,
       `DTSTAMP:${stamp}`,
       `SEQUENCE:${Math.floor(now / 1000)}`,
-      ...(e.allDay ? [`DTSTART;VALUE=DATE:${e.start}`, 'DURATION:P1D'] : [`DTSTART:${e.start}`, `DURATION:PT${Math.max(5, Math.round(e.min))}M`]),
+      ...(allDay ? [`DTSTART;VALUE=DATE:${stampOf(e.day)}`, 'DURATION:P1D'] : [`DTSTART:${stampOf(e.day)}`, `DURATION:PT${Math.max(5, Math.round(e.min))}M`]),
       ...(e.rule ? [`RRULE:${e.rule}`] : []),
-      ...(e.except ?? []).map((x) => (e.allDay ? `EXDATE;VALUE=DATE:${x}` : `EXDATE:${x}`)),
+      ...(e.except ?? []).map((x) => (allDay ? `EXDATE;VALUE=DATE:${stampOf(x)}` : `EXDATE:${stampOf(x)}`)),
       `SUMMARY:${text(e.title)}`,
       `DESCRIPTION:${text(e.note)}`,
       ...(e.place ? [`LOCATION:${text(e.place)}`] : []),

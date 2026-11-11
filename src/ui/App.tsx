@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { Store } from '../game/store';
 import type { Notes } from '../notes/notes';
+import type { GoogleCalendar } from '../sync/gcal';
 import type { Sync } from '../sync/sync';
 import type { CompleteResult } from '../game/state';
 import type { DayKey } from '../game/types';
@@ -24,6 +25,7 @@ import { Realm } from './Realm';
 import { Settings } from './Settings';
 import { Shop } from './Shop';
 import { Sheets, type SheetState } from './Sheets';
+import { useGoogle } from './GooglePanel';
 import { useSync } from './SyncPanel';
 
 export type Screen = 'camp' | 'plan' | 'realm' | 'notes' | 'settings' | 'calendar' | 'shop';
@@ -44,6 +46,8 @@ export interface Ui {
   store: Store;
   sync: Sync;
   notes: Notes;
+  /** Напоминания через Google Календарь. */
+  google: GoogleCalendar;
   now: number;
   go(screen: Screen): void;
   /**
@@ -92,9 +96,10 @@ const SHEET_OUT_MS = 200;
 /** Сила магии: выбранная в Настройках или по настройке системы «Уменьшить движение». */
 const motionOf = (now: number) => resolveMotion(loadLocal(now).magic, systemReduced());
 
-export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: Notes }) {
+export function App({ store, sync, notes, google }: { store: Store; sync: Sync; notes: Notes; google: GoogleCalendar }) {
   useStore(store);
   useSync(sync);
+  useGoogle(google);
   useNotes(notes);
   const s = store.state;
   const [screen, setScreen] = useState<Screen>(() => (s.litDay !== s.day && s.closedDay !== s.day ? 'plan' : 'camp'));
@@ -249,6 +254,15 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
     };
   }, [notes]);
 
+  // Вернулись после входа в Google: говорим, получилось ли, и открываем Настройки, где видно календарь.
+  useEffect(() => {
+    const back = google.flash;
+    if (!back) return;
+    google.flash = null;
+    setScreen('settings');
+    setToast({ text: back.text, id: Date.now() });
+  }, [google]);
+
   useEffect(() => {
     if (!toast) return;
     const id = window.setTimeout(() => setToast(null), toast.action ? 6000 : 2600);
@@ -264,6 +278,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
     store,
     sync,
     notes,
+    google,
     now,
     go: (sc) => {
       closeSheet();

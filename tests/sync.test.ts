@@ -766,3 +766,42 @@ describe('лавка с двух устройств', () => {
     }
   });
 });
+
+describe('календарь в Google при слиянии', () => {
+  function pair() {
+    const base = newState(at(8));
+    const local = JSON.parse(JSON.stringify(base)) as State;
+    const remote = JSON.parse(JSON.stringify(base)) as State;
+    return { base, local, remote };
+  }
+
+  it('календарь, заведённый на одном устройстве, остаётся и после слияния с другим', () => {
+    const { base, local, remote } = pair();
+    remote.touchedAt = at(9);
+    remote.googleCalendar = 'cal1@group.calendar.google.com';
+    local.touchedAt = at(10);
+    addTask(local, at(10), { title: 'Отчёт', questId: base.quests[0].id, level: 1 });
+    expect(mergeGames(base, local, remote, at(11)).googleCalendar).toBe('cal1@group.calendar.google.com');
+    expect(mergeGames(null, local, remote, at(11)).googleCalendar).toBe('cal1@group.calendar.google.com');
+  });
+
+  it('если оба устройства завели свой календарь, остаётся один', () => {
+    const { base, local, remote } = pair();
+    local.touchedAt = at(9);
+    local.googleCalendar = 'cal-pc@group.calendar.google.com';
+    remote.touchedAt = at(10);
+    remote.googleCalendar = 'cal-phone@group.calendar.google.com';
+    expect(mergeGames(base, local, remote, at(11)).googleCalendar).toBe('cal-phone@group.calendar.google.com');
+    expect(mergeGames(null, local, remote, at(11)).googleCalendar).toBe('cal-phone@group.calendar.google.com');
+  });
+
+  it('календарь, удалённый на одном устройстве, уходит, а без Google поля нет вовсе', () => {
+    const { base, local, remote } = pair();
+    base.googleCalendar = local.googleCalendar = remote.googleCalendar = 'cal1@group.calendar.google.com';
+    local.touchedAt = at(9);
+    delete local.googleCalendar;
+    expect('googleCalendar' in mergeGames(base, local, remote, at(10))).toBe(false);
+    const fresh = pair();
+    for (const m of [mergeGames(fresh.base, fresh.local, fresh.remote, at(10)), mergeGames(null, fresh.local, fresh.remote, at(10))]) expect('googleCalendar' in m).toBe(false);
+  });
+});

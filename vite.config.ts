@@ -27,6 +27,9 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(info.version),
     __APP_BUILD__: JSON.stringify(info.build),
+    // OAuth-ключ (Client ID) для Google Календаря. Он не секретный: Google пускает с ним только на адреса,
+    // вписанные в его настройках. Без него ключ вписывают в Настройках → «Напоминания».
+    __GOOGLE_CLIENT_ID__: JSON.stringify(process.env.LAGER_GOOGLE_CLIENT_ID ?? ''),
   },
   test: {
     include: ['tests/**/*.test.ts'],

@@ -13,7 +13,8 @@ import type { Ui } from './App';
 import { downloadGame, saveFile } from './files';
 import { GIcon, LIcon } from './Icon';
 import { clearDrafts } from '../notes/drafts';
-import { clearLocal, loadLocal, updateLocal } from './local';
+import { GooglePanel } from './GooglePanel';
+import { appUrl, clearLocal, remindOf, updateLocal } from './local';
 import type { Motion } from './magic/mode';
 import { Chips, WeekdayPicker } from './parts';
 import { Sheet } from './Sheets';
@@ -216,6 +217,7 @@ export function WipeSheet({ ui }: { ui: Ui }) {
       }
     }
     sync.disconnect();
+    ui.google.forget();
     store.wipe();
     notes.clear();
     clearDrafts();
@@ -273,14 +275,15 @@ export function WipeSheet({ ui }: { ui: Ui }) {
  */
 function Reminders({ ui }: { ui: Ui }) {
   const s = ui.store.state;
-  const [opt, setOpt] = useState(() => loadLocal(ui.now).remind ?? { morning: s.settings.workStart, days: 'work' as const });
+  const [opt, setOpt] = useState(() => remindOf(ui.now, s));
   const change = (next: typeof opt) => {
     setOpt(next);
     updateLocal(ui.store.now(), (l) => {
       l.remind = next;
     });
+    ui.google.changed();
   };
-  const url = `${location.origin}${location.pathname}`;
+  const url = appUrl();
   const o: IcsOptions = { morning: opt.morning, morningDays: opt.days, url };
   const what = calendarEvents(s, o);
   const parts: string[] = [];
@@ -322,6 +325,7 @@ function Reminders({ ui }: { ui: Ui }) {
         </button>
       </div>
       <p class="note">{parts.length ? `В файле: ${parts.join(', ')}.` : 'Пока добавлять нечего: включи утренний костёр или поставь задаче время.'}</p>
+      <GooglePanel ui={ui} />
     </section>
   );
 }
