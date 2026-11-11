@@ -47,8 +47,8 @@ export function spriteKey(spot: string, who: string, pose: string): string {
   return `${spot}/${who}/${pose}`;
 }
 
-/** Буквы обликов героя в именах картинок: «rogue», «rogue-b», «rogue-c». */
-const LOOK_SUFFIX = ['', '-b', '-c'];
+/** Буквы обликов героя в именах картинок: «rogue», «rogue-b» … «rogue-e». */
+const LOOK_SUFFIX = ['', '-b', '-c', '-d', '-e'];
 
 /** Картинка героя в его облике. Если такой облик не снят, берётся первый. */
 export function heroKey(spot: string, cls: string, look: number, pose: string): string {

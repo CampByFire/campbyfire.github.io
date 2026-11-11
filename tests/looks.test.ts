@@ -5,7 +5,7 @@ import { LOOKS, lookOf } from '../src/game/view';
 import { heroKey } from '../src/scene/scene';
 
 describe('облики героев', () => {
-  it('облик задачи постоянный и бывает любым из трёх', () => {
+  it('облик задачи постоянный и бывает любым из пяти', () => {
     const seen = new Set<number>();
     for (let i = 1; i <= 30; i++) {
       const look = lookOf(`t${i}`);

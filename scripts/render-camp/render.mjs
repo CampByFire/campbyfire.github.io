@@ -163,7 +163,7 @@ for (const light of ['day', 'evening', 'night']) {
   console.log('background', light);
 }
 
-// Герои со всеми обликами: «rogue», «rogue-b», «rogue-c» и так далее.
+// Герои со всеми обликами: «rogue», «rogue-b» … «rogue-e» и так далее.
 const heroes = await page.evaluate(() => window.camp.heroes);
 const jobs = [];
 for (const c of heroes) {

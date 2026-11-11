@@ -10,7 +10,7 @@ export type Tone = 'today' | 'evening' | 'undead' | 'current';
 export type Pose = 'sit' | 'work' | 'cheer' | 'lie';
 
 /** Сколько обликов у каждого класса: снаряжение и головной убор разные, класс тот же. */
-export const LOOKS = 3;
+export const LOOKS = 5;
 
 export interface SeatFigure {
   seat: number;

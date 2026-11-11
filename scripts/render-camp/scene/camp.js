@@ -430,7 +430,7 @@ async function buildProps() {
 const BODY = /_(Arm|Leg|Body|Head|Eyes|Jaw|Skull)/;
 
 /**
- * Герои: у каждого класса три облика. Первый (без буквы) прежний, «-b» и «-c» собраны из снаряжения,
+ * Герои: у каждого класса пять обликов. Первый (без буквы) прежний, «-b»…«-e» собраны из снаряжения,
  * которое лежит в той же модели выключенным. Плащ (cape) есть у всех: приложение красит его в цвет похода.
  */
 const CHARS = {
@@ -452,6 +452,18 @@ const CHARS = {
     show: ['1H_Crossbow', 'Knife_Offhand'],
     work: ['Use_Item', 0.55],
   },
+  'rogue-d': {
+    file: `${ADV}/Rogue.glb`,
+    cape: 'Rogue_Cape',
+    show: ['Knife', 'Knife_Offhand'],
+    work: ['Use_Item', 0.55],
+  },
+  'rogue-e': {
+    file: `${ADV}/Rogue_Hooded.glb`,
+    cape: 'Rogue_Cape',
+    show: ['Throwable'],
+    work: ['Throw', 0.35],
+  },
   barbarian: {
     file: `${ADV}/Barbarian.glb`,
     cape: 'Barbarian_Cape',
@@ -469,6 +481,18 @@ const CHARS = {
     cape: 'Barbarian_Cape',
     show: ['Barbarian_Hat', 'Mug', '1H_Axe_Offhand'],
     work: ['Interact', 0.6],
+  },
+  'barbarian-d': {
+    file: `${ADV}/Barbarian.glb`,
+    cape: 'Barbarian_Cape',
+    show: ['Barbarian_Hat', '1H_Axe', '1H_Axe_Offhand'],
+    work: ['Dualwield_Melee_Attack_Chop', 0.32],
+  },
+  'barbarian-e': {
+    file: `${ADV}/Barbarian.glb`,
+    cape: 'Barbarian_Cape',
+    show: ['2H_Axe'],
+    work: ['2H_Melee_Attack_Chop', 0.32],
   },
   mage: {
     file: `${ADV}/Mage.glb`,
@@ -488,6 +512,18 @@ const CHARS = {
     show: ['Mage_Hat', '1H_Wand', 'Spellbook'],
     work: ['Spellcasting', 0.5],
   },
+  'mage-d': {
+    file: `${ADV}/Mage.glb`,
+    cape: 'Mage_Cape',
+    show: ['2H_Staff'],
+    work: ['Spellcasting', 0.5],
+  },
+  'mage-e': {
+    file: `${ADV}/Mage.glb`,
+    cape: 'Mage_Cape',
+    show: ['Mage_Hat', '2H_Staff', 'Spellbook_open'],
+    work: ['Spellcasting', 0.5],
+  },
   knight: {
     file: `${ADV}/Knight.glb`,
     cape: 'Knight_Cape',
@@ -504,6 +540,18 @@ const CHARS = {
     file: `${ADV}/Knight.glb`,
     cape: 'Knight_Cape',
     show: ['Knight_Helmet', '1H_Sword', 'Rectangle_Shield'],
+    work: ['Interact', 0.6],
+  },
+  'knight-d': {
+    file: `${ADV}/Knight.glb`,
+    cape: 'Knight_Cape',
+    show: ['Knight_Helmet', '1H_Sword', 'Spike_Shield'],
+    work: ['Interact', 0.6],
+  },
+  'knight-e': {
+    file: `${ADV}/Knight.glb`,
+    cape: 'Knight_Cape',
+    show: ['1H_Sword', 'Badge_Shield'],
     work: ['Interact', 0.6],
   },
 };
