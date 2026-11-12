@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { EMBER_EVERY, EMBER_XP, HOUR, MANA_LOW, MANA_MAX, MANA_REST_PER_HOUR, RESTED_XP_BONUS, SPARK_AFTER, SPARK_XP, estimateOf, heroLevel } from '../game/rules';
 import {
   canSecondWind,
+  findRoutine,
   complete,
   confirmWorking,
   dismissIdle,
@@ -22,6 +23,7 @@ import {
 } from '../game/state';
 import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatSpent, formatTimer, formatTimerSeconds, minutesOfDay } from '../game/time';
 import { meetingsOn } from '../game/calendar';
+import { habitWeek, weekOf } from '../game/habits';
 import { canBuy, goalOf, shortOf, unlockedBy } from '../game/shop';
 import type { State, Task } from '../game/types';
 import { campView, type CampView, type Tone } from '../game/view';
@@ -658,6 +660,8 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           )}
           {r.undead && <span class="rw rw-lair">нежить упокоена{r.reward.undeadXp ? `, +${r.reward.undeadXp} опыта сверху` : ''}</span>}
           {r.reward.restedXp ? <span class="rw rw-lair">отдохнувший герой: +{r.reward.restedXp} опыта</span> : null}
+          {r.reward.mainGold ? <span class="rw rw-main">главное на неделе: +{r.reward.mainGold} золота сверху</span> : null}
+          {r.reward.habitBonus && t?.routineId ? <HabitCheer s={s} routineId={t.routineId} gold={r.reward.habitBonus.gold} /> : null}
         </div>
         <ShopHint ui={ui} gain={r.reward.gold} />
         {next ? (
@@ -764,6 +768,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           {q ? q.name : W.noSphere} · <LevelMark level={cur.level} /> · {CLASS_AT[cls]}
         </div>
         {cur.cue && !cur.sparkDay && <Cue text={cur.cue} />}
+        {cur.win && <WinLine text={cur.win} />}
         <div class="timer">
           <GIcon name="hourglass" size={16} class="ic-gold" />
           <span class="timer-val">
@@ -890,6 +895,30 @@ function FireLine({ s, t, now, spent, running }: { s: State; t: Task; now: numbe
 }
 
 /** План «если — то»: когда начать и с какого шага. */
+/** Главная задача у огня: напоминание, что считается победой. */
+function WinLine({ text }: { text: string }) {
+  return (
+    <div class="cue cue-win">
+      <LIcon name="star" size={14} class="ic-gold" />
+      <span>
+        <span class="sr-only">Главное на неделе. </span>Победа: {text}
+      </span>
+    </div>
+  );
+}
+
+/** Привычка дошла до цели недели. */
+function HabitCheer({ s, routineId, gold }: { s: State; routineId: string; gold: number }) {
+  const r = findRoutine(s, routineId);
+  if (!r) return null;
+  const hw = habitWeek(s, r, weekOf(s.day));
+  return (
+    <span class="rw rw-main">
+      привычка недели: {hw.done} из {hw.goal}, +{gold} золота
+    </span>
+  );
+}
+
 function Cue({ text }: { text: string }) {
   return (
     <div class="cue">

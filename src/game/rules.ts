@@ -162,3 +162,15 @@ export const PACE_DAYS = 14;
 export const PACE_MIN_DAYS = 3;
 /** В истории лавки видно столько последних покупок. */
 export const PURCHASES_SHOWN = 30;
+
+/** Привычка дошла до цели недели: столько золота и опыта сверху, один раз за неделю. Это два коротких дела. */
+export const HABIT_GOAL_GOLD = 50;
+export const HABIT_GOAL_XP = 30;
+
+/** Главных задач на неделю не больше стольких: сделанные тоже считаются. */
+export const WEEK_MAIN_MAX = 3;
+/** Главная задача сделана в свою неделю: столько золота и опыта сверху. */
+export const MAIN_QUEST_GOLD = 75;
+export const MAIN_QUEST_XP = 50;
+/** Условие победы не длиннее стольких знаков. */
+export const WIN_MAX = 140;

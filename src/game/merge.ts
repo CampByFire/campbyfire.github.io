@@ -11,6 +11,7 @@
 import { MANA_MAX } from './rules';
 import { tidyShop } from './shop';
 import { settle, tidyRoutines } from './state';
+import { tidyHabits } from './habits';
 import type { Current, DayLog, Meeting, Prize, Purchase, Quest, Rating, Routine, State, Task } from './types';
 
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x)) as T;
@@ -214,6 +215,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
       out.log[day] = a && c ? (localWins ? a : c) : clone((a ?? c)!);
     }
     tidyRoutines(out);
+    tidyHabits(out);
     return out;
   }
 
@@ -250,6 +252,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   // Таймер не может стоять на задаче, которой больше нет.
   if (out.current && !out.tasks.some((t) => t.id === out.current!.taskId)) out.current = null;
   tidyRoutines(out);
+  tidyHabits(out);
   return out;
 }
 

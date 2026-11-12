@@ -1,5 +1,6 @@
 // Сбор отряда: утренний план дня. Кого позвать к костру, хватит ли сил.
-import { MANA_DRAIN_PER_HOUR, MANA_MAX, estimateOf, heroLevel, planXp } from '../game/rules';
+import { MANA_DRAIN_PER_HOUR, MANA_MAX, WEEK_MAIN_MAX, estimateOf, heroLevel, planXp } from '../game/rules';
+import { mainOf, weekOf } from '../game/habits';
 import { useState } from 'preact/hooks';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { backlogOf, findQuest, inboxOf, isUndead, kindOf as kindOfQuest, leftoversOf, lightFire, nestedTasks, periodTasks, planOf, planTask, quickGather, swapInPlan, tailsOf, waitingOf } from '../game/state';
@@ -11,7 +12,7 @@ import type { Ui } from './App';
 import { AgendaRow, openCalendar, tomorrowNews } from './Calendar';
 import { GIcon, LIcon } from './Icon';
 import { ignite } from './magic/spells';
-import { QuestDot, TaskMeta } from './parts';
+import { HabitWeekView, QuestDot, TaskMeta } from './parts';
 
 type View = 'day' | PeriodKind;
 
@@ -394,6 +395,9 @@ function PeriodPlan({ ui, kind }: { ui: Ui; kind: PeriodKind }) {
         </button>
       )}
 
+      {kind === 'week' && <WeekMain ui={ui} week={key} />}
+      {kind === 'week' && key === now && <WeekHabits ui={ui} />}
+
       <section class="group">
         <div class="group-head">
           <h2 class="sc">Задачи</h2>
@@ -462,6 +466,72 @@ function PeriodPlan({ ui, kind }: { ui: Ui; kind: PeriodKind }) {
         </section>
       )}
     </>
+  );
+}
+
+/**
+ * Главное на неделе: до трёх задач со звездой, у каждой своё условие победы. Пустое место
+ * зовёт завести главное, но ничего не требует.
+ */
+function WeekMain({ ui, week }: { ui: Ui; week: PeriodKey }) {
+  const s = ui.store.state;
+  const main = mainOf(s, week);
+  const doneN = main.filter((t) => t.status === 'done').length;
+  const empty = Math.max(0, WEEK_MAIN_MAX - main.length);
+  const past = week < weekOf(s.day);
+  if (past && main.length === 0) return null;
+  return (
+    <section class="group week-main">
+      <div class="group-head">
+        <h2 class="sc">
+          <LIcon name="star" size={15} class="ic-gold" />
+          Главное на неделе
+        </h2>
+        {main.length > 0 && (
+          <span class="group-meta">
+            {doneN} из {main.length}
+          </span>
+        )}
+      </div>
+      {main.map((t) => (
+        <button key={t.id} class={`main-slot${t.status === 'done' ? ' main-done' : ''}`} onClick={() => ui.open({ kind: 'task', taskId: t.id })}>
+          <span class="main-title">
+            {t.status === 'done' && <GIcon name="check" size={14} class="ic-green" />}
+            {t.status === 'done' && <span class="sr-only">сделано: </span>}
+            {t.title}
+          </span>
+          {t.win && <span class="main-win">Победа: {t.win}</span>}
+        </button>
+      ))}
+      {!past && empty > 0 && (
+        <button class="main-slot main-empty" onClick={() => ui.open({ kind: 'add', day: null, period: week, main: true })}>
+          <LIcon name="plus" size={15} />
+          {main.length === 0 ? 'Главное: до трёх дел, ради которых эта неделя' : `Ещё главное (можно ${empty})`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Привычки на этой неделе: счёт и дни. Только у тех повторяющихся, что отмечены привычкой. */
+function WeekHabits({ ui }: { ui: Ui }) {
+  const s = ui.store.state;
+  const habits = s.routines.filter((r) => r.habit);
+  if (habits.length === 0) return null;
+  return (
+    <section class="group week-habits">
+      <div class="group-head">
+        <h2 class="sc">Привычки</h2>
+      </div>
+      {habits.map((r) => (
+        <div key={r.id} class="habit-row">
+          <button class="habit-name" onClick={() => ui.open({ kind: 'routine', routineId: r.id })}>
+            {r.title}
+          </button>
+          <HabitWeekView s={s} r={r} />
+        </div>
+      ))}
+    </section>
   );
 }
 

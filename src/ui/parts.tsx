@@ -1,9 +1,11 @@
 // Мелкие общие куски интерфейса.
 import { inkOn, isDark, questHex } from '../game/color';
+import { habitWeek, habitWeeksWon, weekOf } from '../game/habits';
+import { mondayOf } from '../game/period';
 import { estimateOf } from '../game/rules';
 import { daysOverdue, findQuest, findRoutine, isUndead } from '../game/state';
-import { formatDue, formatDuration, formatSpent, plural } from '../game/time';
-import type { Level, Quest, State, Task } from '../game/types';
+import { addDays, formatDue, formatDuration, formatSpent, plural } from '../game/time';
+import type { Level, Quest, Routine, State, Task } from '../game/types';
 import type { Tone } from '../game/view';
 import { LEVEL_ROMAN, WEEKDAY_CHIPS, periodShort } from '../game/words';
 import { GIcon, LIcon } from './Icon';
@@ -23,10 +25,29 @@ export function SpentMark({ ms }: { ms: number }) {
  * period: показывать ли горизонт (на вкладке самого периода он лишний).
  */
 export function TaskMeta({ s, t, estimate = false, period = true }: { s: State; t: Task; estimate?: boolean; period?: boolean }) {
-  const repeat = t.status !== 'done' && findRoutine(s, t.routineId) && (
+  const routine = t.status !== 'done' ? findRoutine(s, t.routineId) : undefined;
+  const hw = routine?.habit ? habitWeek(s, routine, weekOf(s.day)) : null;
+  const star = t.main && t.status !== 'done' && (
     <>
-      <LIcon name="repeat" size={13} class="ic-gold" />
-      <span class="sr-only">повторяется,</span>
+      <LIcon name="star" size={13} class="ic-gold" />
+      <span class="sr-only">главная на неделе,</span>
+    </>
+  );
+  const repeat = (
+    <>
+      {star}
+      {routine && (
+        <>
+          <LIcon name="repeat" size={13} class="ic-gold" />
+          <span class="sr-only">{hw ? 'привычка,' : 'повторяется,'}</span>
+        </>
+      )}
+      {hw && (
+        <span class="habit-count">
+          {hw.done}/{hw.goal}
+          <span class="sr-only"> на этой неделе,</span>
+        </span>
+      )}
     </>
   );
   if (isUndead(t, s.day)) {
@@ -41,13 +62,13 @@ export function TaskMeta({ s, t, estimate = false, period = true }: { s: State; 
   // Задача позвана на будущий день: видно, когда она придёт к костру.
   if (t.status === 'open' && t.day && t.day > s.day) return <span class="meta">{repeat}{formatDue(t.day, s.day)}{t.at && `, ${t.at}`}</span>;
   if (t.at) return <span class="meta">{repeat}в {t.at}</span>;
-  if (t.due === s.day) return <span class="meta meta-gold">сегодня</span>;
+  if (t.due === s.day) return <span class="meta meta-gold">{repeat}сегодня</span>;
   if (estimate) {
     const e = estimateOf(t);
     return <span class="meta">{repeat}{e ? formatDuration(e) : 'дни'}</span>;
   }
-  if (t.due) return <span class="meta">{formatDue(t.due, s.day)}</span>;
-  if (period && t.period) return <span class="meta">{periodShort(t.period, s.day)}</span>;
+  if (t.due) return <span class="meta">{repeat}{formatDue(t.due, s.day)}</span>;
+  if (period && t.period) return <span class="meta">{repeat}{periodShort(t.period, s.day)}</span>;
   return (
     <span class="meta">
       {repeat}
@@ -166,4 +187,42 @@ export function ChipText({ label, sr }: { label: string; sr?: string }) {
       <span class="sr-only">{sr}</span>
     </>
   );
+}
+
+const WEEK_SHORT = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс'];
+const WEEK_FULL = ['понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу', 'воскресенье'];
+
+/**
+ * Привычка на этой неделе: счёт «3 из 5» и семь точек с понедельника. Сделанный день залит,
+ * остальные просто контур: пропуск не ошибка, красного нет. Ниже сумма недель с целью.
+ */
+export function HabitWeekView({ s, r }: { s: State; r: Routine }) {
+  const week = weekOf(s.day);
+  const hw = habitWeek(s, r, week);
+  const monday = mondayOf(s.day);
+  const days = WEEK_SHORT.map((_, i) => addDays(monday, i));
+  const doneNames = days.flatMap((d, i) => (hw.days.includes(d) ? [WEEK_FULL[i]] : []));
+  const won = habitWeeksWon(s, r);
+  return (
+    <div class="habit">
+      <div class="habit-head">
+        <span class="habit-score">
+          {hw.done} из {hw.goal} на этой неделе
+          {hw.done > hw.goal && <LIcon name="star" size={13} class="ic-gold" />}
+        </span>
+        {won > 0 && <span class="habit-won">недель с целью: {won}</span>}
+      </div>
+      <ol class="habit-dots" aria-label={doneNames.length ? `Сделано в ${listRu(doneNames)}` : 'На этой неделе ещё не сделано'}>
+        {days.map((d, i) => (
+          <li key={d} class={`habit-dot${hw.days.includes(d) ? ' on' : ''}${d === s.day ? ' today' : ''}`} aria-hidden="true">
+            {WEEK_SHORT[i]}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+function listRu(xs: string[]): string {
+  return xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} и ${xs[xs.length - 1]}`;
 }

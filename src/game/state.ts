@@ -9,6 +9,8 @@ import {
   FORGOTTEN_AFTER,
   GOLD_PER_LEVEL,
   HOUR,
+  MAIN_QUEST_GOLD,
+  MAIN_QUEST_XP,
   MANA_DRAIN_PER_HOUR,
   MANA_MAX,
   MANA_REST_PER_HOUR,
@@ -32,7 +34,9 @@ import {
   XP_BY_LEVEL,
   levelForEstimate,
   undeadRank,
+  WIN_MAX,
 } from './rules';
+import { canBeMain, daysPerWeek, habitBonusFor, mainRoom, recheckHabitBonus, weekOf } from './habits';
 import { BIGGER, isPast, periodKind, periodOf, within, type PeriodKey } from './period';
 import { addDays, dayKey, daysBetween, parseDay, repeatsOn, shiftAt } from './time';
 import type { DayKey, DayLog, Level, Quest, QuestColor, QuestKind, Rating, Repeat, Reward, Routine, Settings, State, Task } from './types';
@@ -443,6 +447,8 @@ export interface TaskInput {
   period?: PeriodKey | null;
   /** План «если — то»; пустой не сохраняется. */
   cue?: string | null;
+  /** Условие победы главной задачи; пустое не сохраняется. */
+  win?: string | null;
 }
 
 export function addTask(s: State, now: number, input: TaskInput): string {
@@ -466,6 +472,7 @@ export function addTask(s: State, now: number, input: TaskInput): string {
   };
   if (input.period) t.period = input.period;
   if (input.cue?.trim()) t.cue = input.cue.trim();
+  setWin(t, input.win ?? null);
   s.tasks.push(t);
   return id;
 }
@@ -474,7 +481,7 @@ export function addTask(s: State, now: number, input: TaskInput): string {
 export function updateTask(
   s: State,
   id: string,
-  patch: Partial<Omit<Task, 'id' | 'status' | 'spentMs' | 'period' | 'cue'>> & { period?: PeriodKey | null; cue?: string | null },
+  patch: Partial<Omit<Task, 'id' | 'status' | 'spentMs' | 'period' | 'cue' | 'main' | 'win'>> & { period?: PeriodKey | null; cue?: string | null; win?: string | null },
 ): void {
   const t = findTask(s, id);
   if (!t) return;
@@ -482,10 +489,12 @@ export function updateTask(
     t.order = nextOrder(s, patch.day);
     delete t.leftDay;
   }
-  const { period, cue, ...rest } = patch;
+  const { period, cue, win, ...rest } = patch;
   Object.assign(t, rest);
   if (cue !== undefined) setCue(t, cue);
+  if (win !== undefined) setWin(t, win);
   if (period !== undefined) setPeriod(s, id, period);
+  keepMain(t);
   if (t.status === 'inbox' && (t.questId || t.period)) t.status = 'open';
 }
 
@@ -494,6 +503,37 @@ function setCue(x: { cue?: string }, cue: string | null): void {
   const c = cue?.trim();
   if (c) x.cue = c;
   else delete x.cue;
+}
+
+/** Условие победы: пустое убирается, длинное обрезается. */
+function setWin(t: Task, win: string | null): void {
+  const w = win?.trim().slice(0, WIN_MAX);
+  if (w) t.win = w;
+  else delete t.win;
+}
+
+/** Задача ушла из своей недели (другой горизонт или день): она больше не главная. */
+function keepMain(t: Task): void {
+  if (!t.main || t.status === 'done' || t.period === t.main) return;
+  if (t.period || (t.day && weekOf(t.day) !== t.main)) delete t.main;
+}
+
+/**
+ * Сделать задачу главной на неделю week или снять это (week null). Главных на неделю не больше
+ * WEEK_MAIN_MAX, сделанные тоже считаются. Возвращает false, если места нет или задача не подходит.
+ */
+export function setMain(s: State, id: string, week: PeriodKey | null): boolean {
+  const t = findTask(s, id);
+  if (!t) return false;
+  if (week === null) {
+    if (t.status === 'done') return false;
+    delete t.main;
+    return true;
+  }
+  if (t.main === week) return true;
+  if (!canBeMain(t, week) || mainRoom(s, week) === 0) return false;
+  t.main = week;
+  return true;
 }
 
 /** Поставить задаче горизонт или снять его. Письмо с горизонтом встаёт в отряд. */
@@ -507,6 +547,7 @@ export function setPeriod(s: State, id: string, period: PeriodKey | null): void 
     delete t.period;
     if (t.status === 'open' && !t.questId && !t.day && !t.routineId) t.status = 'inbox';
   }
+  keepMain(t);
 }
 
 function nextOrder(s: State, day: DayKey): number {
@@ -530,6 +571,7 @@ export function planTask(s: State, id: string, day: DayKey | null): void {
   }
   delete t.leftDay;
   if (t.status === 'inbox') t.status = 'open';
+  keepMain(t);
 }
 
 // ---------- повторяющиеся задачи ----------
@@ -542,6 +584,8 @@ export interface RoutineInput {
   at: string | null;
   cue?: string | null;
   repeat: Repeat;
+  /** Привычка с целью на неделю; null снимает, нет поля: не трогать. */
+  habit?: { goal: number } | null;
 }
 
 export function findRoutine(s: State, id: string | null | undefined): Routine | undefined {
@@ -559,9 +603,10 @@ export function waitingOf(s: State, routineId: string): Task | undefined {
  */
 export function addRoutine(s: State, now: number, input: RoutineInput, fromTaskId?: string): string {
   const id = nextId(s, 'r');
-  const { cue, ...rest } = input;
+  const { cue, habit, ...rest } = input;
   const r: Routine = { id, ...rest, title: input.title.trim() || 'Без названия', repeat: { ...input.repeat }, createdAt: now };
   setCue(r, cue ?? null);
+  setHabit(r, habit ?? null);
   s.routines.push(r);
   const t = fromTaskId ? findTask(s, fromTaskId) : undefined;
   if (t && (t.status === 'open' || t.status === 'inbox')) {
@@ -577,9 +622,11 @@ export function updateRoutine(s: State, id: string, input: RoutineInput): void {
   const r = findRoutine(s, id);
   if (!r) return;
   const moved = JSON.stringify(r.repeat) !== JSON.stringify(input.repeat);
-  const { cue, ...rest } = input;
+  const { cue, habit, ...rest } = input;
   Object.assign(r, rest, { title: input.title.trim() || r.title, repeat: { ...input.repeat } });
   if (cue !== undefined) setCue(r, cue);
+  if (habit !== undefined) setHabit(r, habit);
+  else if (r.habit) setHabit(r, r.habit);
   const t = waitingOf(s, id);
   if (t) {
     Object.assign(t, { title: r.title, questId: r.questId, level: r.level, estimateMin: r.estimateMin, at: r.at });
@@ -587,6 +634,16 @@ export function updateRoutine(s: State, id: string, input: RoutineInput): void {
     if (t.status === 'inbox' && t.questId) t.status = 'open';
   }
   if (moved) planRoutines(s, id);
+}
+
+/** Привычка: цель от одного дня до числа дней повтора. null снимает. */
+function setHabit(r: Routine, habit: { goal: number } | null): void {
+  if (!habit) {
+    delete r.habit;
+    return;
+  }
+  const most = daysPerWeek(r.repeat);
+  r.habit = { goal: Math.min(most, Math.max(1, Math.round(habit.goal) || most)) };
 }
 
 /** Новое время повторяющейся задачи: ждущая в отряде задача переезжает вместе с ней. Возвращает прежнее время. */
@@ -617,7 +674,9 @@ export function planRoutines(s: State, only?: string): void {
   if (s.closedDay === s.day) return;
   const dayStart = parseDay(s.day).getTime() + DAY_STARTS_AT_HOUR * HOUR;
   for (const r of s.routines) {
-    if ((only && r.id !== only) || !repeatsOn(r.repeat, s.day)) continue;
+    if (only && r.id !== only) continue;
+    if (r.habit) dropHabitDebt(s, r);
+    if (!repeatsOn(r.repeat, s.day)) continue;
     const waiting = waitingOf(s, r.id);
     if (waiting) {
       if (waiting.day !== s.day) planTask(s, waiting.id, s.day);
@@ -642,6 +701,18 @@ export function planRoutines(s: State, only?: string): void {
       ...(r.cue ? { cue: r.cue } : {}),
     });
   }
+}
+
+/**
+ * У привычки не копится долг: несделанная задача прошлого дня тихо уходит, на её место придёт
+ * сегодняшняя в свой день. Не трогаем задачу у огня и позванную на будущий день.
+ */
+function dropHabitDebt(s: State, r: Routine): void {
+  const t = waitingOf(s, r.id);
+  if (!t || !t.id.startsWith(`${r.id}@`) || s.current?.taskId === t.id || (t.day && t.day > s.day)) return;
+  // Id пришедшей задачи кончается днём прихода: «r1@2026-11-02».
+  if (t.id.slice(r.id.length + 1) >= s.day) return;
+  s.tasks = s.tasks.filter((x) => x !== t);
 }
 
 /**
@@ -815,6 +886,18 @@ export function complete(s: State, now: number, id: string, level?: Level): Comp
     reward.restedXp = Math.round(base * RESTED_XP_BONUS);
     reward.xp += reward.restedXp;
   }
+  const habitBonus = habitBonusFor(s, findRoutine(s, t.routineId), t, s.day);
+  if (habitBonus) {
+    reward.habitBonus = habitBonus;
+    reward.gold += habitBonus.gold;
+    reward.xp += habitBonus.xp;
+  }
+  if (t.main && t.main === weekOf(s.day)) {
+    reward.mainGold = MAIN_QUEST_GOLD;
+    reward.mainXp = MAIN_QUEST_XP;
+    reward.gold += MAIN_QUEST_GOLD;
+    reward.xp += MAIN_QUEST_XP;
+  }
   t.status = 'done';
   t.doneAt = now;
   t.doneDay = s.day;
@@ -926,9 +1009,11 @@ export function undoComplete(s: State, id: string): void {
   if (t.reward.undead) l.undeadSlain = Math.max(0, l.undeadSlain - 1);
   if (t.reward.restedXp && s.rested && s.rested.day === t.doneDay) s.rested.left = Math.min(RESTED_TASKS, s.rested.left + 1);
   t.status = 'open';
+  const week = weekOf(t.doneDay);
   delete t.doneAt;
   delete t.doneDay;
   delete t.reward;
+  if (t.routineId) recheckHabitBonus(s, findRoutine(s, t.routineId), week);
 }
 
 /** Разжечь костёр: план дня утверждён, за него даётся немного опыта. */

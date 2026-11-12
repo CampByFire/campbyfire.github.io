@@ -1,9 +1,10 @@
 // Листы поверх экрана: новая задача, карточка задачи, письма, сфера и проект, оценка сфер, итоги дня.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { PRESETS, questHex } from '../game/color';
+import { canBeMain, daysPerWeek, mainRoom, weekOf } from '../game/habits';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { parsePhrase, type Parsed } from '../game/phrase';
-import { ESTIMATE_BY_LEVEL, IMPROVE_MAX, MERCY_XP, MORE_TIME_MIN, RESTED_XP_BONUS, SCORE_MAX, SCORE_MIN, UNDEAD_XP_BONUS, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
+import { ESTIMATE_BY_LEVEL, IMPROVE_MAX, MERCY_XP, MORE_TIME_MIN, RESTED_XP_BONUS, SCORE_MAX, SCORE_MIN, UNDEAD_XP_BONUS, WEEK_MAIN_MAX, WIN_MAX, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
 import {
   addQuest,
   addRoutine,
@@ -37,6 +38,7 @@ import {
   restoreDues,
   setImprove,
   setEstimate,
+  setMain,
   setPeriod,
   spentNow,
   tailTargets,
@@ -76,7 +78,7 @@ import { heroLevel } from '../game/rules';
 import { GIcon, LIcon } from './Icon';
 import { comeBack, ignite, letGo } from './magic/spells';
 import { bedtime, expectJoin, expectLetter, lairFall } from './magic/world';
-import { Chips, LevelMark, QuestDot, TaskMeta, WeekdayPicker, questName } from './parts';
+import { Chips, HabitWeekView, LevelMark, QuestDot, TaskMeta, WeekdayPicker, questName } from './parts';
 import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
 import { WipeSheet } from './Settings';
@@ -87,7 +89,7 @@ import { MeetingSheet, MoveMeetingSheet } from './MeetingSheet';
 import { PrizeSheet } from './Shop';
 
 export type SheetState =
-  | { kind: 'add'; questId?: string | null; day?: DayKey | null; period?: PeriodKey | null }
+  | { kind: 'add'; questId?: string | null; day?: DayKey | null; period?: PeriodKey | null; main?: boolean }
   | { kind: 'edit'; taskId: string }
   | { kind: 'routine'; routineId: string }
   | { kind: 'task'; taskId: string }
@@ -258,7 +260,7 @@ const REPEATS: { value: RepeatKind; label: string }[] = [
  * повторяющаяся, правка меняет и саму повторяющуюся. Повторяющаяся без ждущей задачи
  * правится отдельно (routineId): у неё нет дня и срока, а перестать повторять её можно кнопкой.
  */
-function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questId?: string | null; day?: DayKey | null; period?: PeriodKey | null }; taskId?: string; routineId?: string }) {
+function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questId?: string | null; day?: DayKey | null; period?: PeriodKey | null; main?: boolean }; taskId?: string; routineId?: string }) {
   const s = ui.store.state;
   const editing = taskId ? findTask(s, taskId) : undefined;
   const routine = findRoutine(s, routineId ?? editing?.routineId);
@@ -277,6 +279,10 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const [repeatKind, setRepeatKind] = useState<RepeatKind>(routine?.repeat.every ?? 'none');
   const [weekday, setWeekday] = useState<number>(routine?.repeat.every === 'week' ? routine.repeat.weekday : parseDay(s.day).getDay());
   const [days, setDays] = useState<number[]>(routine?.repeat.every === 'days' ? routine.repeat.days : [weekday]);
+  // Привычка: цель на неделю или null. Главное на неделе и условие победы.
+  const [habitGoal, setHabitGoal] = useState<number | null>(routine?.habit?.goal ?? null);
+  const [mainOn, setMainOn] = useState<boolean>(editing ? !!editing.main : !!preset?.main);
+  const [win, setWin] = useState<string>(editing?.win ?? '');
   // Что игрок выбрал руками: это сильнее слов во фразе.
   const [touched, setTouched] = useState<Partial<Record<Field, true>>>({});
   const touch = (f: Field) => setTouched((x) => (x[f] ? x : { ...x, [f]: true }));
@@ -292,7 +298,12 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const tomorrow = addDays(s.day, 1);
   const repeat: Repeat | null = repeatKind === 'none' ? null : repeatKind === 'day' ? { every: 'day' } : repeatKind === 'week' ? { every: 'week', weekday } : repeatOnDays(days);
   const noDays = repeat?.every === 'days' && repeat.days.length === 0;
+  const most = repeat ? daysPerWeek(repeat) : 0;
+  const goal = habitGoal === null ? null : Math.min(most, habitGoal);
   const willBeLetter = !repeat && !v.questId && !v.day && !v.period;
+  const formWeek = weekOfTask({ period: v.period, day: v.day });
+  // Место для звезды: своя звезда на этой же неделе места не занимает.
+  const roomFor = (w: PeriodKey) => mainRoom(s, w) > 0 || editing?.main === w;
   const name = parsed ? parsed.title : title.trim();
 
   const save = (e?: Event) => {
@@ -307,31 +318,51 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
     }
     const fields = { title: name, questId: v.questId, level: v.lvl, estimateMin: v.estimate === ESTIMATE_BY_LEVEL[v.lvl] ? null : v.estimate, at: v.at || null, cue: cue.trim() || null };
     if (repeat) {
+      const habit = goal === null ? null : { goal };
       const rid = ui.store.act((st, now) => {
         if (routine) {
-          updateRoutine(st, routine.id, { ...fields, repeat });
+          updateRoutine(st, routine.id, { ...fields, repeat, habit });
           return routine.id;
         }
-        if (editing) updateTask(st, editing.id, { ...fields, due: null });
-        return addRoutine(st, now, { ...fields, repeat }, editing?.id);
+        if (editing) {
+          updateTask(st, editing.id, { ...fields, due: null });
+          setMain(st, editing.id, null);
+        }
+        return addRoutine(st, now, { ...fields, repeat, habit }, editing?.id);
       });
       if (!routine || JSON.stringify(routine.repeat) !== JSON.stringify(repeat)) ui.toast(routineNews(ui.store.state, rid, repeat));
       ui.close();
       return;
     }
-    const patch = { ...fields, day: v.day, due: v.due, period: v.period };
+    const patch = { ...fields, day: v.day, due: v.due, period: v.period, win: mainOn ? win.trim() || null : null };
+    // Звезду ставим после сохранения: неделя задачи могла поменяться вместе с горизонтом или днём.
+    const star = (st: State, id: string): boolean => {
+      const w = mainOn ? weekOfTask(findTask(st, id)!) : null;
+      if (!w) {
+        setMain(st, id, null);
+        return true;
+      }
+      return setMain(st, id, w);
+    };
     if (editing) {
-      ui.store.act((st) => {
+      const starred = ui.store.act((st) => {
         if (routine) stopRoutine(st, routine.id);
         updateTask(st, editing.id, patch);
         if (patch.day !== editing.day) planTask(st, editing.id, patch.day);
+        return star(st, editing.id);
       });
       if (routine) ui.toast('Задача больше не повторяется');
+      else if (!starred) ui.toast(MAIN_FULL);
       ui.close();
       return;
     }
     const letters = inboxOf(ui.store.state).length;
-    ui.store.act((st, now) => addTask(st, now, patch));
+    const starred = ui.store.act((st, now) => star(st, addTask(st, now, patch)));
+    if (!starred) {
+      ui.toast(MAIN_FULL);
+      ui.close();
+      return;
+    }
     const where = v.period && !v.day ? ` · ${periodName(v.period, s.day).toLowerCase()}` : v.day && v.day > s.day ? ` · ${formatDue(v.day, s.day)}` : '';
     ui.toast(willBeLetter ? 'Письмо у вестника: разберёшь в сборе отряда' : `${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]]} в отряде${where}`);
     if (willBeLetter) expectLetter(letters);
@@ -390,6 +421,22 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       {repeatKind === 'week' && <Chips label="В какой день недели" value={weekday} options={WEEKDAY_CHIPS} onChange={setWeekday} />}
       {repeatKind === 'days' && <WeekdayPicker label="В какие дни" days={days} onChange={setDays} />}
       {noDays && <p class="note note-error">Выбери хотя бы один день.</p>}
+      {repeat && !noDays && (
+        <Chips
+          label="Привычка: цель на неделю"
+          value={goal}
+          options={[
+            { value: null as number | null, label: 'Нет' },
+            ...Array.from({ length: most }, (_, i) => most - i).map((n) => ({ value: n as number | null, label: `${n} из ${most}`, sr: `${n} ${plural(n, 'день', 'дня', 'дней')} из ${most}` })),
+          ]}
+          onChange={setHabitGoal}
+        />
+      )}
+      {repeat && goal !== null && (
+        <p class="note">
+          Счёт идёт с понедельника. Когда он дойдёт до цели, придёт бонус. Пропуск ничего не отнимает, а несделанная вчерашняя не копится: каждый день приходит новая.
+        </p>
+      )}
       {!repeat && (
         <Chips
           label="Горизонт"
@@ -418,6 +465,36 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
           ]}
           onChange={(x) => { touch('day'); setDay(x); }}
         />
+      )}
+      {!repeat && formWeek && (
+        <Chips
+          label={formWeek === weekOf(s.day) ? 'Главное на этой неделе' : `Главное: ${periodName(formWeek, s.day).toLowerCase()}`}
+          value={mainOn ? 'yes' : 'no'}
+          options={[
+            { value: 'no', label: 'Нет' },
+            { value: 'yes', label: 'Да, со звездой' },
+          ]}
+          onChange={(x) => setMainOn(x === 'yes')}
+        />
+      )}
+      {!repeat && formWeek && mainOn && !roomFor(formWeek) && <p class="note note-error">{MAIN_FULL}.</p>}
+      {!repeat && formWeek && mainOn && (
+        <>
+          <label class="field">
+            <span class="field-label">Победа, это когда…</span>
+            <input
+              class="input"
+              value={win}
+              onInput={(e) => setWin(e.currentTarget.value)}
+              placeholder="Например, страница оплаты видна на сайте"
+              maxLength={WIN_MAX}
+              aria-describedby="win-hint"
+            />
+          </label>
+          <p class="note" id="win-hint">
+            Необязательно, но с условием победы проще понять, что уже готово. За главное, сделанное в свою неделю, придёт бонус.
+          </p>
+        </>
       )}
       <div class="field-row">
         {!repeat && (
@@ -596,11 +673,19 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
           {routine && (
             <span class="fact-repeat">
               <LIcon name="repeat" size={14} />
-              Повторяется {repeatName(routine.repeat)}
+              {routine.habit ? 'Привычка' : 'Повторяется'} {repeatName(routine.repeat)}
             </span>
           )}
+          {t.main && (
+            <span class="fact-main">
+              <LIcon name="star" size={14} />
+              Главное на {t.main === weekOf(s.day) ? 'этой неделе' : periodName(t.main, s.day).toLowerCase()}
+            </span>
+          )}
+          {t.win && <span class="fact-win">Победа: {t.win}</span>}
           {done && t.reward && <span>Сделано: +{t.reward.gold} золота, +{t.reward.xp} опыта</span>}
         </div>
+        {routine?.habit && <HabitWeekView s={s} r={routine} />}
       </div>
 
       {!done && t.status !== 'released' && undead && !isCurrent && (
@@ -673,6 +758,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
               <LIcon name="edit" size={16} />
               Изменить
             </button>
+            <MainToggle ui={ui} t={t} />
             {routine && (
               <button
                 class="act"
@@ -764,6 +850,45 @@ function DurationSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
       <Chips label="Или вся задача целиком" value={pick} options={all} onChange={setPick} />
       <p class="note">Отданное время, уровень и награда остаются прежними.</p>
     </Sheet>
+  );
+}
+
+const MAIN_FULL = `Главного на неделе уже ${WEEK_MAIN_MAX}. Задача сохранена без звезды`;
+
+/** Неделя, в которой стоит задача: по горизонту «неделя» или по дню у костра. */
+function weekOfTask(t: { period?: string | null; day: DayKey | null }): PeriodKey | null {
+  if (t.period && periodKind(t.period) === 'week') return t.period;
+  return t.day ? weekOf(t.day) : null;
+}
+
+/** Звезда главного на неделе: поставить или снять. Когда места нет, кнопка объясняет почему. */
+function MainToggle({ ui, t }: { ui: Ui; t: Task }) {
+  const s = ui.store.state;
+  if (t.main) {
+    return (
+      <button class="act" onClick={() => { ui.store.act((st) => setMain(st, t.id, null)); ui.toast('Звезда снята'); }}>
+        <LIcon name="star" size={16} />
+        Снять звезду
+      </button>
+    );
+  }
+  const week = weekOfTask(t);
+  if (!week || !canBeMain(t, week)) return null;
+  return (
+    <button
+      class="act"
+      onClick={() => {
+        if (mainRoom(s, week) === 0) {
+          ui.toast(`Главного уже ${WEEK_MAIN_MAX}. Сними звезду с другой задачи`);
+          return;
+        }
+        ui.store.act((st) => setMain(st, t.id, week));
+        ui.toast(`Главное на неделе: ${t.title}`);
+      }}
+    >
+      <LIcon name="star" size={16} />
+      Главное на неделе
+    </button>
   );
 }
 
