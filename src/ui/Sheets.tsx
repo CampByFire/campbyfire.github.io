@@ -15,6 +15,7 @@ import {
   findRoutine,
   findTask,
   inboxOf,
+  isStarted,
   isUndead,
   lairOf,
   lastRating,
@@ -46,7 +47,7 @@ import {
   waitingOf,
   winQuest,
 } from '../game/state';
-import { addDays, formatDue, formatDuration, nextRepeat, parseDay, plural, repeatOnDays } from '../game/time';
+import { addDays, formatDue, formatDuration, formatSpent, nextRepeat, parseDay, plural, repeatOnDays } from '../game/time';
 import type { DayKey, Level, Quest, QuestColor, QuestKind, Repeat, State, Task } from '../game/types';
 import type { DiaryEntry } from '../notes/diary';
 import {
@@ -67,7 +68,7 @@ import {
   repeatName,
 } from '../game/words';
 import type { Ui } from './App';
-import { CallLabel, callToFire, finish } from './Camp';
+import { CallLabel, backToWork, callToFire, finish, pauseHere } from './Camp';
 import { heroLevel } from '../game/rules';
 import { GIcon, LIcon } from './Icon';
 import { comeBack, ignite, letGo } from './magic/spells';
@@ -557,6 +558,8 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
   const cls = CLASS_BY_LEVEL[t.level];
   const undead = isUndead(t, s.day);
   const isCurrent = s.current?.taskId === t.id;
+  const running = isCurrent && s.current!.runningSince !== null && s.breakSince === null;
+  const started = isStarted(s, t);
   const inToday = t.day === s.day;
   const est = estimateOf(t);
   const spent = spentNow(s, t, ui.now);
@@ -576,7 +579,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
           </span>
         </div>
         <div class="task-facts">
-          {spent > 0 && <span>Потрачено {formatDuration(Math.max(1, Math.round(spent / 60_000)))}</span>}
+          {spent > 0 && <span>{done ? 'Потрачено' : 'У огня уже'} {formatSpent(spent)}</span>}
           {t.due && <span class={undead ? 'meta-undead' : ''}>Срок: {formatDue(t.due, s.day)}</span>}
           {t.at && <span>В {t.at}</span>}
           {t.period && <span>Горизонт: {periodName(t.period, s.day).toLowerCase()}</span>}
@@ -602,10 +605,21 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
             {!isCurrent && (
               <button class="btn btn-gold" onClick={() => { close(); callToFire(ui, t); }}>
                 <GIcon name="campfire" size={18} />
-                {switchCost > 0 ? W.callToFireShort : <CallLabel />}
+                {started ? W.resume : switchCost > 0 ? W.callToFireShort : <CallLabel />}
                 {switchCost > 0 && <small class="btn-cost">−{switchCost} маны</small>}
               </button>
             )}
+            {isCurrent && (running ? (
+              <button class="btn btn-ghost" onClick={() => { close(); pauseHere(ui); }}>
+                <LIcon name="pause" size={16} stroke={2.6} />
+                {W.pause}
+              </button>
+            ) : (
+              <button class="btn btn-ghost" onClick={() => { close(); backToWork(ui); }}>
+                <LIcon name="play" size={16} />
+                {W.resume}
+              </button>
+            ))}
             <button class={`btn ${isCurrent ? 'btn-gold' : 'btn-ghost'}`} onClick={() => { close(); finish(ui, t, level ?? undefined); }}>
               <GIcon name="check" size={17} />
               {undead ? W.slay : W.done}

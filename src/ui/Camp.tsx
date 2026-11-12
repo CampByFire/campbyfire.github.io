@@ -8,6 +8,9 @@ import {
   dismissIdle,
   embersOf,
   findQuest,
+  isStarted,
+  isUndead,
+  pause,
   reopenDay,
   restedLeft,
   resume,
@@ -17,7 +20,7 @@ import {
   toggleBreak,
   undoComplete,
 } from '../game/state';
-import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatTimer, formatTimerSeconds, minutesOfDay } from '../game/time';
+import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatSpent, formatTimer, formatTimerSeconds, minutesOfDay } from '../game/time';
 import { meetingsOn } from '../game/calendar';
 import { canBuy, goalOf, shortOf, unlockedBy } from '../game/shop';
 import type { State, Task } from '../game/types';
@@ -31,7 +34,7 @@ import { GIcon, LIcon } from './Icon';
 import { interrupt } from './magic/engine';
 import { done, kindle, rest, summon, wind } from './magic/spells';
 import { campShown, dusk, lightNow } from './magic/world';
-import { LevelMark, TaskMeta, numLook } from './parts';
+import { LevelMark, SpentMark, TaskMeta, numLook } from './parts';
 import { Scene } from './Scene';
 import { dragHeight, snapUp } from './shade';
 import { syncTrouble } from './SyncPanel';
@@ -669,7 +672,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             <div class="btns">
               <button class="btn btn-gold" onClick={() => callToFire(ui, next)}>
                 <GIcon name="campfire" size={18} />
-                {next.id === v.current?.id ? W.resume : <CallLabel />}
+                {next.id === v.current?.id || isStarted(s, next) ? W.resume : <CallLabel />}
               </button>
               <button class="btn btn-ghost" onClick={() => toggleRest(ui)}>
                 {W.rest}
@@ -776,22 +779,26 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
         <FireLine s={s} t={cur} now={now} spent={spent} running={v.running} />
         {v.running && s.hero.mana < MANA_LOW && <div class="hint">Силы на исходе: самое время для привала.</div>}
         <SecondWind ui={ui} />
-        <div class="btns">
+        <div class="btns btns-three btns-fire">
           <button class="btn btn-gold" onClick={() => finish(ui, cur)}>
             <GIcon name="check" size={17} />
             {W.done}
           </button>
           {v.running ? (
-            <button class="btn btn-ghost" data-rest onClick={() => toggleRest(ui)}>
-              <GIcon name="campfire" size={19} class="ic-fire" />
-              {W.rest}
+            <button class="btn btn-ghost" data-pause onClick={() => pauseHere(ui)}>
+              <LIcon name="pause" size={16} stroke={2.6} />
+              {W.pause}
             </button>
           ) : (
-            <button class="btn btn-ghost" onClick={() => backToWork(ui)}>
+            <button class="btn btn-ghost" data-pause onClick={() => backToWork(ui)}>
               <LIcon name="play" size={16} />
               {W.resume}
             </button>
           )}
+          <button class="btn btn-ghost" data-rest onClick={() => toggleRest(ui)}>
+            <GIcon name="campfire" size={19} class="ic-fire" />
+            {W.rest}
+          </button>
         </div>
       </div>
     );
@@ -810,14 +817,14 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             {v.numbers.get(next.id)}
           </span>
           <span class="next-title">{next.title}</span>
-          <TaskMeta s={s} t={next} />
+          {isStarted(s, next) ? <SpentMark ms={next.spentMs} /> : <TaskMeta s={s} t={next} />}
         </div>
-        {next.cue && <Cue text={next.cue} />}
+        {next.cue && !isStarted(s, next) && <Cue text={next.cue} />}
         <SecondWind ui={ui} />
         <div class="btns">
           <button class="btn btn-gold" onClick={() => callToFire(ui, next)}>
             <GIcon name="campfire" size={18} />
-            <CallLabel />
+            {isStarted(s, next) ? W.resume : <CallLabel />}
           </button>
           <button class="btn btn-ghost" onClick={() => toggleRest(ui)}>
             {W.rest}
@@ -957,9 +964,14 @@ export function callToFire(ui: Ui, t: Task): void {
   const s = ui.store.state;
   if (s.current?.taskId === t.id) return backToWork(ui);
   const mana = Math.round(s.hero.mana);
+  const prev = s.current ? s.tasks.find((x) => x.id === s.current!.taskId) : undefined;
   const { switchCost } = ui.store.act((st, n) => start(st, n, t.id));
   summon(t.id, switchCost, mana);
-  if (switchCost) ui.toast(`Смена сферы: −${switchCost} маны`);
+  // Прежняя задача уходит от огня с сохранённым временем: к ней можно вернуться, и таймер продолжит.
+  const left = prev && prev.id !== t.id ? ui.store.state.tasks.find((x) => x.id === prev.id) : undefined;
+  const kept = left && isStarted(ui.store.state, left) ? `«${left.title}» ждёт у костра, ${formatSpent(left.spentMs)} сохранено` : null;
+  const cost = switchCost ? `Смена сферы: −${switchCost} маны` : null;
+  if (kept || cost) ui.toast([kept, cost].filter(Boolean).join('. '));
 }
 
 export function finish(ui: Ui, t: Task, level?: 1 | 2 | 3 | 4): void {
@@ -981,10 +993,19 @@ function toggleRest(ui: Ui): void {
   if (hadFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>('.card [data-rest]')?.focus());
 }
 
+/** Пауза: таймер стоит, задача остаётся у огня. Фокус переходит на «Продолжить», которая встала на место кнопки. */
+export function pauseHere(ui: Ui): void {
+  const hadFocus = (document.activeElement as HTMLElement | null)?.hasAttribute('data-pause') ?? false;
+  ui.store.act((st, n) => pause(st, n));
+  if (hadFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>('.card [data-pause]')?.focus());
+}
+
 /** Таймер снова идёт: спутник у огня встаёт за работу. */
-function backToWork(ui: Ui): void {
+export function backToWork(ui: Ui): void {
+  const hadFocus = (document.activeElement as HTMLElement | null)?.hasAttribute('data-pause') ?? false;
   ui.store.act((st, n) => resume(st, n));
   rest(false);
+  if (hadFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>('.card [data-pause]')?.focus());
 }
 
 function TaskRow({ s, t, n, tone, color, onClick }: { s: State; t: Task; n: number; tone: Tone; color: string | undefined; onClick: () => void }) {
@@ -994,7 +1015,7 @@ function TaskRow({ s, t, n, tone, color, onClick }: { s: State; t: Task; n: numb
         {n}
       </span>
       <span class="row-title">{t.title}</span>
-      <TaskMeta s={s} t={t} />
+      {isStarted(s, t) && !isUndead(t, s.day) ? <SpentMark ms={t.spentMs} /> : <TaskMeta s={s} t={t} />}
     </button>
   );
 }

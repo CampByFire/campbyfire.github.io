@@ -22,6 +22,7 @@ import {
   SECOND_WIND,
   SPARK_AFTER,
   SPARK_XP,
+  STARTED_AFTER,
   SWITCH_COST,
   UNDEAD_XP_BONUS,
   XP_BY_LEVEL,
@@ -691,6 +692,14 @@ export function start(s: State, now: number, id: string): { switchCost: number }
   s.lastQuestId = rootOf(s, t.questId);
   s.current = { taskId: id, runningSince: now, seenAt: now, idleSince: null };
   return { switchCost };
+}
+
+/**
+ * Задача начата и ждёт, когда к ней вернутся: у неё уже набралось время, она не сделана и сейчас не у огня.
+ * Её можно позвать снова, и таймер продолжит с того же места.
+ */
+export function isStarted(s: State, t: Task): boolean {
+  return t.status === 'open' && s.current?.taskId !== t.id && t.spentMs >= STARTED_AFTER;
 }
 
 /** Таймер стоит, задача остаётся у огня. */

@@ -3595,3 +3595,28 @@ button.chip-gold::before {
 .act:disabled {
   opacity: 0.45;
 }
+
+/* Карточка «Сейчас у огня»: Готово, Пауза или Продолжить, Привал в один ряд. */
+.btns-fire .btn {
+  padding: 0 6px;
+  gap: 6px;
+  font-size: 16px;
+}
+
+@media (max-width: 429px) {
+  .btns-fire .btn svg {
+    display: none;
+  }
+}
+
+@media (max-width: 379px) {
+  .btns-fire .btn {
+    font-size: 15px;
+  }
+}
+
+/* Начатая задача в списке: сколько у огня уже отдано. */
+.meta-spent {
+  color: var(--gold);
+  font-weight: 700;
+}

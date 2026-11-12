@@ -2,11 +2,21 @@
 import { inkOn, isDark, questHex } from '../game/color';
 import { estimateOf } from '../game/rules';
 import { daysOverdue, findQuest, findRoutine, isUndead } from '../game/state';
-import { formatDue, formatDuration, plural } from '../game/time';
+import { formatDue, formatDuration, formatSpent, plural } from '../game/time';
 import type { Level, Quest, State, Task } from '../game/types';
 import type { Tone } from '../game/view';
 import { LEVEL_ROMAN, WEEKDAY_CHIPS, periodShort } from '../game/words';
 import { GIcon, LIcon } from './Icon';
+
+/** Начатая задача ждёт у костра: сколько у огня уже отдано. По этой метке видно, к чему можно вернуться. */
+export function SpentMark({ ms }: { ms: number }) {
+  return (
+    <span class="meta meta-spent">
+      <LIcon name="pause" size={12} stroke={2.6} />
+      <span class="sr-only">начата, у огня уже</span> {formatSpent(ms)}
+    </span>
+  );
+}
 
 /**
  * Подпись справа в строке задачи: нежить, время, срок, оценка или горизонт. У повторяющейся перед ней значок.

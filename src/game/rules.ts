@@ -96,6 +96,8 @@ export const SPARK_XP = 5;
 /** Угольки: каждые столько минут работы у огня приносят опыт, не дожидаясь «Готово». */
 export const EMBER_EVERY = 15 * MINUTE;
 export const EMBER_XP = 2;
+/** Задача считается начатой, когда у огня набралось столько времени: случайное касание её не помечает. */
+export const STARTED_AFTER = MINUTE;
 
 /** Напоминание о задаче со временем приходит за столько минут. */
 export const REMIND_BEFORE_MIN = 10;

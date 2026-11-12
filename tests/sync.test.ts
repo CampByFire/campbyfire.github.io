@@ -387,6 +387,32 @@ describe('сохранение в GitHub', () => {
     expect(findTask(phone.store.state, id)!.spentMs).toBeCloseTo(40 * MINUTE, -4);
   });
 
+  it('переключение задач на другом устройстве: время обеих сохраняется, у огня последняя', async () => {
+    const gh = fakeGitHub();
+    const now = { t: at(9) };
+    const pc = device(gh, 'компьютер', now);
+    const a = pc.store.act((s, t) => addTask(s, t, { title: 'Отчёт', questId: s.quests[0].id, day: s.day }));
+    const b = pc.store.act((s, t) => addTask(s, t, { title: 'Письма', questId: s.quests[0].id, day: s.day }));
+    await pc.sync.connect('good');
+    const phone = device(gh, 'телефон', now);
+    await phone.sync.connect('good');
+
+    pc.store.act((s, t) => start(s, t, a));
+    await vi.advanceTimersByTimeAsync(5000);
+    now.t = at(9, 30);
+    await phone.sync.syncNow();
+    phone.store.act((s, t) => start(s, t, b));
+    await vi.advanceTimersByTimeAsync(5000);
+
+    now.t = at(9, 50);
+    pc.store.tick();
+    await pc.sync.syncNow();
+    const st = pc.store.state;
+    expect(st.current?.taskId).toBe(b);
+    expect(findTask(st, a)!.spentMs).toBeCloseTo(30 * MINUTE, -4);
+    expect(findTask(st, b)!.spentMs).toBeCloseTo(20 * MINUTE, -4);
+  });
+
   it('в GitHub другая игра: спрашивает и делает, что выбрали', async () => {
     const gh = fakeGitHub();
     const now = { t: at(9) };

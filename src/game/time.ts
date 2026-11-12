@@ -139,6 +139,11 @@ export function formatDuration(min: number): string {
   return `${h} ч ${m} мин`;
 }
 
+/** Сколько отдано задаче: «7 мин», «1 ч 20 мин». Меньше минуты считается за минуту. */
+export function formatSpent(ms: number): string {
+  return formatDuration(Math.max(1, Math.round(ms / 60_000)));
+}
+
 /** «24 октября 2027 г.» */
 export function formatDayLong(day: DayKey): string {
   return parseDay(day).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });

@@ -7,13 +7,17 @@ import {
   complete,
   confirmWorking,
   endDay,
+  isStarted,
   lightFire,
   newState,
+  pause,
   planOf,
   planTask,
   release,
+  resume,
   secondWind,
   settle,
+  spentNow,
   start,
   swapInPlan,
   toggleBreak,
@@ -96,6 +100,52 @@ describe('таймер и мана', () => {
     confirmWorking(s, at(12));
     expect(s.tasks[0].spentMs).toBe(3 * HOUR);
     expect(s.current?.runningSince).toBe(at(12));
+  });
+
+  it('между задачами можно переключаться: время каждой сохраняется и продолжается', () => {
+    const { s, work } = fresh();
+    const a = addTask(s, at(8), { title: 'Отчёт', questId: work, day: s.day });
+    const b = addTask(s, at(8), { title: 'Письма', questId: work, day: s.day });
+    const task = (id: string) => s.tasks.find((t) => t.id === id)!;
+    start(s, at(9), a);
+    start(s, at(9, 40), b);
+    expect(task(a).spentMs).toBe(40 * MINUTE);
+    expect(isStarted(s, task(a))).toBe(true);
+    expect(isStarted(s, task(b))).toBe(false);
+    start(s, at(10), a);
+    expect(task(b).spentMs).toBe(20 * MINUTE);
+    expect(isStarted(s, task(b))).toBe(true);
+    expect(spentNow(s, task(a), at(10, 15))).toBe(55 * MINUTE);
+    settle(s, at(10, 15));
+    expect(task(a).spentMs).toBe(55 * MINUTE);
+    expect(s.log[s.day].workedMs).toBe(75 * MINUTE);
+  });
+
+  it('пауза держит задачу у огня, а «Продолжить» досчитывает к прежнему времени', () => {
+    const { s, work } = fresh();
+    const id = addTask(s, at(8), { title: 'Отчёт', questId: work, day: s.day });
+    start(s, at(9), id);
+    pause(s, at(9, 25));
+    settle(s, at(11));
+    expect(s.current).toMatchObject({ taskId: id, runningSince: null });
+    expect(s.tasks[0].spentMs).toBe(25 * MINUTE);
+    resume(s, at(11));
+    settle(s, at(11, 10));
+    expect(s.tasks[0].spentMs).toBe(35 * MINUTE);
+  });
+
+  it('начатой задача считается с минуты у огня, сделанная уже не начатая', () => {
+    const { s, work } = fresh();
+    const a = addTask(s, at(8), { title: 'A', questId: work, day: s.day });
+    const b = addTask(s, at(8), { title: 'B', questId: work, day: s.day });
+    start(s, at(9), a);
+    start(s, at(9, 0) + 30_000, b);
+    expect(isStarted(s, s.tasks[0])).toBe(false);
+    start(s, at(9, 5), a);
+    start(s, at(9, 10), b);
+    expect(isStarted(s, s.tasks[0])).toBe(true);
+    complete(s, at(9, 11), a);
+    expect(isStarted(s, s.tasks[0])).toBe(false);
   });
 
   it('другой поход стоит маны, тот же нет', () => {

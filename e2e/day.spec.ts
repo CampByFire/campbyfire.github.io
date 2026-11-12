@@ -1,7 +1,7 @@
 // Обычный день целиком: знакомство, сбор отряда, работа у огня, привал, «Готово» и отбой.
 // Идёт на маленьком телефоне, обычном телефоне и компьютере.
 import { expect, test } from '@playwright/test';
-import { addTask, at, expectNoSideScroll, openGame, setTime, sheet, tab } from './helpers';
+import { addTask, at, expectNoSideScroll, openGame, setTime, sheet, tab, toast } from './helpers';
 
 test('день от знакомства до отбоя', async ({ page }) => {
   await openGame(page, { time: at(9), intro: true });
@@ -71,5 +71,46 @@ test('день от знакомства до отбоя', async ({ page }) => {
   await expect(page.getByRole('button', { name: /^Ответить на почту/ })).toBeVisible();
   await tab(page, 'Летопись').click();
   await expect(page.getByRole('heading', { level: 1, name: 'Летопись' })).toBeVisible();
+  await expectNoSideScroll(page);
+});
+
+test('между задачами можно переключаться, а таймер каждой продолжается с того же места', async ({ page }) => {
+  await openGame(page, { time: at(9) });
+  await addTask(page, 'Сдать отчёт', { quest: 'Работа', size: '1 ч' });
+  await addTask(page, 'Ответить на почту', { quest: 'Работа', size: '15 мин' });
+  await page.getByRole('button', { name: /Разжечь костёр/ }).click();
+  const day = page.getByRole('region', { name: 'Задачи дня' });
+  const minutesLater = async (min: number) => setTime(page, new Date((await page.evaluate(() => Date.now())) + min * 60_000));
+
+  // Начать первую задачу и поработать 20 минут.
+  await day.getByRole('button', { name: 'Позвать к огню' }).click();
+  await expect(day.getByRole('heading', { name: 'Сейчас у огня' })).toBeVisible();
+  await minutesLater(20);
+  await expect(day.locator('.timer')).toContainText('0:20');
+
+  // Пауза: задача остаётся у огня, таймер стоит.
+  await day.getByRole('button', { name: 'Пауза' }).click();
+  await expect(day.getByRole('button', { name: 'Продолжить' })).toBeVisible();
+  await minutesLater(15);
+  await expect(day.locator('.timer')).toContainText('0:20');
+  await expectNoSideScroll(page);
+
+  // Переключиться на вторую: время первой сохраняется и видно в списке.
+  await day.getByRole('button', { name: /^Ответить на почту/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /^(Позвать к огню|К огню)/ }).click();
+  await expect(toast(page)).toContainText('«Сдать отчёт» ждёт у костра, 20 мин сохранено');
+  await expect(day.getByRole('button', { name: 'Ответить на почту' })).toBeVisible();
+  await expect(day.getByRole('button', { name: /^Сдать отчёт/ })).toContainText('20 мин');
+  await minutesLater(10);
+
+  // Вернуться к первой: «Продолжить», и таймер идёт дальше от 20 минут.
+  await day.getByRole('button', { name: /^Сдать отчёт/ }).click();
+  const card = page.getByRole('dialog');
+  await expect(card).toContainText('У огня уже 20 мин');
+  await card.getByRole('button', { name: /^Продолжить/ }).click();
+  await expect(day.getByRole('button', { name: 'Сдать отчёт' })).toBeVisible();
+  await expect(day.getByRole('button', { name: /^Ответить на почту/ })).toContainText('10 мин');
+  await minutesLater(5);
+  await expect(day.locator('.timer')).toContainText('0:25');
   await expectNoSideScroll(page);
 });
