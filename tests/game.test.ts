@@ -9,6 +9,7 @@ import {
   endDay,
   isStarted,
   lightFire,
+  moreTime,
   newState,
   pause,
   planOf,
@@ -16,6 +17,7 @@ import {
   release,
   resume,
   secondWind,
+  setEstimate,
   settle,
   spentNow,
   start,
@@ -132,6 +134,42 @@ describe('таймер и мана', () => {
     resume(s, at(11));
     settle(s, at(11, 10));
     expect(s.tasks[0].spentMs).toBe(35 * MINUTE);
+  });
+
+  it('у огня можно поменять длительность: таймер, уровень и пауза остаются как были', () => {
+    const { s, work } = fresh();
+    const id = addTask(s, at(8), { title: 'Отчёт', questId: work, day: s.day, estimateMin: 30 });
+    const t = s.tasks[0];
+    start(s, at(9), id);
+    pause(s, at(9, 25));
+    setEstimate(s, id, 60);
+    expect(t.estimateMin).toBe(60);
+    expect(t.level).toBe(1);
+    expect(t.spentMs).toBe(25 * MINUTE);
+    expect(s.current).toMatchObject({ taskId: id, runningSince: null });
+    // Обычная длительность уровня хранится пустой, как в форме правки.
+    setEstimate(s, id, 30);
+    expect(t.estimateMin).toBeNull();
+    resume(s, at(10));
+    // «Нужно ещё 15 минут» считается от отданного времени, вместе с тем, что натикало до сих пор.
+    moreTime(s, at(10, 20), id, 15);
+    expect(t.estimateMin).toBe(60);
+    expect(spentNow(s, t, at(10, 20))).toBe(45 * MINUTE);
+    expect(s.current?.runningSince).toBe(at(10));
+  });
+
+  it('длительность не бывает меньше минуты и больше недели, у сделанной задачи не меняется', () => {
+    const { s, work } = fresh();
+    const id = addTask(s, at(8), { title: 'Отчёт', questId: work, day: s.day, estimateMin: 30 });
+    setEstimate(s, id, 0);
+    expect(s.tasks[0].estimateMin).toBe(1);
+    setEstimate(s, id, 100_000);
+    expect(s.tasks[0].estimateMin).toBe(7 * 24 * 60);
+    setEstimate(s, id, Number.NaN);
+    expect(s.tasks[0].estimateMin).toBe(7 * 24 * 60);
+    complete(s, at(9), id);
+    setEstimate(s, id, 45);
+    expect(s.tasks[0].estimateMin).toBe(7 * 24 * 60);
   });
 
   it('начатой задача считается с минуты у огня, сделанная уже не начатая', () => {

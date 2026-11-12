@@ -4,6 +4,8 @@ import {
   DAY_STARTS_AT_HOUR,
   EMBER_EVERY,
   EMBER_XP,
+  ESTIMATE_BY_LEVEL,
+  ESTIMATE_MAX_MIN,
   FORGOTTEN_AFTER,
   GOLD_PER_LEVEL,
   HOUR,
@@ -11,6 +13,7 @@ import {
   MANA_MAX,
   MANA_REST_PER_HOUR,
   MERCY_XP,
+  MINUTE,
   RATE_EVERY_DAYS,
   RATE_FIRST_AFTER_DAYS,
   IMPROVE_MAX,
@@ -713,6 +716,24 @@ export function start(s: State, now: number, id: string): { switchCost: number }
  */
 export function isStarted(s: State, t: Task): boolean {
   return t.status === 'open' && s.current?.taskId !== t.id && t.spentMs >= STARTED_AFTER;
+}
+
+/**
+ * Новая длительность задачи в минутах. Уровень и уже отданное время не меняются: таймер у огня
+ * идёт дальше, меняется только «из ~…». Длительность, равная обычной для уровня, хранится пустой.
+ */
+export function setEstimate(s: State, id: string, min: number): void {
+  const t = findTask(s, id);
+  if (!t || t.status === 'done' || t.status === 'released' || !Number.isFinite(min)) return;
+  const m = Math.min(ESTIMATE_MAX_MIN, Math.max(1, Math.round(min)));
+  t.estimateMin = m === ESTIMATE_BY_LEVEL[t.level] ? null : m;
+}
+
+/** «Нужно ещё столько минут»: длительность становится уже отданным временем плюс add. */
+export function moreTime(s: State, now: number, id: string, add: number): void {
+  const t = findTask(s, id);
+  if (!t) return;
+  setEstimate(s, id, Math.round(spentNow(s, t, now) / MINUTE) + add);
 }
 
 /** Таймер стоит, задача остаётся у огня. */

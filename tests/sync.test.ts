@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HOUR, MINUTE } from '../src/game/rules';
-import { addQuest, addRoutine, addTask, complete, findTask, newState, pause, rateSpheres, removeQuest, setImprove, settle, start, updateTask } from '../src/game/state';
+import { addQuest, addRoutine, addTask, complete, findTask, newState, pause, rateSpheres, removeQuest, setEstimate, setImprove, settle, start, updateTask } from '../src/game/state';
 import { joinLines, mergeGames } from '../src/game/merge';
 import { addPrize, buyPrize, goalOf, prizesOf, purchasesOf, refund, removePrize, setGoal, updatePrize } from '../src/game/shop';
 import { Store, type Storage } from '../src/game/store';
@@ -600,6 +600,19 @@ describe('слияние версий', () => {
     expect(t.status).toBe('done');
     expect(t.reward?.gold).toBe(25);
     expect(m.hero.gold).toBe(25);
+  });
+
+  it('длительность, поменянная на одном устройстве, и время у огня с другого складываются', () => {
+    const { base, local, remote, id } = pair();
+    local.touchedAt = at(9);
+    setEstimate(local, id, 90);
+    remote.touchedAt = at(10);
+    start(remote, at(9, 30), id);
+    pause(remote, at(10));
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(findTask(m, id)!.estimateMin).toBe(90);
+    expect(findTask(m, id)!.spentMs).toBe(30 * MINUTE);
+    expect(findTask(m, id)!.level).toBe(1);
   });
 
   it('строка «когда начну» с одного устройства и время с другого не теряются', () => {

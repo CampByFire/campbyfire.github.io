@@ -114,3 +114,46 @@ test('между задачами можно переключаться, а та
   await expect(day.locator('.timer')).toContainText('0:25');
   await expectNoSideScroll(page);
 });
+
+test('у огня можно поменять, сколько займёт задача, и таймер не сбивается', async ({ page }) => {
+  await openGame(page, { time: at(9) });
+  await addTask(page, 'Сдать отчёт', { quest: 'Работа', size: '30 мин' });
+  await page.getByRole('button', { name: /Разжечь костёр/ }).click();
+  const day = page.getByRole('region', { name: 'Задачи дня' });
+  const minutesLater = async (min: number) => setTime(page, new Date((await page.evaluate(() => Date.now())) + min * 60_000));
+  await day.getByRole('button', { name: 'Позвать к огню' }).click();
+  await minutesLater(25);
+  await day.getByRole('button', { name: 'Пауза' }).click();
+  await expect(day.locator('.timer')).toContainText('0:25');
+  await expect(day.locator('.timer')).toContainText('из ~30 мин');
+
+  // «Нужно ещё 15 минут»: считается от отданных 25, пауза остаётся.
+  await day.getByRole('button', { name: /из ~30 мин, изменить длительность/ }).click();
+  const form = sheet(page, 'Сколько займёт');
+  await expect(form).toContainText('У огня уже 25 мин');
+  await form.getByRole('button', { name: /^Ещё 15 мин, всего 40 мин$/ }).click();
+  await expect(form).toBeHidden();
+  await expect(toast(page)).toContainText('«Сдать отчёт» теперь ~40 мин');
+  await expect(day.locator('.timer')).toContainText('из ~40 мин');
+  await expect(day.locator('.timer')).toContainText('0:25');
+  await expect(day.getByRole('button', { name: 'Продолжить' })).toBeVisible();
+  await expectNoSideScroll(page);
+
+  // Вся задача целиком: выбрать 2 часа и сохранить. Таймер идёт дальше от прежнего места.
+  await day.getByRole('button', { name: 'Продолжить' }).click();
+  await minutesLater(5);
+  await day.getByRole('button', { name: /изменить длительность/ }).click();
+  await form.getByRole('radiogroup', { name: 'Или вся задача целиком' }).getByRole('radio', { name: '2 ч', exact: true }).click();
+  await form.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(day.locator('.timer')).toContainText('из ~2 ч');
+  await expect(day.locator('.timer')).toContainText('0:30');
+
+  // «Вернуть» отменяет правку.
+  await toast(page).getByRole('button', { name: 'Вернуть' }).click();
+  await expect(day.locator('.timer')).toContainText('из ~40 мин');
+
+  // Из карточки задачи тоже можно открыть этот лист.
+  await day.getByRole('button', { name: 'Сдать отчёт' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Сколько займёт' }).click();
+  await expect(sheet(page, 'Сколько займёт')).toBeVisible();
+});

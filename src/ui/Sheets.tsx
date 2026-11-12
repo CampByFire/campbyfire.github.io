@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/ho
 import { PRESETS, questHex } from '../game/color';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { parsePhrase, type Parsed } from '../game/phrase';
-import { ESTIMATE_BY_LEVEL, IMPROVE_MAX, MERCY_XP, RESTED_XP_BONUS, SCORE_MAX, SCORE_MIN, UNDEAD_XP_BONUS, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
+import { ESTIMATE_BY_LEVEL, IMPROVE_MAX, MERCY_XP, MORE_TIME_MIN, RESTED_XP_BONUS, SCORE_MAX, SCORE_MIN, UNDEAD_XP_BONUS, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
 import {
   addQuest,
   addRoutine,
@@ -28,6 +28,7 @@ import {
   sphereOf,
   spheresOf,
   switchCostOf,
+  moreTime,
   planTask,
   postpone,
   release,
@@ -35,6 +36,7 @@ import {
   restedLeft,
   restoreDues,
   setImprove,
+  setEstimate,
   setPeriod,
   spentNow,
   tailTargets,
@@ -89,6 +91,7 @@ export type SheetState =
   | { kind: 'edit'; taskId: string }
   | { kind: 'routine'; routineId: string }
   | { kind: 'task'; taskId: string }
+  | { kind: 'duration'; taskId: string }
   | { kind: 'summary' }
   | { kind: 'letters' }
   | { kind: 'tails' }
@@ -123,6 +126,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <TaskForm ui={ui} routineId={sheet.routineId} />;
     case 'task':
       return <TaskSheet ui={ui} taskId={sheet.taskId} />;
+    case 'duration':
+      return <DurationSheet ui={ui} taskId={sheet.taskId} />;
     case 'summary':
       return <SummarySheet ui={ui} />;
     case 'letters':
@@ -658,6 +663,12 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
                 Уже сделано: упокоить сразу
               </button>
             )}
+            {isCurrent && (
+              <button class="act" onClick={() => ui.open({ kind: 'duration', taskId: t.id })}>
+                <GIcon name="hourglass" size={16} />
+                {W.duration}
+              </button>
+            )}
             <button class="act" onClick={() => ui.open({ kind: 'edit', taskId: t.id })}>
               <LIcon name="edit" size={16} />
               Изменить
@@ -689,6 +700,69 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
           </div>
         </>
       )}
+    </Sheet>
+  );
+}
+
+/** Подпись длительности: «~1 ч 30 мин» или «несколько дней». */
+function estimateLabel(min: number | null): string {
+  return min ? `~${formatDuration(min)}` : 'несколько дней';
+}
+
+/**
+ * Сколько займёт задача у огня. «Нужно ещё» считает от уже отданного времени и сразу сохраняет,
+ * а длительность всей задачи выбирается фишками. Таймер, пауза и уровень не меняются.
+ */
+function DurationSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
+  const s = ui.store.state;
+  const t = findTask(s, taskId);
+  const was = t ? estimateOf(t) : null;
+  const [pick, setPick] = useState<number | null>(was ?? 60);
+  if (!t) return null;
+  const spent = spentNow(s, t, ui.now);
+  const spentMin = Math.round(spent / 60_000);
+  const before = t.estimateMin;
+  const apply = (change: (st: State, now: number) => void) => {
+    ui.store.act(change);
+    ui.close();
+    const now = findTask(ui.store.state, taskId);
+    if (!now) return;
+    ui.toast(`«${now.title}» теперь ${estimateLabel(estimateOf(now))}`, {
+      label: 'Вернуть',
+      run: () => ui.store.act((st) => updateTask(st, taskId, { estimateMin: before })),
+    });
+  };
+  const options = ESTIMATES.filter((o): o is { value: number; label: string } => o.value !== null);
+  const all = pick === null || options.some((o) => o.value === pick) ? options : [...options, { value: pick, label: formatDuration(pick) }].sort((a, b) => a.value - b.value);
+  return (
+    <Sheet
+      title={W.duration}
+      onClose={ui.close}
+      footer={
+        <button class="btn btn-gold btn-wide" onClick={() => pick !== null && apply((st) => setEstimate(st, taskId, pick))}>
+          Сохранить
+        </button>
+      }
+    >
+      <div class="task-head">
+        <div class="task-title">{t.title}</div>
+        <div class="task-facts">
+          <span>Было {estimateLabel(was)}</span>
+          {spent > 0 && <span>У огня уже {formatSpent(spent)}</span>}
+        </div>
+      </div>
+      <div class="field">
+        <h3 class="field-label" id="more-time">Нужно ещё</h3>
+        <div class="chips" role="group" aria-labelledby="more-time">
+          {MORE_TIME_MIN.map((m) => (
+            <button key={m} type="button" class="chipbtn" aria-label={`Ещё ${formatDuration(m)}, всего ${formatDuration(spentMin + m)}`} onClick={() => apply((st, now) => moreTime(st, now, taskId, m))}>
+              +{formatDuration(m)}
+            </button>
+          ))}
+        </div>
+      </div>
+      <Chips label="Или вся задача целиком" value={pick} options={all} onChange={setPick} />
+      <p class="note">Отданное время, уровень и награда остаются прежними.</p>
     </Sheet>
   );
 }

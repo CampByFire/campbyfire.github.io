@@ -747,6 +747,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
     const est = estimateOf(cur);
     const spent = spentNow(s, cur, now);
     const progress = est ? Math.min(1, spent / (est * 60_000)) : 0;
+    const estText = est ? `из ~${formatDuration(est)}` : 'несколько дней';
     const cls = CLASS_BY_LEVEL[cur.level];
     return (
       <div class="card">
@@ -769,7 +770,10 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             {timer}
             <small>{seconds}</small>
           </span>
-          <span class="timer-est">{est ? `из ~${formatDuration(est)}` : 'несколько дней'}</span>
+          <button class="timer-est" aria-label={`${estText}, изменить длительность`} onClick={() => ui.open({ kind: 'duration', taskId: cur.id })}>
+            {estText}
+            <LIcon name="edit" size={13} />
+          </button>
           {est && (
             <span class="bar bar-gold" aria-hidden="true">
               <span style={{ width: `${progress * 100}%` }} />

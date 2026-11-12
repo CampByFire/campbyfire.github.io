@@ -10,6 +10,14 @@ test('axe не находит нарушений на экранах и в ли�
   expect(await axe(page), 'Сбор отряда').toEqual([]);
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   expect(await axe(page), 'Лагерь').toEqual([]);
+  const day = page.getByRole('region', { name: 'Задачи дня' });
+  await day.getByRole('button', { name: 'Позвать к огню' }).click();
+  expect(await axe(page), 'Сейчас у огня').toEqual([]);
+  await day.getByRole('button', { name: /изменить длительность/ }).click();
+  await expect(sheet(page, 'Сколько займёт')).toBeVisible();
+  expect(await axe(page), 'Сколько займёт').toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(day.getByRole('button', { name: /изменить длительность/ })).toBeFocused();
   await tab(page, 'Королевство').click();
   expect(await axe(page), 'Королевство').toEqual([]);
   await tab(page, 'Летопись').click();

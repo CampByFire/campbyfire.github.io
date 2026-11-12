@@ -238,6 +238,7 @@ export const W = {
   callToFire: 'Позвать к огню',
   callToFireShort: 'К огню',
   pause: 'Пауза',
+  duration: 'Сколько займёт',
   resume: 'Продолжить',
   release: 'Отпустить',
   secondWind: 'Второе дыхание',
