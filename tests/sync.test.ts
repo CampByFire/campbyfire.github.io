@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HOUR, MINUTE } from '../src/game/rules';
-import { addQuest, addRoutine, addTask, complete, findTask, newState, pause, rateSpheres, removeQuest, settle, start, updateTask } from '../src/game/state';
-import { mergeGames } from '../src/game/merge';
+import { addQuest, addRoutine, addTask, complete, findTask, newState, pause, rateSpheres, removeQuest, setImprove, settle, start, updateTask } from '../src/game/state';
+import { joinLines, mergeGames } from '../src/game/merge';
 import { addPrize, buyPrize, goalOf, prizesOf, purchasesOf, refund, removePrize, setGoal, updatePrize } from '../src/game/shop';
 import { Store, type Storage } from '../src/game/store';
 import type { State } from '../src/game/types';
@@ -666,6 +666,65 @@ describe('слияние версий', () => {
     expect(m.quests.some((q) => q.id === fresh)).toBe(true);
     void local;
     void remote;
+  });
+});
+
+describe('заметки «Как улучшить» с двух устройств', () => {
+  function pair() {
+    const base = newState(at(8));
+    const [work, health] = base.quests.map((q) => q.id);
+    setImprove(base, work, 'Меньше созвонов');
+    const copy = () => JSON.parse(JSON.stringify(base)) as State;
+    return { base, local: copy(), remote: copy(), work, health };
+  }
+  const note = (s: State, id: string) => s.quests.find((q) => q.id === id)?.improve;
+
+  it('заметки разных сфер с разных устройств остаются обе', () => {
+    const { base, local, remote, work, health } = pair();
+    setImprove(local, work, 'Меньше созвонов\nОбед без телефона');
+    local.touchedAt = at(9);
+    setImprove(remote, health, 'Ложиться до полуночи');
+    remote.touchedAt = at(10);
+    const m = mergeGames(base, local, remote, at(10, 5));
+    expect(note(m, work)).toBe('Меньше созвонов\nОбед без телефона');
+    expect(note(m, health)).toBe('Ложиться до полуночи');
+  });
+
+  it('одна заметка, изменённая на обоих устройствах, не теряет строк: к позднему тексту дописываются строки другого', () => {
+    const { base, local, remote, work } = pair();
+    setImprove(local, work, 'Меньше созвонов\nОбед без телефона');
+    local.touchedAt = at(9);
+    setImprove(remote, work, 'Меньше созвонов\nПланировать утром');
+    remote.touchedAt = at(10);
+    expect(note(mergeGames(base, local, remote, at(10, 5)), work)).toBe('Меньше созвонов\nПланировать утром\nОбед без телефона');
+    // И в обратную сторону: с этого устройства действовали позже.
+    local.touchedAt = at(11);
+    expect(note(mergeGames(base, local, remote, at(11, 5)), work)).toBe('Меньше созвонов\nОбед без телефона\nПланировать утром');
+  });
+
+  it('заметка, стёртая на одном устройстве и не тронутая на другом, уходит', () => {
+    const { base, local, remote, work } = pair();
+    setImprove(local, work, '');
+    local.touchedAt = at(9);
+    const m = mergeGames(base, local, remote, at(10));
+    expect(note(m, work)).toBeUndefined();
+    expect('improve' in m.quests.find((q) => q.id === work)!).toBe(false);
+  });
+
+  it('без общей версии заметки с обеих сторон складываются', () => {
+    const { local, remote, work } = pair();
+    setImprove(local, work, 'Меньше созвонов\nОбед без телефона');
+    local.touchedAt = at(9);
+    setImprove(remote, work, 'Планировать утром');
+    remote.touchedAt = at(10);
+    expect(note(mergeGames(null, local, remote, at(10, 5)), work)).toBe('Планировать утром\nМеньше созвонов\nОбед без телефона');
+  });
+
+  it('строки склеиваются без повторов и пустых строк', () => {
+    expect(joinLines('а\nб', ' б \n\nв')).toBe('а\nб\nв');
+    expect(joinLines(undefined, 'в')).toBe('в');
+    expect(joinLines('а', undefined)).toBe('а');
+    expect(joinLines(undefined, undefined)).toBeUndefined();
   });
 });
 

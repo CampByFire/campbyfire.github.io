@@ -3,6 +3,7 @@ import { mergeGames } from '../src/game/merge';
 import {
   DEFAULT_SPHERES,
   addQuest,
+  findQuest,
   addRoutine,
   addTask,
   complete,
@@ -16,6 +17,7 @@ import {
   ratingDue,
   removeQuest,
   reopenQuest,
+  setImprove,
   settle,
   sphereOf,
   spheresOf,
@@ -23,6 +25,7 @@ import {
   updateQuest,
   winQuest,
 } from '../src/game/state';
+import { IMPROVE_MAX } from '../src/game/rules';
 import { SAVE_VERSION, checkSave } from '../src/game/store';
 import { campView } from '../src/game/view';
 import type { State } from '../src/game/types';
@@ -264,6 +267,40 @@ describe('оценка сфер', () => {
     expect(ratingDue(s)).toBe(true);
     s.settings.rateEvery = 'never';
     expect(ratingDue(s)).toBe(false);
+  });
+});
+
+describe('заметка «Как улучшить» у сферы', () => {
+  it('сохраняется у сферы, пробелы по краям срезаются, пустая убирает поле', () => {
+    const s = newGame();
+    const work = spheresOf(s)[0].id;
+    setImprove(s, work, '  Меньше созвонов\r\nОбед без телефона  \n');
+    expect(findQuest(s, work)!.improve).toBe('Меньше созвонов\nОбед без телефона');
+    setImprove(s, work, '   \n ');
+    expect('improve' in findQuest(s, work)!).toBe(false);
+  });
+
+  it('у проекта и у чужого id заметки нет, длинный текст обрезается', () => {
+    const s = newGame();
+    const work = spheresOf(s)[0].id;
+    const p = addQuest(s, at(8), { name: 'Сертификат', kind: 'work', color: 'blue', sphereId: work });
+    setImprove(s, p, 'Нельзя');
+    setImprove(s, 'nope', 'Нельзя');
+    expect(findQuest(s, p)!.improve).toBeUndefined();
+    setImprove(s, work, 'я'.repeat(IMPROVE_MAX + 50));
+    expect(findQuest(s, work)!.improve).toHaveLength(IMPROVE_MAX);
+  });
+
+  it('формат сохранения прежний: заметка переживает запись и чтение, испорченная отбрасывается', () => {
+    const s = newGame();
+    const [work, health] = spheresOf(s).map((q) => q.id);
+    setImprove(s, work, 'Меньше созвонов');
+    expect(s.v).toBe(SAVE_VERSION);
+    const back = checkSave(copy(s))!;
+    expect(findQuest(back, work)!.improve).toBe('Меньше созвонов');
+    const broken = copy(s);
+    (broken.quests.find((q) => q.id === health) as unknown as Record<string, unknown>).improve = 42;
+    expect('improve' in findQuest(checkSave(broken)!, health)!).toBe(false);
   });
 });
 

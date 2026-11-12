@@ -88,6 +88,32 @@ const TASK_GROUPS = [
   ['status', 'doneAt', 'doneDay', 'reward', 'releasedAt', 'releasedFrom', 'releasedXp'],
   ['day', 'order', 'leftDay'],
 ];
+/**
+ * Сферы и проекты сливаются по полям. Заметка «Как улучшить», изменённая с обеих сторон, не выбирается
+ * одна из двух: к тексту победителя дописываются строки другой стороны, которых в нём нет.
+ */
+function mergeQuest(b: Quest, l: Quest, r: Quest, localWins: boolean): Quest {
+  const out = mergeFields(b, l, r, localWins, []);
+  if (eq(l.improve, b.improve) || eq(r.improve, b.improve) || eq(l.improve, r.improve)) return out;
+  return withImprove(out, localWins ? joinLines(l.improve, r.improve) : joinLines(r.improve, l.improve));
+}
+
+/** Текст первого и строки второго, которых в первом нет. Пустые строки второго не переносятся. */
+export function joinLines(first: string | undefined, second: string | undefined): string | undefined {
+  if (!first) return second || undefined;
+  if (!second) return first;
+  const have = new Set(first.split('\n').map((x) => x.trim()));
+  const extra = second.split('\n').filter((x) => x.trim() && !have.has(x.trim()));
+  return extra.length ? `${first}\n${extra.join('\n')}` : first;
+}
+
+function withImprove(q: Quest, text: string | undefined): Quest {
+  const out = { ...q };
+  if (text) out.improve = text;
+  else delete out.improve;
+  return out;
+}
+
 /** Повтор и его конец задаются вместе: конец от прежнего повтора к новому не подходит. */
 const MEETING_GROUPS = [['repeat', 'repeatUntil']];
 
@@ -168,7 +194,12 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   out.settledAt = now;
 
   if (!base) {
-    out.quests = unionById(l.quests, r.quests, localWins);
+    out.quests = unionById(l.quests, r.quests, localWins).map((q) => {
+      // Заметки «Как улучшить» с двух устройств без общей версии не теряются: строки другой стороны дописываются.
+      const a = l.quests.find((x) => x.id === q.id);
+      const c = r.quests.find((x) => x.id === q.id);
+      return a && c ? withImprove(q, joinLines(localWins ? a.improve : c.improve, localWins ? c.improve : a.improve)) : q;
+    });
     out.tasks = unionById(l.tasks, r.tasks, localWins);
     out.routines = unionById(l.routines, r.routines, localWins);
     setMeetings(out, unionById(l.meetings ?? [], r.meetings ?? [], localWins));
@@ -192,7 +223,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
     xp: sum(b.hero.xp, l.hero.xp, r.hero.xp),
     mana: Math.max(0, Math.min(MANA_MAX, sum(b.hero.mana, l.hero.mana, r.hero.mana))),
   };
-  out.quests = mergeById<Quest>(b.quests, l.quests, r.quests, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
+  out.quests = mergeById<Quest>(b.quests, l.quests, r.quests, (x, y, z) => mergeQuest(x, y, z, localWins), localWins);
   out.tasks = mergeById<Task>(b.tasks, l.tasks, r.tasks, (x, y, z) => mergeFields(x, y, z, localWins, TASK_COUNTERS, TASK_GROUPS), localWins);
   out.routines = mergeById<Routine>(b.routines, l.routines, r.routines, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
   setMeetings(out, mergeById<Meeting>(b.meetings ?? [], l.meetings ?? [], r.meetings ?? [], (x, y, z) => mergeMeeting(x, y, z, localWins), localWins));

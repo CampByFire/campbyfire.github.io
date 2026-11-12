@@ -125,6 +125,7 @@ export function checkSave(raw: unknown): State | null {
   if (s.prizes !== undefined && !Array.isArray(s.prizes)) delete s.prizes;
   if (s.purchases !== undefined && !Array.isArray(s.purchases)) delete s.purchases;
   if (s.goalId !== undefined && typeof s.goalId !== 'string') delete s.goalId;
+  for (const q of s.quests) if (q && q.improve !== undefined && (typeof q.improve !== 'string' || !q.improve)) delete q.improve;
   tidyShop(s);
   dropFrog(s);
   return s;

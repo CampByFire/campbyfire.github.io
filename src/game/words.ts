@@ -254,6 +254,7 @@ export const W = {
   noSphere: 'Без сферы',
   wheel: 'Колесо баланса',
   rate: 'Оценить сферы',
+  improve: 'Как улучшить',
   undead: 'Нежить на дороге',
   slay: 'Упокоить',
   postpone: 'Перенести',

@@ -60,6 +60,56 @@ test('оценка сфер рисует колесо, а вторая оцен�
   await expect(page.locator('.wheel-prev')).toHaveCount(8);
 });
 
+test('нажатие на сферу в колесе открывает заметку «Как улучшить», она сохраняется и видна под колесом', async ({ page }) => {
+  await openGame(page);
+  await tab(page, 'Королевство').click();
+  const row = page.locator('.wheel-pick').filter({ hasText: 'Здоровье' });
+  await expect(row).toContainText('Как улучшить?');
+  await row.click();
+  const note = sheet(page, 'Здоровье');
+  const field = note.getByLabel('Что сделать, чтобы эта сфера стала лучше');
+  await expect(field).toBeFocused();
+  expect(await axe(page), 'Как улучшить').toEqual([]);
+  expect(await tooSmall(page), 'Как улучшить').toEqual([]);
+  await field.fill('Ложиться до полуночи\nГулять после обеда');
+  await note.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(toast(page)).toHaveText('Заметка сохранена');
+  await expect(note).toBeHidden();
+  // Под колесом видна первая строка, фокус вернулся на строку сферы.
+  await expect(row).toContainText('Ложиться до полуночи');
+  await expect(row).not.toContainText('Гулять после обеда');
+  await expect(row).toBeFocused();
+  expect(await axe(page), 'Королевство с заметкой').toEqual([]);
+
+  // Сектор колеса тоже открывает заметку. Закрыть лист без кнопки значит сохранить.
+  const sectors = page.locator('.wheel-hit');
+  await expect(sectors).toHaveCount(8);
+  const work = page.locator('.wheel-pick').first();
+  await expect(work).toContainText('Работа');
+  await sectors.first().click();
+  const workNote = sheet(page, 'Работа');
+  await workNote.getByLabel('Что сделать, чтобы эта сфера стала лучше').fill('Меньше созвонов');
+  await page.keyboard.press('Escape');
+  await expect(workNote).toBeHidden();
+  await expect(work).toContainText('Меньше созвонов');
+
+  // После перезагрузки заметка на месте, и в листе сферы тоже.
+  await page.reload();
+  await tab(page, 'Королевство').click();
+  await expect(row).toContainText('Ложиться до полуночи');
+  await page.locator('.sphere-card').filter({ hasText: 'Здоровье' }).click();
+  const health = sheet(page, 'Здоровье');
+  await expect(health.locator('.improve-row')).toContainText('Гулять после обеда');
+  await health.locator('.improve-row').click();
+  const again = sheet(page, 'Здоровье').getByLabel('Что сделать, чтобы эта сфера стала лучше');
+  await expect(again).toHaveValue('Ложиться до полуночи\nГулять после обеда');
+
+  // Пустая заметка убирается.
+  await again.fill('');
+  await sheet(page, 'Здоровье').getByRole('button', { name: 'Сохранить' }).click();
+  await expect(toast(page)).toHaveText('Заметка убрана');
+});
+
 test('проект в сфере: задачи, выполнение и возврат из зала трофеев', async ({ page }) => {
   await openGame(page);
   await tab(page, 'Королевство').click();

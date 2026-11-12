@@ -13,6 +13,7 @@ import {
   MERCY_XP,
   RATE_EVERY_DAYS,
   RATE_FIRST_AFTER_DAYS,
+  IMPROVE_MAX,
   SCORE_MAX,
   SCORE_MIN,
   planXp,
@@ -396,6 +397,18 @@ export function rateSpheres(s: State, now: number, scores: Record<string, number
   s.ratings = s.ratings.filter((r) => r.id !== s.day);
   s.ratings.push({ id: s.day, at: now, scores: clean });
   s.ratings.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+}
+
+/**
+ * Заметка «Как улучшить» у сферы: что сделать, чтобы сфера стала лучше. Пробелы по краям срезаются,
+ * текст длиннее IMPROVE_MAX обрезается, пустой убирает поле. У проекта заметки нет.
+ */
+export function setImprove(s: State, id: string, text: string): void {
+  const q = findQuest(s, id);
+  if (!q?.sphere) return;
+  const clean = text.replace(/\r\n?/g, '\n').trim().slice(0, IMPROVE_MAX).trimEnd();
+  if (clean) q.improve = clean;
+  else delete q.improve;
 }
 
 /** Последняя оценка и та, что была перед ней (до before, если задан день). */

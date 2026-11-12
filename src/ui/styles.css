@@ -2788,6 +2788,78 @@ button.sheet-grip:focus-visible {
   color: var(--text-hi);
 }
 
+/* Строка сферы под колесом: кнопка, открывает заметку «Как улучшить». */
+.wheel-pick {
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.wheel-pick-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.wheel-improve {
+  font-size: 14px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wheel-improve-empty {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Невидимые секторы поверх колеса: нажатие на сферу открывает её заметку. */
+.wheel-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .wheel-hit:hover {
+    fill: rgba(255, 236, 200, 0.06);
+  }
+}
+
+/* Заметка «Как улучшить» в листе сферы. */
+.row.improve-row {
+  height: auto;
+  min-height: 44px;
+  padding: 10px 16px;
+  align-items: flex-start;
+}
+
+.improve-text {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+}
+
+.improve-input {
+  display: block;
+  padding: 10px 12px;
+  line-height: 1.6;
+  resize: vertical;
+}
+
 .wheel-up {
   color: var(--green-text);
 }

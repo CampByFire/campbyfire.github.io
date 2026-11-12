@@ -3,7 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/ho
 import { PRESETS, questHex } from '../game/color';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { parsePhrase, type Parsed } from '../game/phrase';
-import { ESTIMATE_BY_LEVEL, MERCY_XP, RESTED_XP_BONUS, SCORE_MAX, SCORE_MIN, UNDEAD_XP_BONUS, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
+import { ESTIMATE_BY_LEVEL, IMPROVE_MAX, MERCY_XP, RESTED_XP_BONUS, SCORE_MAX, SCORE_MIN, UNDEAD_XP_BONUS, estimateOf, levelForEstimate, undeadRank } from '../game/rules';
 import {
   addQuest,
   addRoutine,
@@ -34,6 +34,7 @@ import {
   removeQuest,
   restedLeft,
   restoreDues,
+  setImprove,
   setPeriod,
   spentNow,
   tailTargets,
@@ -95,6 +96,7 @@ export type SheetState =
   | { kind: 'newQuest'; sphere?: boolean; sphereId?: string | null }
   | { kind: 'editQuest'; questId: string }
   | { kind: 'rate' }
+  | { kind: 'improve'; questId: string }
   | { kind: 'sync' }
   | { kind: 'syncConflict' }
   | { kind: 'rules' }
@@ -133,6 +135,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <QuestForm ui={ui} sphere={sheet.sphere} sphereId={sheet.sphereId} />;
     case 'rate':
       return <RateSheet ui={ui} />;
+    case 'improve':
+      return <ImproveSheet key={sheet.questId} ui={ui} questId={sheet.questId} />;
     case 'editQuest':
       return <QuestForm ui={ui} questId={sheet.questId} />;
     case 'sync':
@@ -1172,6 +1176,11 @@ function SphereSheet({ ui, q }: { ui: Ui; q: Quest }) {
         {SPHERE_KIND_NAME[q.kind]} сфера · {open.length} в отряде{score !== undefined && ` · оценка ${score} из ${SCORE_MAX}`}
       </div>
       <p class="note">Сфера не кончается. {QUEST_KIND_HINT[q.kind][0].toUpperCase() + QUEST_KIND_HINT[q.kind].slice(1)}.</p>
+      <div class="field-label">{W.improve}</div>
+      <button class="row improve-row" onClick={() => ui.open({ kind: 'improve', questId: q.id })}>
+        <span class={q.improve ? 'improve-text' : 'improve-text row-muted'}>{q.improve ?? 'Запиши, что сделать, чтобы эта сфера стала лучше'}</span>
+        <LIcon name="edit" size={16} />
+      </button>
       <div class="field-label">{W.quests}</div>
       {projects.length === 0 && <p class="note">Проектов пока нет.</p>}
       <div class="sublist">
@@ -1231,6 +1240,66 @@ function TaskList({ ui, s, tasks }: { ui: Ui; s: State; tasks: Task[] }) {
 }
 
 // ---------- оценка сфер ----------
+
+/**
+ * Заметка «Как улучшить» у сферы: свободный текст, что сделать, чтобы сфера стала лучше.
+ * Открывается нажатием на сферу в колесе баланса. Закрыть лист значит сохранить: набранное не теряется.
+ */
+function ImproveSheet({ ui, questId }: { ui: Ui; questId: string }) {
+  const s = ui.store.state;
+  const q = findQuest(s, questId);
+  const [text, setText] = useState(q?.improve ?? '');
+  const area = useRef<HTMLTextAreaElement>(null);
+  // Лист открывают, чтобы писать: поле сразу в фокусе, на телефоне выезжает клавиатура.
+  useEffect(() => area.current?.focus({ preventScroll: true }), []);
+  if (!q?.sphere) return null;
+  const score = lastRating(s)?.scores[q.id];
+  // Escape и «Назад» зовут закрытие, запомненное листом чуть раньше: текст берётся из ref, а не из замыкания.
+  const typed = useRef(text);
+  typed.current = text;
+  const keep = () => {
+    const now = typed.current;
+    if (now.trim() !== (findQuest(ui.store.state, q.id)?.improve ?? '')) {
+      ui.store.act((st) => setImprove(st, q.id, now));
+      return true;
+    }
+    return false;
+  };
+  const close = () => {
+    keep();
+    ui.close();
+  };
+  const save = () => {
+    if (keep()) ui.toast(typed.current.trim() ? 'Заметка сохранена' : 'Заметка убрана');
+    ui.close();
+  };
+  const id = `improve-${q.id}`;
+  return (
+    <Sheet title={q.name} onClose={close} footer={<button class="btn btn-gold btn-wide" onClick={save}>Сохранить</button>}>
+      <div class="task-sub">
+        <QuestDot q={q} />
+        {SPHERE_KIND_NAME[q.kind]} сфера{score !== undefined ? ` · оценка ${score} из ${SCORE_MAX}` : ' · ещё без оценки'}
+      </div>
+      <label class="field">
+        <span class="field-label">Что сделать, чтобы эта сфера стала лучше</span>
+        <textarea
+          ref={area}
+          id={id}
+          class="input improve-input"
+          rows={7}
+          maxLength={IMPROVE_MAX}
+          value={text}
+          placeholder={'Например:\nложиться до полуночи\nгулять полчаса после обеда'}
+          onInput={(e) => {
+            typed.current = e.currentTarget.value;
+            setText(e.currentTarget.value);
+          }}
+        />
+      </label>
+      <p class="note">Записи видишь только ты. Каждый шаг можно писать с новой строки.</p>
+    </Sheet>
+  );
+}
 
 /** Оценить каждую сферу от 1 до 10. Ползунок стоит на прошлой оценке, а без неё посередине. */
 function RateSheet({ ui }: { ui: Ui }) {

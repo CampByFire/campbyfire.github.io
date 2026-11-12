@@ -21,7 +21,7 @@ export function Realm({ ui }: { ui: Ui }) {
   return (
     <div class="page">
       <h1 class="page-title">{W.realm}</h1>
-      <div class="page-sub">Королевство делится на сферы жизни, как колесо баланса. Время от времени оценивай каждую от 1 до 10, а большие цели собирай в проекты внутри сфер.</div>
+      <div class="page-sub">Королевство делится на сферы жизни, как колесо баланса. Время от времени оценивай каждую от 1 до 10, а большие цели собирай в проекты внутри сфер. Нажми на сферу в колесе, чтобы записать, что сделать, чтобы она стала лучше.</div>
 
       <section class="group">
         <div class="group-head">
@@ -32,7 +32,7 @@ export function Realm({ ui }: { ui: Ui }) {
             {last ? `Пора оценить сферы: прошлая оценка ${formatDue(last.id, s.day).toLowerCase()}.` : 'Оцени сферы, чтобы увидеть своё колесо баланса.'}
           </p>
         )}
-        {spheres.length > 0 && <Wheel spheres={spheres} last={last} prev={prev} />}
+        {spheres.length > 0 && <Wheel spheres={spheres} last={last} prev={prev} onPick={(id) => ui.open({ kind: 'improve', questId: id })} />}
         {spheres.length > 0 && (
           <ul class="wheel-legend">
             {spheres.map((q) => {
@@ -41,12 +41,20 @@ export function Realm({ ui }: { ui: Ui }) {
               const delta = v !== undefined && was !== undefined ? v - was : 0;
               return (
                 <li key={q.id}>
-                  <QuestDot q={q} />
-                  <span class="row-title">{q.name}</span>
-                  <span class="wheel-score">
-                    {v === undefined ? <span class="row-muted">нет оценки</span> : `${v} из ${SCORE_MAX}`}
-                    {delta !== 0 && <span class={delta > 0 ? 'wheel-up' : 'wheel-down'}>{delta > 0 ? ` +${delta}` : ` −${-delta}`}</span>}
-                  </span>
+                  <button class="wheel-pick" data-sphere={q.id} onClick={() => ui.open({ kind: 'improve', questId: q.id })}>
+                    <QuestDot q={q} />
+                    <span class="wheel-pick-text">
+                      <span class="row-title">{q.name}</span>
+                      <span class={q.improve ? 'wheel-improve' : 'wheel-improve wheel-improve-empty'}>
+                        <span class="sr-only">{q.improve ? `. ${W.improve}: ` : '. '}</span>
+                        {q.improve ? firstLine(q.improve) : `${W.improve}?`}
+                      </span>
+                    </span>
+                    <span class="wheel-score">
+                      {v === undefined ? <span class="row-muted">нет оценки</span> : `${v} из ${SCORE_MAX}`}
+                      {delta !== 0 && <span class={delta > 0 ? 'wheel-up' : 'wheel-down'}>{delta > 0 ? ` +${delta}` : ` −${-delta}`}</span>}
+                    </span>
+                  </button>
                 </li>
               );
             })}
@@ -140,6 +148,11 @@ export function Realm({ ui }: { ui: Ui }) {
   );
 }
 
+/** Первая непустая строка заметки: в списке под колесом видно только её. */
+function firstLine(text: string): string {
+  return text.split('\n').find((x) => x.trim())?.trim() ?? '';
+}
+
 function openIn(s: State, questId: string): number {
   return s.tasks.filter((t) => t.questId === questId && t.status === 'open').length;
 }
@@ -201,8 +214,9 @@ const scoreText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1)
  * Внутри сектора по дуге на каждую единицу оценки, край сектора замыкает счёт: у шестёрки ровно 6 полос.
  * Дальше до обода шкала продолжается дугами потише, чтобы было видно, сколько осталось до 10.
  * Прошлая оценка видна бледным контуром. Диктору колесо не нужно: те же баллы стоят списком под ним.
+ * Нажатие на сектор открывает заметку «Как улучшить» этой сферы (то же делают строки списка под колесом).
  */
-function Wheel({ spheres, last, prev }: { spheres: Quest[]; last: Rating | undefined; prev: Rating | undefined }) {
+function Wheel({ spheres, last, prev, onPick }: { spheres: Quest[]; last: Rating | undefined; prev: Rating | undefined; onPick: (id: string) => void }) {
   const c = SIZE / 2;
   const n = spheres.length;
   const step = (2 * Math.PI) / n;
@@ -266,6 +280,9 @@ function Wheel({ spheres, last, prev }: { spheres: Quest[]; last: Rating | undef
             </text>
           );
         })}
+        {spheres.map((q, i) => (
+          <path key={`h-${q.id}`} d={sector(i, R)} class="wheel-hit" onClick={() => onPick(q.id)} />
+        ))}
       </svg>
     </div>
   );

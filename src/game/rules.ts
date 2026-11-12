@@ -41,6 +41,8 @@ export const SCORE_MAX = 10;
 export const RATE_EVERY_DAYS: Record<Exclude<RateEvery, 'never'>, number> = { week: 7, month: 30, quarter: 91 };
 /** Первый раз напоминать оценить сферы, когда игре столько дней. */
 export const RATE_FIRST_AFTER_DAYS = 3;
+/** Заметка «Как улучшить» у сферы не длиннее стольких знаков. */
+export const IMPROVE_MAX = 4000;
 
 export const SEATS = 6;
 export const ROAD_SPOTS = 3;
