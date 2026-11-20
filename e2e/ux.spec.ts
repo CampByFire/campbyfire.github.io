@@ -40,19 +40,21 @@ test('пояснения разделов доступны по вопросит
   expect(await axe(page), 'Справка Лавки').toEqual([]);
 });
 
-test('дальние горизонты доступны из списка и не добавляют вкладок', async ({ page }) => {
+test('все пять горизонтов доступны вкладками и с клавиатуры', async ({ page }) => {
   await openGame(page);
   const tabs = page.getByRole('radiogroup', { name: 'Что собирать' });
-  await expect(tabs.getByRole('radio')).toHaveCount(2);
+  await expect(tabs.getByRole('radio')).toHaveCount(5);
   await tabs.getByRole('radio', { name: 'День', exact: true }).focus();
   await page.keyboard.press('ArrowRight');
   await expect(tabs.getByRole('radio', { name: 'Неделя', exact: true })).toBeFocused();
-  for (const period of ['month', 'quarter', 'year']) {
-    await page.getByRole('combobox', { name: 'Дальше' }).selectOption(period);
+  for (const period of ['Месяц', 'Квартал', 'Год']) {
+    await page.keyboard.press('ArrowRight');
+    await expect(tabs.getByRole('radio', { name: period, exact: true })).toBeFocused();
+    await expect(tabs.getByRole('radio', { name: period, exact: true })).toBeChecked();
     expect(await axe(page), period).toEqual([]);
   }
   await tabs.getByRole('radio', { name: 'День', exact: true }).click();
-  await expect(page.getByRole('combobox', { name: 'Дальше' })).toHaveValue('');
+  await expect(tabs.getByRole('radio', { name: 'День', exact: true })).toBeChecked();
 });
 
 async function plan(page: Page) {

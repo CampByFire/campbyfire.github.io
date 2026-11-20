@@ -53,7 +53,7 @@ export function Plan({ ui }: { ui: Ui }) {
   );
 }
 
-const VIEWS: { value: View; label: string }[] = [{ value: 'day', label: 'День' }, { value: 'week', label: PERIOD_KIND_NAME.week }];
+const VIEWS: { value: View; label: string }[] = [{ value: 'day', label: 'День' }, ...PERIOD_KINDS.map((k) => ({ value: k, label: PERIOD_KIND_NAME[k] }))];
 
 /** Вкладки сбора отряда: день и горизонты. Как у радиокнопок: Tab на выбранную, стрелки на соседнюю. */
 function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => void }) {
@@ -68,7 +68,6 @@ function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => voi
     requestAnimationFrame(() => (group?.children[i] as HTMLElement | undefined)?.focus());
   };
   return (
-    <div class="plan-horizons">
     <div class="seg" role="radiogroup" aria-label="Что собирать">
       {VIEWS.map((v, i) => (
         <button
@@ -76,7 +75,7 @@ function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => voi
           type="button"
           role="radio"
           aria-checked={i === at}
-          tabIndex={i === at || (at < 0 && i === 0) ? 0 : -1}
+          tabIndex={i === at ? 0 : -1}
           class={`seg-btn${i === at ? ' is-on' : ''}`}
           onClick={() => onChange(v.value)}
           onKeyDown={onKey}
@@ -84,11 +83,6 @@ function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => voi
           {v.label}
         </button>
       ))}
-    </div>
-    <select class={`horizon-more${at < 0 ? ' is-on' : ''}`} aria-label="Дальше" value={at < 0 ? value : ''} onChange={(e) => onChange(e.currentTarget.value as PeriodKind)}>
-      <option value="" disabled>Дальше</option>
-      {PERIOD_KINDS.filter((k) => k !== 'week').map((k) => <option value={k}>{PERIOD_KIND_NAME[k]}</option>)}
-    </select>
     </div>
   );
 }
