@@ -73,10 +73,6 @@ export function Shop({ ui }: { ui: Ui }) {
           <GIcon name="coins" size={15} class="ic-gold" />
           {formatDate(s.day)} · {formatClock(ui.now)}
         </span>
-        <button class="link-btn" onClick={() => ui.go('camp')}>
-          В лагерь
-          <LIcon name="chevron" size={16} />
-        </button>
       </div>
       <h1 class="page-title">{W.shop}</h1>
       <div class="page-sub">Золото за дела меняется здесь на радости в жизни. Заведи то, чего тебе хочется, назначь цену и покупай: всё куплено честно.</div>

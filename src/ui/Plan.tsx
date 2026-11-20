@@ -35,10 +35,6 @@ export function Plan({ ui }: { ui: Ui }) {
           <GIcon name="sunrise" size={15} class="ic-sun" />
           {formatDate(s.day)} · {formatClock(ui.now)}
         </span>
-        <button class="link-btn" onClick={() => ui.go('camp')}>
-          В лагерь
-          <LIcon name="chevron" size={16} />
-        </button>
       </div>
       <h1 class="page-title">{W.plan}</h1>
       <div class="page-sub">
@@ -290,13 +286,12 @@ function DayPlan({ ui }: { ui: Ui }) {
 }
 
 /**
- * Сбор отряда по желанию: можно сразу идти к огню с тем, что уже у костра, или одним касанием
- * вернуть вчерашние дела и тоже сразу к огню. Собирать план руками никто не заставляет.
+ * Быстрый сбор одним касанием возвращает вчерашние дела и разжигает костёр.
  */
 function QuickStart({ ui, planned }: { ui: Ui; planned: number }) {
   const { store } = ui;
   const leftovers = leftoversOf(store.state).length;
-  if (planned === 0 && leftovers === 0) return null;
+  if (leftovers === 0) return null;
   const go = (act: () => { xp: number; text: string }) => {
     const before = heroLevel(store.state.hero.xp).level;
     const { xp, text } = act();
@@ -316,12 +311,6 @@ function QuickStart({ ui, planned }: { ui: Ui; planned: number }) {
         Собирать план не обязательно.
       </p>
       <div class="btns">
-        {planned > 0 && (
-          <button class="btn btn-gold" onClick={() => go(() => ({ xp: store.act((st, n) => lightFire(st, n)), text: 'Костёр горит' }))}>
-            <GIcon name="campfire" size={18} />
-            Сразу к огню
-          </button>
-        )}
         {leftovers > 0 && (
           <button
             class={`btn ${planned > 0 ? 'btn-ghost' : 'btn-gold'}`}

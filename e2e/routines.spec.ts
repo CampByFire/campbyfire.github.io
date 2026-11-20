@@ -1,6 +1,6 @@
 // Повторяющиеся задачи: сами встают в план в свои дни.
 import { expect, test } from '@playwright/test';
-import { addTask, at, axe, openGame, setTime, sheet, tab, toast } from './helpers';
+import { expandTaskForm, addTask, at, axe, openGame, setTime, sheet, tab, toast } from './helpers';
 
 test('каждый день: сделанная сегодня завтра приходит снова', async ({ page }) => {
   await openGame(page, { time: at(9) });
@@ -29,6 +29,7 @@ test('свои дни: приходит только в выбранные дн�
   await openGame(page, { time: at(9) });
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
+  await expandTaskForm(form);
   await form.getByLabel('Что сделать').fill('Растяжка');
   await form.getByRole('radiogroup', { name: 'Повторять' }).getByRole('radio', { name: 'Свои дни' }).click();
   await expect(form.getByRole('radio', { name: 'По рабочим дням' })).toHaveCount(0);

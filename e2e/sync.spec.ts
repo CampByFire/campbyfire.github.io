@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { addTask, at, connectGitHub, fakeGitHub, openGame, setTime, sheet, tab, toast } from './helpers';
 
 // Значок сохранения в верхней полосе Лагеря (рядом всегда есть шестерёнка Настроек).
-const badge = (page: Page) => page.locator('.topbar .chip-alert');
+const badge = (page: Page) => page.locator('.topbar button:has(.chip-alert)');
 
 test('токен перестал работать: в лагере значок, токен заменяется, значок уходит', async ({ page }) => {
   const gh = await fakeGitHub(page);

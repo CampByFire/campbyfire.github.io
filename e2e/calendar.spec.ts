@@ -1,6 +1,6 @@
 // Календарь: события и задачи на дату, шкала дня по часам, что стоит на завтра, вход из плана и из лагеря.
 import { expect, test, type Page } from '@playwright/test';
-import { at, axe, expectNoSideScroll, openGame, setTime, sheet, tab, toast } from './helpers';
+import { expandTaskForm, at, axe, expectNoSideScroll, openGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Кнопки и поля меньше 44×44 на экране и в листе. Дела на шкале дня не в счёт: их высота это их длительность. */
 const tooSmall = (page: Page) =>
@@ -49,6 +49,7 @@ test('событие и задача на завтра: шкала дня, пл�
   // Задача без времени встаёт в «Весь день».
   await page.getByRole('button', { name: 'Задача', exact: true }).click();
   const task = sheet(page, 'Новая задача');
+  await expandTaskForm(task);
   await task.getByLabel('Что сделать').fill('Купить торт');
   await task.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio', { name: 'Дом и быт' }).click();
   await task.getByRole('button', { name: 'Взять в отряд' }).click();
@@ -297,6 +298,7 @@ test('дела на шкале дня переносятся перетаски�
   // Задача со временем тоже переезжает.
   await page.getByRole('button', { name: 'Задача', exact: true }).click();
   const task = sheet(page, 'Новая задача');
+  await expandTaskForm(task);
   await task.getByLabel('Что сделать').fill('Купить торт в 17:00');
   await task.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio', { name: 'Дом и быт' }).click();
   await task.getByRole('button', { name: 'Взять в отряд' }).click();

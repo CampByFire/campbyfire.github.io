@@ -42,6 +42,14 @@ export const toast = (page: Page): Locator => page.locator('.toast');
 /** Открытый лист (окно поверх экрана) с этим заголовком. */
 export const sheet = (page: Page, name: string): Locator => page.getByRole('dialog', { name });
 
+/** Развернуть дополнительные поля и полный выбор сфер для сценариев подробной формы. */
+export async function expandTaskForm(form: Locator) {
+  const more = form.getByRole('button', { name: 'Ещё сферы и проекты' });
+  if (await more.isVisible()) await more.click();
+  const details = form.locator('details.form-details').first();
+  if (await details.getAttribute('open') === null) await details.locator('summary').click();
+}
+
 /** Добавить задачу через большой «+» внизу. */
 export async function addTask(
   page: Page,
@@ -51,6 +59,7 @@ export async function addTask(
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
   await form.getByLabel('Что сделать').fill(title);
+  if (quest || size || repeat || weekday) await expandTaskForm(form);
   if (quest) await form.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio', { name: quest }).click();
   if (size) await form.getByRole('radiogroup', { name: 'Сколько займёт' }).getByRole('radio', { name: size, exact: true }).click();
   if (repeat) await form.getByRole('radiogroup', { name: 'Повторять' }).getByRole('radio', { name: repeat }).click();

@@ -21,7 +21,6 @@ export function Realm({ ui }: { ui: Ui }) {
   return (
     <div class="page">
       <h1 class="page-title">{W.realm}</h1>
-      <div class="page-sub">Королевство делится на сферы жизни, как колесо баланса. Время от времени оценивай каждую от 1 до 10, а большие цели собирай в проекты внутри сфер. Нажми на сферу в колесе, чтобы записать, что сделать, чтобы она стала лучше.</div>
 
       <section class="group">
         <div class="group-head">
@@ -33,33 +32,6 @@ export function Realm({ ui }: { ui: Ui }) {
           </p>
         )}
         {spheres.length > 0 && <Wheel spheres={spheres} last={last} prev={prev} onPick={(id) => ui.open({ kind: 'improve', questId: id })} />}
-        {spheres.length > 0 && (
-          <ul class="wheel-legend">
-            {spheres.map((q) => {
-              const v = last?.scores[q.id];
-              const was = prev?.scores[q.id];
-              const delta = v !== undefined && was !== undefined ? v - was : 0;
-              return (
-                <li key={q.id}>
-                  <button class="wheel-pick" data-sphere={q.id} onClick={() => ui.open({ kind: 'improve', questId: q.id })}>
-                    <QuestDot q={q} />
-                    <span class="wheel-pick-text">
-                      <span class="row-title">{q.name}</span>
-                      <span class={q.improve ? 'wheel-improve' : 'wheel-improve wheel-improve-empty'}>
-                        <span class="sr-only">{q.improve ? `. ${W.improve}: ` : '. '}</span>
-                        {q.improve ? firstLine(q.improve) : `${W.improve}?`}
-                      </span>
-                    </span>
-                    <span class="wheel-score">
-                      {v === undefined ? <span class="row-muted">нет оценки</span> : `${v} из ${SCORE_MAX}`}
-                      {delta !== 0 && <span class={delta > 0 ? 'wheel-up' : 'wheel-down'}>{delta > 0 ? ` +${delta}` : ` −${-delta}`}</span>}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
         {last && <p class="note">Оценка {formatDue(last.id, s.day).toLowerCase()}{prev ? `, бледный контур: прошлая, ${formatDue(prev.id, s.day).toLowerCase()}` : ''}.</p>}
         {spheres.length > 0 ? (
           <button class={`btn ${due || !last ? 'btn-gold' : 'btn-ghost'} btn-wide`} onClick={() => ui.open({ kind: 'rate' })}>
@@ -78,14 +50,16 @@ export function Realm({ ui }: { ui: Ui }) {
             новая сфера
           </button>
         </div>
-        {spheres.map((q) => (
-          <div key={q.id} class="sphere">
-            <SphereCard ui={ui} s={s} q={q} score={last?.scores[q.id]} />
-            {projectsOf(s, q.id).map((p) => (
-              <ProjectCard key={p.id} ui={ui} s={s} q={p} />
-            ))}
-          </div>
-        ))}
+        <ul class="wheel-legend">
+          {spheres.map((q) => (
+            <li key={q.id} class="sphere">
+              <SphereCard ui={ui} s={s} q={q} score={last?.scores[q.id]} previous={prev?.scores[q.id]} />
+              {projectsOf(s, q.id).map((p) => (
+                <ProjectCard key={p.id} ui={ui} s={s} q={p} />
+              ))}
+            </li>
+          ))}
+        </ul>
         {loose.length > 0 && (
           <div class="sphere">
             <div class="quest-name">
@@ -157,23 +131,23 @@ function openIn(s: State, questId: string): number {
   return s.tasks.filter((t) => t.questId === questId && t.status === 'open').length;
 }
 
-function SphereCard({ ui, s, q, score }: { ui: Ui; s: State; q: Quest; score: number | undefined }) {
+function SphereCard({ ui, s, q, score, previous }: { ui: Ui; s: State; q: Quest; score: number | undefined; previous: number | undefined }) {
   const open = openIn(s, q.id);
+  const delta = score !== undefined && previous !== undefined ? score - previous : 0;
   return (
-    <button class="quest-card sphere-card" onClick={() => ui.open({ kind: 'quest', questId: q.id })}>
+    <button class="quest-card sphere-card" data-sphere={q.id} onClick={() => ui.open({ kind: 'quest', questId: q.id })}>
       <span class="quest-card-top">
         <QuestDot q={q} />
         <span class="quest-card-name">{q.name}</span>
-        {score !== undefined && (
-          <span class="sphere-score">
-            <span aria-hidden="true">{score}</span>
-            <span class="sr-only">, оценка {score} из {SCORE_MAX}</span>
-          </span>
-        )}
+        <span class="wheel-score">
+          {score === undefined ? 'нет оценки' : `${score} из ${SCORE_MAX}`}
+          {delta !== 0 && <span class={delta > 0 ? 'wheel-up' : 'wheel-down'}>{delta > 0 ? ` +${delta}` : ` −${-delta}`}</span>}
+        </span>
       </span>
       <span class="quest-card-sub">
         {SPHERE_KIND_NAME[q.kind]} · {open} в отряде
       </span>
+      {q.improve && <span class="wheel-improve">{firstLine(q.improve)}</span>}
     </button>
   );
 }
@@ -214,7 +188,7 @@ const scoreText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1)
  * Внутри сектора по дуге на каждую единицу оценки, край сектора замыкает счёт: у шестёрки ровно 6 полос.
  * Дальше до обода шкала продолжается дугами потише, чтобы было видно, сколько осталось до 10.
  * Прошлая оценка видна бледным контуром. Диктору колесо не нужно: те же баллы стоят списком под ним.
- * Нажатие на сектор открывает заметку «Как улучшить» этой сферы (то же делают строки списка под колесом).
+ * Нажатие на сектор открывает заметку «Как улучшить», строка в списке открывает саму сферу.
  */
 function Wheel({ spheres, last, prev, onPick }: { spheres: Quest[]; last: Rating | undefined; prev: Rating | undefined; onPick: (id: string) => void }) {
   const c = SIZE / 2;

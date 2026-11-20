@@ -329,8 +329,10 @@ export function Camp({ ui }: { ui: Ui }) {
           )}
           {/* Быстрая мысль, чтобы записать, не уходя из лагеря, и рядом ближайшее событие. */}
           <div class="camp-book">
-            <button class="chip camp-book-btn" aria-label="Записать мысль" title="Записать мысль" onClick={() => ui.open({ kind: 'thought' })}>
-              <LIcon name="bulb" size={18} />
+            <button class="camp-hit" aria-label="Записать мысль" title="Записать мысль" onClick={() => ui.open({ kind: 'thought' })}>
+              <span class="chip camp-book-btn">
+                <LIcon name="bulb" size={18} />
+              </span>
             </button>
             <CalendarChip ui={ui} />
           </div>
@@ -456,7 +458,7 @@ const SHADE_GAP = 10;
 /** Палец сдвинулся на столько, и понятно, тянут шторку или нажимают. */
 const DRAG_SLOP = 8;
 /** Нижний край верхней полосы с датой, золотом и маной. */
-const TOPBAR_H = 42;
+const TOPBAR_H = 54;
 /** Номер над макушкой вместе с хвостиком, в пикселях экрана: от масштаба сцены не зависит. */
 const BADGE_H = 40;
 
@@ -519,18 +521,20 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
         <span class="sr-only">{`${formatDate(s.day)}, ${formatClock(now)}, ${SHIFT_NAME[v.asleep ? 'night' : v.shift]}`}</span>
       </div>
       <SyncBadge ui={ui} />
-      <button class="chip chip-gold" data-magic="gold" title={W.shop} onClick={() => ui.go('shop')}>
-        <GIcon name="coins" size={17} />
-        <span aria-hidden="true" data-magic="gold-n" data-v={s.hero.gold}>
-          {s.hero.gold.toLocaleString('ru-RU')}
-        </span>
-        <span class="chip-level" aria-hidden="true" data-magic="level">
-          ур.{' '}
-          <span data-magic="level-n" data-v={lvl.level}>
-            {lvl.level}
+      <button class="camp-hit" data-magic="gold" title={W.shop} onClick={() => ui.go('shop')}>
+        <span class="chip chip-gold">
+          <GIcon name="coins" size={17} />
+          <span aria-hidden="true" data-magic="gold-n" data-v={s.hero.gold}>
+            {s.hero.gold.toLocaleString('ru-RU')}
           </span>
+          <span class="chip-level" aria-hidden="true" data-magic="level">
+            ур.{' '}
+            <span data-magic="level-n" data-v={lvl.level}>
+              {lvl.level}
+            </span>
+          </span>
+          <span class="sr-only">{`${W.shop}. ${W.gold}: ${s.hero.gold}, уровень героя ${lvl.level}`}</span>
         </span>
-        <span class="sr-only">{`${W.shop}. ${W.gold}: ${s.hero.gold}, уровень героя ${lvl.level}`}</span>
       </button>
       <div class={`chip chip-mana${v.onBreak ? ' is-regen' : ''}`} data-magic="mana">
         <span class="mana-gem" aria-hidden="true" />
@@ -542,8 +546,8 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
         </span>
         <span class="sr-only">{`${W.mana}: ${mana} из ${MANA_MAX}`}</span>
       </div>
-      <button class="chip chip-gear" aria-label={W.settings} title={W.settings} onClick={() => ui.go('settings')}>
-        <LIcon name="gear" size={18} />
+      <button class="camp-hit" aria-label={W.settings} title={W.settings} onClick={() => ui.go('settings')}>
+        <span class="chip chip-gear"><LIcon name="gear" size={18} /></span>
       </button>
     </div>
   );
@@ -559,9 +563,11 @@ function CalendarChip({ ui }: { ui: Ui }) {
   const next = meetingsOn(s, s.day).find((m) => m.at && m.at >= nowAt);
   const label = next ? `Календарь: сегодня в ${next.at!.replace(/^0/, '')} ${next.title}` : `Календарь. ${tomorrowNews(s)}`;
   return (
-    <button class="chip camp-book-btn" aria-label={label} title={label} onClick={() => openCalendar(ui, next ? s.day : addDays(s.day, 1))}>
-      <LIcon name="calendar" size={18} />
-      {next && <span aria-hidden="true">{next.at!.replace(/^0/, '')}</span>}
+    <button class="camp-hit" aria-label={label} title={label} onClick={() => openCalendar(ui, next ? s.day : addDays(s.day, 1))}>
+      <span class="chip camp-book-btn">
+        <LIcon name="calendar" size={18} />
+        {next && <span aria-hidden="true">{next.at!.replace(/^0/, '')}</span>}
+      </span>
     </button>
   );
 }
@@ -573,12 +579,12 @@ function SyncBadge({ ui }: { ui: Ui }) {
   const label = trouble === 'stale' ? 'Нет связи с GitHub: последние действия ещё не сохранены там' : 'Игра не сохраняется в GitHub';
   return (
     <button
-      class={`chip chip-alert${trouble === 'error' ? '' : ' is-mild'}`}
+      class="camp-hit"
       aria-label={label}
       title={label}
       onClick={() => ui.open(ui.sync.status.phase === 'conflict' ? { kind: 'syncConflict' } : { kind: 'sync' })}
     >
-      <LIcon name="cloudAlert" size={19} />
+      <span class={`chip chip-alert${trouble === 'error' ? '' : ' is-mild'}`}><LIcon name="cloudAlert" size={19} /></span>
     </button>
   );
 }

@@ -414,11 +414,19 @@ h2.sc {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
 }
 
-.fig-mark .num::before {
-  content: '';
-  position: absolute;
-  /* --hit задаёт сцена, когда соседний номер стоит близко. */
-  inset: calc(-1 * var(--hit, 8px));
+.figure-hit {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin: -8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
 }
 
 .fig-mark .num::after {
@@ -614,6 +622,22 @@ h2.sc {
   white-space: nowrap;
 }
 
+/* Вид плашки прежний, а сама кнопка имеет область нажатия не меньше 44×44. */
+.camp-hit {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
 .topbar {
   position: absolute;
   left: 10px;
@@ -665,11 +689,6 @@ h2.sc {
   background: rgba(42, 13, 8, 0.82);
 }
 
-.chip-alert::before {
-  content: '';
-  position: absolute;
-  inset: -7px;
-}
 
 /* Шестерёнка Настроек в правом углу верхней полосы. Как и значок сохранения, нажимается шире, чем видно. */
 .chip-gear {
@@ -681,11 +700,6 @@ h2.sc {
   color: var(--text-hi);
 }
 
-.chip-gear::before {
-  content: '';
-  position: absolute;
-  inset: -7px;
-}
 
 .chip-alert.is-mild {
   color: var(--muted);
@@ -1972,6 +1986,28 @@ h3.field-label {
   gap: 7px;
 }
 
+.form-details {
+  margin: 12px 0;
+  border-top: 1px solid var(--line);
+}
+
+.form-details > summary {
+  font-family: var(--font-display);
+  min-height: 44px;
+  padding: 10px 0;
+  color: var(--text-hi);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.form-details[open] > summary {
+  margin-bottom: 8px;
+}
+
+.quest-more {
+  margin-top: -8px;
+}
+
 .chipbtn {
   min-height: 44px;
   min-width: 44px;
@@ -2798,11 +2834,7 @@ h3.field-label {
 }
 
 .wheel-legend li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 36px;
-  border-top: 1px solid var(--line);
+  min-width: 0;
 }
 
 .wheel-score {
@@ -2810,41 +2842,13 @@ h3.field-label {
   color: var(--text-hi);
 }
 
-/* Строка сферы под колесом: кнопка, открывает заметку «Как улучшить». */
-.wheel-pick {
-  flex: 1;
-  min-width: 0;
-  min-height: 48px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.wheel-pick-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-
+/* Первая строка заметки в едином списке сфер. */
 .wheel-improve {
   font-size: 14px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.wheel-improve-empty {
-  color: var(--muted);
-  font-style: italic;
 }
 
 /* Невидимые секторы поверх колеса: нажатие на сферу открывает её заметку. */
@@ -2910,19 +2914,6 @@ h3.field-label {
 
 .project-card .quest-card-name {
   font-size: 17px;
-}
-
-.sphere-score {
-  min-width: 32px;
-  height: 32px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  border: 2px solid var(--gold);
-  color: var(--gold-hi);
-  font-family: var(--font-display);
-  font-weight: 700;
 }
 
 button.trophy {
@@ -3439,17 +3430,6 @@ button.trophy {
 /* ---------- лавка ---------- */
 
 /* Золото в верхней полосе Лагеря ведёт в лавку. Нажимается шире, чем видно. */
-button.chip-gold {
-  position: relative;
-  font-family: inherit;
-  cursor: pointer;
-}
-
-button.chip-gold::before {
-  content: '';
-  position: absolute;
-  inset: -7px -3px;
-}
 
 /* Кошель остаётся наверху, пока листаешь полку: видно, сколько золота и как оно уходит при покупке. */
 .purse {

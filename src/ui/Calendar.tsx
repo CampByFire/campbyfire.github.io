@@ -77,10 +77,6 @@ function MonthView({ ui }: { ui: Ui }) {
           <LIcon name="calendar" size={15} class="ic-gold" />
           {formatDate(s.day)} · {formatClock(ui.now)}
         </span>
-        <button class="link-btn" onClick={() => ui.go('camp')}>
-          В лагерь
-          <LIcon name="chevron" size={16} />
-        </button>
       </div>
       <h1 class="page-title">{W.calendar}</h1>
       <p class="page-sub">{tomorrowNews(s)}.</p>
@@ -310,10 +306,6 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
         <button class="link-btn" onClick={() => ui.openDay(null)}>
           <LIcon name="back" size={16} />
           {monthName(monthOf(day), s.day)}
-        </button>
-        <button class="link-btn" onClick={() => ui.go('camp')}>
-          В лагерь
-          <LIcon name="chevron" size={16} />
         </button>
       </div>
       <div class="period-nav tl-nav">

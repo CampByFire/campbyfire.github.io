@@ -1,7 +1,7 @@
 // Магия: заклинания не держат игру, сила магии выбирается в Настройках и помнится на этом устройстве.
 // Идёт на телефоне со всей магией и на телефоне с «Уменьшить движение» в системе, где магия спокойная.
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { addTask, at, openGame, openSettings, setTime, sheet, tab, toast } from './helpers';
+import { expandTaskForm, addTask, at, openGame, openSettings, setTime, sheet, tab, toast } from './helpers';
 
 /** Ошибки страницы и предупреждения магии. Их не должно быть ни одного. */
 function watchErrors(page: Page): string[] {
@@ -162,6 +162,7 @@ test('день от разжигания до отбоя: заклинания �
   // Вестник: письмо без сферы и дня прилетает к значку писем.
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
+  await expandTaskForm(form);
   await form.getByLabel('Что сделать').fill('Письмо от бабушки');
   await form.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio', { name: 'Без сферы' }).click();
   await form.getByRole('radiogroup', { name: 'Когда к костру' }).getByRole('radio', { name: 'Потом' }).click();

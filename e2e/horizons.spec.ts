@@ -1,6 +1,6 @@
 // Горизонты (неделя, месяц, квартал, год) и задача одной фразой.
 import { expect, test, type Page } from '@playwright/test';
-import { at, axe, openGame, setTime, sheet, tab, toast } from './helpers';
+import { expandTaskForm, at, axe, openGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Вкладка сбора отряда: День, Неделя, Месяц, Квартал, Год. */
 const view = (page: Page, name: string) => page.getByRole('radiogroup', { name: 'Что собирать' }).getByRole('radio', { name, exact: true });
@@ -8,6 +8,7 @@ const view = (page: Page, name: string) => page.getByRole('radiogroup', { name: 
 async function phrase(page: Page, text: string) {
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
+  await expandTaskForm(form);
   await form.getByLabel('Что сделать').fill(text);
   return form;
 }
@@ -58,6 +59,7 @@ test('год и вложенные задачи, листание периодо
   await openGame(page, { time: new Date('2026-11-02T09:00:00+03:00') });
   await tab(page, 'Добавить задачу').click();
   let form = sheet(page, 'Новая задача');
+  await expandTaskForm(form);
   await form.getByLabel('Что сделать').fill('Выучить испанский');
   await form.getByRole('radiogroup', { name: 'Горизонт' }).getByRole('radio', { name: 'Год' }).click();
   await expect(form.getByRole('radiogroup', { name: 'Какой' }).getByRole('radio', { name: '2026 год' })).toHaveAttribute('aria-checked', 'true');

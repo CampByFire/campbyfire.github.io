@@ -1,6 +1,6 @@
 // Привычки со счётом недели и главное на неделе.
 import { expect, test, type Page } from '@playwright/test';
-import { axe, openGame, setTime, sheet, tab, toast } from './helpers';
+import { expandTaskForm, axe, openGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Вкладка сбора отряда: День, Неделя, Месяц, Квартал, Год. */
 const view = (page: Page, name: string) => page.getByRole('radiogroup', { name: 'Что собирать' }).getByRole('radio', { name, exact: true });
@@ -11,6 +11,7 @@ test('привычка: счёт недели, бонус за цель и бе�
   await openGame(page, { time: nov(2) });
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
+  await expandTaskForm(form);
   await form.getByLabel('Что сделать').fill('Зарядка');
   await form.getByRole('radiogroup', { name: 'Повторять' }).getByRole('radio', { name: 'Каждый день' }).click();
   const goal = form.getByRole('radiogroup', { name: 'Привычка: цель на неделю' });
@@ -71,6 +72,7 @@ test('главное на неделе: звезда, условие побед�
   ]) {
     await block.locator('.main-empty').click();
     const form = sheet(page, 'Новая задача');
+    await expandTaskForm(form);
     await expect(form.getByRole('radiogroup', { name: 'Главное на этой неделе' }).getByRole('radio', { name: 'Да, со звездой' })).toHaveAttribute('aria-checked', 'true');
     await form.getByLabel('Что сделать').fill(title);
     if (win) await form.getByLabel('Победа, это когда…').fill(win);
@@ -86,6 +88,7 @@ test('главное на неделе: звезда, условие побед�
   // Четвёртую звезду поставить нельзя: кнопка объясняет почему.
   await page.getByRole('button', { name: 'Новая задача: эта неделя' }).click();
   const fourth = sheet(page, 'Новая задача');
+  await expandTaskForm(fourth);
   await fourth.getByLabel('Что сделать').fill('Разобрать шкаф');
   await fourth.getByRole('button', { name: 'Взять в отряд' }).click();
   await page.locator('.prow', { hasText: 'Разобрать шкаф' }).getByRole('button', { name: /^Разобрать шкаф/ }).click();

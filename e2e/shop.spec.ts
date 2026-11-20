@@ -134,7 +134,7 @@ test('своя награда становится целью, и лагерь �
   expect(await axe(page), 'Лавка с целью').toEqual([]);
 
   // Первое «Готово»: до цели ещё 50.
-  await page.getByRole('button', { name: 'В лагерь' }).click();
+  await page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name: 'Лагерь', exact: true }).click();
   const day = page.getByRole('region', { name: 'Задачи дня' });
   await day.getByRole('button', { name: 'Позвать к огню' }).click();
   await day.getByRole('button', { name: 'Готово' }).click();
@@ -188,7 +188,7 @@ test('награду можно поправить, подвинуть и убр
   expect(await names()).toEqual(['Кафе с пирожным', 'Серия сериала']);
 
   // В лавку можно попасть и из Настроек, а «Назад» ведёт в Лагерь.
-  await page.getByRole('button', { name: 'В лагерь' }).click();
+  await page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name: 'Лагерь', exact: true }).click();
   await page.locator('.topbar').getByRole('button', { name: 'Настройки', exact: true }).click();
   await page.getByRole('button', { name: 'В лавку' }).click();
   await expect(shopTitle(page)).toBeVisible();

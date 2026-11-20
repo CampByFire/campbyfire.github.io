@@ -1,12 +1,13 @@
 // Строка «когда начну» и напоминания через файл календаря.
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { at, axe, openGame, openSettings, sheet, tab, toast } from './helpers';
+import { expandTaskForm, at, axe, openGame, openSettings, sheet, tab, toast } from './helpers';
 
 test('«когда начну» видно у огня, а файл календаря несёт её в напоминание', async ({ page }) => {
   await openGame(page, { time: at(9) });
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
+  await expandTaskForm(form);
   await form.getByLabel('Что сделать').fill('Позвонить маме');
   await form.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio', { name: 'Работа' }).click();
   await form.getByLabel('Во сколько').fill('19:00');

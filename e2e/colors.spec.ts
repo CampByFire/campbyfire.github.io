@@ -90,8 +90,8 @@ test('номера над спутниками у костра в цвете и�
   const scene = page.locator('.scene');
   const cert = scene.getByRole('button', { name: /^1\. .*Модуль React/ });
   const work = scene.getByRole('button', { name: /^2\. .*Сдать отчёт/ });
-  expect(await fill(cert)).toBe(rgb('#2bb3a3'));
-  expect(await fill(work)).toBe(rgb('#4f7be0'));
+  expect(await fill(cert.locator('.num'))).toBe(rgb('#2bb3a3'));
+  expect(await fill(work.locator('.num'))).toBe(rgb('#4f7be0'));
   // В списке дня номер того же цвета, что над головой.
   const day = page.getByRole('region', { name: 'Задачи дня' });
   expect(await fill(day.locator('.num').first())).toBe(rgb('#2bb3a3'));
@@ -101,6 +101,6 @@ test('номера над спутниками у костра в цвете и�
   await day.getByRole('button', { name: 'Позвать к огню' }).click();
   await expect(day.getByRole('heading', { name: 'Сейчас у огня' })).toBeVisible();
   const ring = scene.getByRole('button', { name: /^1\. .*у огня: Модуль React/ });
-  expect(await fill(ring)).toBe(rgb('#2bb3a3'));
-  await expect(ring).toHaveClass(/num-current/);
+  expect(await fill(ring.locator('.num'))).toBe(rgb('#2bb3a3'));
+  await expect(ring.locator('.num')).toHaveClass(/num-current/);
 });

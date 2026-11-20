@@ -55,10 +55,6 @@ export function Settings({ ui }: { ui: Ui }) {
           <LIcon name="gear" size={15} class="ic-gold" />
           {formatDate(s.day)} · {formatClock(ui.now)}
         </span>
-        <button class="link-btn" onClick={() => ui.go('camp')}>
-          В лагерь
-          <LIcon name="chevron" size={16} />
-        </button>
       </div>
       <h1 class="page-title">{W.settings}</h1>
 

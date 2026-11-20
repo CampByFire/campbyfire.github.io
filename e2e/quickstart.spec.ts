@@ -1,4 +1,4 @@
-// Утренний сбор по желанию: «Сразу к огню» и «Быстрый сбор» вчерашних дел.
+// Утренний сбор по желанию: «Разжечь костёр» и «Быстрый сбор» вчерашних дел.
 import { expect, test } from '@playwright/test';
 import { addTask as addGameTask, endDay, newState } from '../src/game/state';
 import { at, axe, openGame, seedGame, toast } from './helpers';
@@ -33,10 +33,12 @@ test('быстрый сбор возвращает вчерашние дела �
   await expect(day).toContainText('Ответить на почту');
 });
 
-test('«Сразу к огню» разжигает костёр без сбора, а после этого карточки нет', async ({ page }) => {
+test('«Разжечь костёр» остаётся единственной кнопкой запуска дня', async ({ page }) => {
   await seedGame(page, yesterday());
   await openGame(page, { time: at(9) });
-  await startDay(page).getByRole('button', { name: 'Сразу к огню' }).click();
+  await expect(page.getByRole('button', { name: 'Сразу к огню' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'В лагерь', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   await expect(camp(page)).toBeAttached();
   await expect(toast(page)).toHaveText('Костёр горит: +3 опыта за план');
   await page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name: 'План', exact: true }).click();

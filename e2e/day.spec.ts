@@ -1,7 +1,33 @@
 // Обычный день целиком: знакомство, сбор отряда, работа у огня, привал, «Готово» и отбой.
 // Идёт на маленьком телефоне, обычном телефоне и компьютере.
 import { expect, test } from '@playwright/test';
-import { addTask, at, expectNoSideScroll, openGame, setTime, sheet, tab, toast } from './helpers';
+import { addTask as addGameTask, newState } from '../src/game/state';
+import { addTask, at, expectNoSideScroll, openGame, seedGame, setTime, sheet, tab, toast } from './helpers';
+
+test('номера и кнопки лагеря нажимаются по всей области 44 на 44', async ({ page }, testInfo) => {
+  const s = newState(at(9).getTime());
+  for (let i = 0; i < 6; i++) addGameTask(s, at(9).getTime(), { title: `Дело ${i + 1}`, questId: s.quests[0].id, level: 1, day: s.day });
+  for (let i = 0; i < 3; i++) addGameTask(s, at(9).getTime(), { title: `Просроченное дело ${i + 1}`, questId: s.quests[0].id, level: 1, day: null, due: '2026-10-22' });
+  await seedGame(page, s);
+  await openGame(page);
+  await page.getByRole('button', { name: /Разжечь костёр/ }).click();
+  const targets = page.locator('.figure-hit, .camp-hit');
+  await expect(page.locator('.figure-hit')).toHaveCount(9);
+  await page.screenshot({ path: testInfo.outputPath('lager.png') });
+  const bad = await targets.evaluateAll((buttons) => buttons.flatMap((button) => {
+    const r = button.getBoundingClientRect();
+    const name = button.getAttribute('aria-label') ?? button.textContent;
+    if (r.width < 44 || r.height < 44) return [`${name}: ${r.width}×${r.height}`];
+    const points = [[r.left + 1, r.top + 1], [r.right - 1, r.bottom - 1], [r.left + r.width / 2, r.top + r.height / 2]];
+    return points.filter(([x, y]) => !button.contains(document.elementFromPoint(x, y))).map(() => `${name}: область перекрыта`);
+  }));
+  expect(bad).toEqual([]);
+  await expectNoSideScroll(page);
+  const number = page.locator('.figure-hit').first();
+  const bounds = (await number.boundingBox())!;
+  await page.mouse.click(bounds.x + 2, bounds.y + 2);
+  await expect(page.getByRole('dialog')).toContainText(/дело/i);
+});
 
 test('день от знакомства до отбоя', async ({ page }) => {
   await openGame(page, { time: at(9), intro: true });

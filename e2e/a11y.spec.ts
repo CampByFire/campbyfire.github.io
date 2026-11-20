@@ -1,7 +1,7 @@
 // Доступность: проверка axe на главных экранах и листах, работа с клавиатуры.
 // Как звучит игра в VoiceOver и TalkBack, проверяется руками: docs/screen-reader-check.md.
 import { expect, test, type Page } from '@playwright/test';
-import { addTask, axe, newFolder, newSection, openGame, openSettings, sheet, tab, write } from './helpers';
+import { expandTaskForm, addTask, axe, newFolder, newSection, openGame, openSettings, sheet, tab, write } from './helpers';
 
 test('axe не находит нарушений на экранах и в листах', async ({ page }) => {
   await openGame(page);
@@ -26,9 +26,30 @@ test('axe не находит нарушений на экранах и в ли�
   expect(await axe(page), 'Настройки').toEqual([]);
   await tab(page, 'Добавить задачу').click();
   expect(await axe(page), 'Новая задача').toEqual([]);
+  await expandTaskForm(sheet(page, 'Новая задача'));
+  expect(await axe(page), 'Новая задача с подробностями').toEqual([]);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Правила' }).click();
   expect(await axe(page), 'Правила').toEqual([]);
+});
+
+test('выбор уровня раскрывается с клавиатуры и меняет награду за готовое дело', async ({ page }) => {
+  await openGame(page);
+  await addTask(page, 'Проверить отчёт', { size: '1 ч' });
+  await page.getByRole('button', { name: /Разжечь костёр/ }).click();
+  await page.locator('.figure-hit').first().click();
+  const card = page.getByRole('dialog');
+  await expect(card.getByRole('radiogroup', { name: 'Уровень при сдаче' })).toHaveCount(0);
+  const toggle = card.locator('.level-details > summary');
+  await expect(toggle).toHaveText('Уровень II');
+  await toggle.focus();
+  await page.keyboard.press('Enter');
+  const levels = card.getByRole('radiogroup', { name: 'Уровень при сдаче' });
+  await levels.getByRole('radio', { name: /уровень 3/ }).click();
+  expect(await axe(page), 'Раскрытый выбор уровня').toEqual([]);
+  await toggle.click();
+  await card.getByRole('button', { name: 'Готово', exact: true }).click();
+  await expect(page.getByRole('region', { name: 'Задачи дня' })).toContainText('+75 золота');
 });
 
 test('axe не находит нарушений в Лавке и листе награды', async ({ page }) => {
@@ -229,6 +250,7 @@ test('с клавиатуры: лист ловит фокус, Escape возвр
   await page.keyboard.press('Tab');
   await expect(form.getByRole('button', { name: 'Закрыть' })).toBeFocused();
   // Стрелки выбирают соседний вариант, как у радиокнопок.
+  await expandTaskForm(form);
   const size = form.getByRole('radiogroup', { name: 'Сколько займёт' });
   await size.getByRole('radio', { checked: true }).focus();
   await page.keyboard.press('ArrowRight');

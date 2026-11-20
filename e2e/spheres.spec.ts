@@ -13,12 +13,13 @@ const tooSmall = (page: Page) =>
       .map(({ el, box }) => `${el.getAttribute('aria-label') ?? el.textContent ?? el.className}: ${Math.round(box.width)}×${Math.round(box.height)}`),
   );
 
-test('оценка сфер рисует колесо, а вторая оценка показывает, что изменилось', async ({ page }) => {
+test('оценка сфер рисует колесо, а вторая оценка показывает, что изменилось', async ({ page }, testInfo) => {
   await openGame(page);
   await tab(page, 'Королевство').click();
   await expect(page.getByRole('heading', { name: 'Колесо баланса' })).toBeVisible();
   await expect(page.locator('.wheel-legend li')).toHaveCount(8);
   await expect(page.locator('.wheel-legend')).toContainText('нет оценки');
+  await page.screenshot({ path: testInfo.outputPath('korolevstvo.png') });
   // Без оценки вся шкала пустая: 9 тихих дуг, десятая единица это обод.
   await expect(page.locator('.wheel-ticks-empty').first().locator('path')).toHaveCount(9);
 
@@ -63,9 +64,11 @@ test('оценка сфер рисует колесо, а вторая оцен�
 test('нажатие на сферу в колесе открывает заметку «Как улучшить», она сохраняется и видна под колесом', async ({ page }) => {
   await openGame(page);
   await tab(page, 'Королевство').click();
-  const row = page.locator('.wheel-pick').filter({ hasText: 'Здоровье' });
-  await expect(row).toContainText('Как улучшить?');
+  const row = page.locator('.sphere-card').filter({ hasText: 'Здоровье' });
+  await expect(page.locator('.sphere-card')).toHaveCount(8);
+  await expect(page.getByText('Как улучшить?', { exact: true })).toHaveCount(0);
   await row.click();
+  await sheet(page, 'Здоровье').locator('.improve-row').click();
   const note = sheet(page, 'Здоровье');
   const field = note.getByLabel('Что сделать, чтобы эта сфера стала лучше');
   await expect(field).toBeFocused();
@@ -84,7 +87,7 @@ test('нажатие на сферу в колесе открывает заме
   // Сектор колеса тоже открывает заметку. Закрыть лист без кнопки значит сохранить.
   const sectors = page.locator('.wheel-hit');
   await expect(sectors).toHaveCount(8);
-  const work = page.locator('.wheel-pick').first();
+  const work = page.locator('.sphere-card').first();
   await expect(work).toContainText('Работа');
   await sectors.first().click();
   const workNote = sheet(page, 'Работа');

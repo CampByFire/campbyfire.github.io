@@ -28,13 +28,7 @@
   margin-left: auto;
 }
 
-/* На картинке кнопка 34 пикселя, а нажимается все 44: невидимый край сверху и снизу. */
-.camp-book-btn::after {
-  content: '';
-  position: absolute;
-  inset: -5px 0;
-}
-
+/* На картинке плашка 34 пикселя, кнопка .camp-hit вокруг неё не меньше 44×44. */
 .camp-book-btn {
   position: relative;
   height: 34px;

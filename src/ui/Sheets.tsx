@@ -266,6 +266,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const routine = findRoutine(s, routineId ?? editing?.routineId);
   const from = editing ?? routine;
   const quests = pickableQuests(s, from?.questId);
+  const [allQuests, setAllQuests] = useState(false);
   const [title, setTitle] = useState(from?.title ?? '');
   const [questId, setQuestId] = useState<string | null>(from ? from.questId : preset?.questId ?? null);
   const [estimate, setEstimate] = useState<number | null>(from ? estimateOf(from) : 30);
@@ -294,6 +295,15 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   // Фразу разбирает только новая задача: в правке название уже какое есть.
   const parsed = useMemo(() => (from ? null : parsePhrase(title, s.day, quests)), [title]);
   const v = effective(parsed, touched, { questId, estimate, lvl, day, due, at, period }, preset?.day !== undefined);
+  // Последние использованные сферы и проекты; выбранный вариант всегда остаётся виден.
+  const recentIds = [...new Set([...s.tasks].sort((a, b) => b.createdAt - a.createdAt).map((t) => t.questId))];
+  const recent = [...quests].sort((a, b) => {
+    const rank = (id: string) => { const i = recentIds.indexOf(id); return i < 0 ? Infinity : i; };
+    return rank(a.id) - rank(b.id);
+  }).slice(0, 4);
+  const selected = quests.find((q) => q.id === v.questId);
+  if (selected && !recent.includes(selected)) recent.splice(3, 1, selected);
+  const shownQuests = allQuests ? quests : recent;
 
   const tomorrow = addDays(s.day, 1);
   const repeat: Repeat | null = repeatKind === 'none' ? null : repeatKind === 'day' ? { every: 'day' } : repeatKind === 'week' ? { every: 'week', weekday } : repeatOnDays(days);
@@ -407,124 +417,133 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       <Chips
         label={W.quest}
         value={v.questId}
-        options={[...quests.map((q) => ({ value: q.id as string | null, label: q.name, sr: q.sphere ? `сфера ${q.name}` : `проект ${q.name}` })), { value: null, label: W.noSphere }]}
+        options={[...shownQuests.map((q) => ({ value: q.id as string | null, label: q.name, sr: q.sphere ? `сфера ${q.name}` : `проект ${q.name}` })), { value: null, label: W.noSphere }]}
         onChange={(x) => { touch('questId'); setQuestId(x); }}
       />
-      <Chips
-        label={`Сколько займёт: ${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]].toLowerCase()}, ${LEVEL_ROMAN[v.lvl]} уровень`}
-        sr={`Сколько займёт: ${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]].toLowerCase()}, уровень ${v.lvl}`}
-        value={v.estimate}
-        options={estimates.map((o) => ({ ...o, mark: LEVEL_ROMAN[levelOfEstimate(o.value)] }))}
-        onChange={(x) => { touch('estimate'); setEstimate(x); setLvl(levelOfEstimate(x)); }}
-      />
-      <Chips label="Повторять" value={repeatKind} options={routine && !editing ? REPEATS.slice(1) : REPEATS} onChange={setRepeatKind} />
-      {repeatKind === 'week' && <Chips label="В какой день недели" value={weekday} options={WEEKDAY_CHIPS} onChange={setWeekday} />}
-      {repeatKind === 'days' && <WeekdayPicker label="В какие дни" days={days} onChange={setDays} />}
-      {noDays && <p class="note note-error">Выбери хотя бы один день.</p>}
-      {repeat && !noDays && (
+      {quests.length > 4 && (
+        <button class="link-btn quest-more" aria-expanded={allQuests} onClick={() => setAllQuests(!allQuests)}>
+          {allQuests ? 'Только последние' : 'Ещё сферы и проекты'}
+          <LIcon name={allQuests ? 'up' : 'down'} size={16} />
+        </button>
+      )}
+      <details class="form-details" open={!!from || !!preset?.main}>
+        <summary>Подробнее</summary>
         <Chips
-          label="Привычка: цель на неделю"
-          value={goal}
-          options={[
-            { value: null as number | null, label: 'Нет' },
-            ...Array.from({ length: most }, (_, i) => most - i).map((n) => ({ value: n as number | null, label: `${n} из ${most}`, sr: `${n} ${plural(n, 'день', 'дня', 'дней')} из ${most}` })),
-          ]}
-          onChange={setHabitGoal}
+          label={`Сколько займёт: ${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]].toLowerCase()}, ${LEVEL_ROMAN[v.lvl]} уровень`}
+          sr={`Сколько займёт: ${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]].toLowerCase()}, уровень ${v.lvl}`}
+          value={v.estimate}
+          options={estimates.map((o) => ({ ...o, mark: LEVEL_ROMAN[levelOfEstimate(o.value)] }))}
+          onChange={(x) => { touch('estimate'); setEstimate(x); setLvl(levelOfEstimate(x)); }}
         />
-      )}
-      {repeat && goal !== null && (
-        <p class="note">
-          Счёт идёт с понедельника. Когда он дойдёт до цели, придёт бонус. Пропуск ничего не отнимает, а несделанная вчерашняя не копится: каждый день приходит новая.
-        </p>
-      )}
-      {!repeat && (
-        <Chips
-          label="Горизонт"
-          value={kind}
-          options={[{ value: null as PeriodKind | null, label: 'Нет' }, ...PERIOD_KINDS.map((k) => ({ value: k as PeriodKind | null, label: PERIOD_KIND_NAME[k] }))]}
-          onChange={pickKind}
-        />
-      )}
-      {!repeat && kind && v.period && (
-        <Chips
-          label="Какой"
-          value={v.period}
-          options={periodChoices(kind, v.period, s.day).map((k) => ({ value: k, label: periodName(k, s.day) }))}
-          onChange={(x) => { touch('period'); setPeriodKey(x); }}
-        />
-      )}
-      {!repeat && (
-        <Chips
-          label="Когда к костру"
-          value={v.day}
-          options={[
-            { value: s.day, label: 'Сегодня' },
-            { value: tomorrow, label: 'Завтра' },
-            { value: null, label: 'Потом' },
-            ...(v.day && v.day !== s.day && v.day !== tomorrow ? [{ value: v.day, label: formatDue(v.day, s.day) }] : []),
-          ]}
-          onChange={(x) => { touch('day'); setDay(x); }}
-        />
-      )}
-      {!repeat && formWeek && (
-        <Chips
-          label={formWeek === weekOf(s.day) ? 'Главное на этой неделе' : `Главное: ${periodName(formWeek, s.day).toLowerCase()}`}
-          value={mainOn ? 'yes' : 'no'}
-          options={[
-            { value: 'no', label: 'Нет' },
-            { value: 'yes', label: 'Да, со звездой' },
-          ]}
-          onChange={(x) => setMainOn(x === 'yes')}
-        />
-      )}
-      {!repeat && formWeek && mainOn && !roomFor(formWeek) && <p class="note note-error">{MAIN_FULL}.</p>}
-      {!repeat && formWeek && mainOn && (
-        <>
-          <label class="field">
-            <span class="field-label">Победа, это когда…</span>
-            <input
-              class="input"
-              value={win}
-              onInput={(e) => setWin(e.currentTarget.value)}
-              placeholder="Например, страница оплаты видна на сайте"
-              maxLength={WIN_MAX}
-              aria-describedby="win-hint"
-            />
-          </label>
-          <p class="note" id="win-hint">
-            Необязательно, но с условием победы проще понять, что уже готово. За главное, сделанное в свою неделю, придёт бонус.
-          </p>
-        </>
-      )}
-      <div class="field-row">
-        {!repeat && (
-          <label class="field">
-            <span class="field-label">Срок</span>
-            <input class="input" type="date" value={v.due ?? ''} onInput={(e) => { touch('due'); setDue(e.currentTarget.value || null); }} />
-          </label>
+        <Chips label="Повторять" value={repeatKind} options={routine && !editing ? REPEATS.slice(1) : REPEATS} onChange={setRepeatKind} />
+        {repeatKind === 'week' && <Chips label="В какой день недели" value={weekday} options={WEEKDAY_CHIPS} onChange={setWeekday} />}
+        {repeatKind === 'days' && <WeekdayPicker label="В какие дни" days={days} onChange={setDays} />}
+        {noDays && <p class="note note-error">Выбери хотя бы один день.</p>}
+        {repeat && !noDays && (
+          <Chips
+            label="Привычка: цель на неделю"
+            value={goal}
+            options={[
+              { value: null as number | null, label: 'Нет' },
+              ...Array.from({ length: most }, (_, i) => most - i).map((n) => ({ value: n as number | null, label: `${n} из ${most}`, sr: `${n} ${plural(n, 'день', 'дня', 'дней')} из ${most}` })),
+            ]}
+            onChange={setHabitGoal}
+          />
         )}
+        {repeat && goal !== null && (
+          <p class="note">
+            Счёт идёт с понедельника. Когда он дойдёт до цели, придёт бонус. Пропуск ничего не отнимает, а несделанная вчерашняя не копится: каждый день приходит новая.
+          </p>
+        )}
+        {!repeat && (
+          <Chips
+            label="Горизонт"
+            value={kind}
+            options={[{ value: null as PeriodKind | null, label: 'Нет' }, ...PERIOD_KINDS.map((k) => ({ value: k as PeriodKind | null, label: PERIOD_KIND_NAME[k] }))]}
+            onChange={pickKind}
+          />
+        )}
+        {!repeat && kind && v.period && (
+          <Chips
+            label="Какой"
+            value={v.period}
+            options={periodChoices(kind, v.period, s.day).map((k) => ({ value: k, label: periodName(k, s.day) }))}
+            onChange={(x) => { touch('period'); setPeriodKey(x); }}
+          />
+        )}
+        {!repeat && (
+          <Chips
+            label="Когда к костру"
+            value={v.day}
+            options={[
+              { value: s.day, label: 'Сегодня' },
+              { value: tomorrow, label: 'Завтра' },
+              { value: null, label: 'Потом' },
+              ...(v.day && v.day !== s.day && v.day !== tomorrow ? [{ value: v.day, label: formatDue(v.day, s.day) }] : []),
+            ]}
+            onChange={(x) => { touch('day'); setDay(x); }}
+          />
+        )}
+        {!repeat && formWeek && (
+          <Chips
+            label={formWeek === weekOf(s.day) ? 'Главное на этой неделе' : `Главное: ${periodName(formWeek, s.day).toLowerCase()}`}
+            value={mainOn ? 'yes' : 'no'}
+            options={[
+              { value: 'no', label: 'Нет' },
+              { value: 'yes', label: 'Да, со звездой' },
+            ]}
+            onChange={(x) => setMainOn(x === 'yes')}
+          />
+        )}
+        {!repeat && formWeek && mainOn && !roomFor(formWeek) && <p class="note note-error">{MAIN_FULL}.</p>}
+        {!repeat && formWeek && mainOn && (
+          <>
+            <label class="field">
+              <span class="field-label">Победа, это когда…</span>
+              <input
+                class="input"
+                value={win}
+                onInput={(e) => setWin(e.currentTarget.value)}
+                placeholder="Например, страница оплаты видна на сайте"
+                maxLength={WIN_MAX}
+                aria-describedby="win-hint"
+              />
+            </label>
+            <p class="note" id="win-hint">
+              Необязательно, но с условием победы проще понять, что уже готово. За главное, сделанное в свою неделю, придёт бонус.
+            </p>
+          </>
+        )}
+        <div class="field-row">
+          {!repeat && (
+            <label class="field">
+              <span class="field-label">Срок</span>
+              <input class="input" type="date" value={v.due ?? ''} onInput={(e) => { touch('due'); setDue(e.currentTarget.value || null); }} />
+            </label>
+          )}
+          <label class="field">
+            <span class="field-label">Во сколько</span>
+            <input class="input" type="time" value={v.at} onInput={(e) => { touch('at'); setAt(e.currentTarget.value); }} />
+          </label>
+        </div>
         <label class="field">
-          <span class="field-label">Во сколько</span>
-          <input class="input" type="time" value={v.at} onInput={(e) => { touch('at'); setAt(e.currentTarget.value); }} />
+          <span class="field-label">Когда начну</span>
+          <input
+            class="input"
+            value={cue}
+            onInput={(e) => setCue(e.currentTarget.value)}
+            placeholder="Например, когда налью чай, открою документ"
+            maxLength={140}
+            aria-describedby="cue-hint"
+          />
         </label>
-      </div>
-      <label class="field">
-        <span class="field-label">Когда начну</span>
-        <input
-          class="input"
-          value={cue}
-          onInput={(e) => setCue(e.currentTarget.value)}
-          placeholder="Например, когда налью чай, открою документ"
-          maxLength={140}
-          aria-describedby="cue-hint"
-        />
-      </label>
-      <p class="note" id="cue-hint">
-        Необязательно. Момент, после которого начнёшь, и первый крошечный шаг. Лагерь покажет их, когда задача ждёт у огня.
-      </p>
-      {repeat && <p class="note">В свои дни задача сама встаёт в план дня. Пока прошлая не сделана, новая не приходит. В прогресс проекта повторяющиеся задачи не идут: они не кончаются.</p>}
-      {!repeat && v.period && !v.day && <p class="note">Задача ждёт в отряде и видна в сборе отряда на вкладке «{PERIOD_KIND_NAME[kind!]}». К костру её можно позвать в любой день периода.</p>}
-      {willBeLetter && <p class="note">Без сферы, без дня и без горизонта задача уходит письмом к вестнику. Разобрать письма можно в сборе отряда.</p>}
+        <p class="note" id="cue-hint">
+          Необязательно. Момент, после которого начнёшь, и первый крошечный шаг. Лагерь покажет их, когда задача ждёт у огня.
+        </p>
+        {repeat && <p class="note">В свои дни задача сама встаёт в план дня. Пока прошлая не сделана, новая не приходит. В прогресс проекта повторяющиеся задачи не идут: они не кончаются.</p>}
+        {!repeat && v.period && !v.day && <p class="note">Задача ждёт в отряде и видна в сборе отряда на вкладке «{PERIOD_KIND_NAME[kind!]}». К костру её можно позвать в любой день периода.</p>}
+        {willBeLetter && <p class="note">Без сферы, без дня и без горизонта задача уходит письмом к вестнику. Разобрать письма можно в сборе отряда.</p>}
+      </details>
       {routine && !editing && (
         <div class="actions">
           <button
@@ -720,12 +739,17 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
             </button>
           </div>
           )}
-          <Chips
-            label="Уровень при сдаче"
-            value={level ?? t.level}
-            options={([1, 2, 3, 4] as Level[]).map((l) => ({ value: l, label: LEVEL_ROMAN[l], sr: `уровень ${l},`, hint: LEVEL_HINT[l] }))}
-            onChange={setLevel}
-          />
+          <details class="form-details level-details">
+            <summary aria-label={`Уровень ${level ?? t.level} при сдаче`}>
+              Уровень {LEVEL_ROMAN[level ?? t.level]}
+            </summary>
+            <Chips
+              label="Уровень при сдаче"
+              value={level ?? t.level}
+              options={([1, 2, 3, 4] as Level[]).map((l) => ({ value: l, label: LEVEL_ROMAN[l], sr: `уровень ${l},`, hint: LEVEL_HINT[l] }))}
+              onChange={setLevel}
+            />
+          </details>
           <div class="actions">
             {inToday ? (
               <button class="act" onClick={() => ui.store.act((st) => planTask(st, t.id, null))}>
