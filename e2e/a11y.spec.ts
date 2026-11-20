@@ -8,6 +8,10 @@ test('axe не находит нарушений на экранах и в ли�
   await addTask(page, 'Сдать отчёт', { quest: 'Работа', size: '1 ч' });
   await addTask(page, 'Зарядка', { size: '15 мин', repeat: 'Каждый день' });
   expect(await axe(page), 'Сбор отряда').toEqual([]);
+  await page.getByRole('button', { name: 'Действия: Сдать отчёт' }).click();
+  expect(await axe(page), 'Действия задачи').toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Действия: Сдать отчёт' })).toBeFocused();
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   expect(await axe(page), 'Лагерь').toEqual([]);
   const day = page.getByRole('region', { name: 'Задачи дня' });
@@ -24,11 +28,17 @@ test('axe не находит нарушений на экранах и в ли�
   expect(await axe(page), 'Летопись').toEqual([]);
   await openSettings(page);
   expect(await axe(page), 'Настройки').toEqual([]);
+  for (const part of ['Распорядок', 'Напоминания', 'Сохранение', 'Магия', 'Справка', 'Стереть']) {
+    await page.getByRole('navigation', { name: 'Разделы настроек' }).getByRole('button', { name: part, exact: true }).click();
+    expect(await axe(page), part).toEqual([]);
+    await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+  }
   await tab(page, 'Добавить задачу').click();
   expect(await axe(page), 'Новая задача').toEqual([]);
   await expandTaskForm(sheet(page, 'Новая задача'));
   expect(await axe(page), 'Новая задача с подробностями').toEqual([]);
   await page.keyboard.press('Escape');
+  await page.getByRole('navigation', { name: 'Разделы настроек' }).getByRole('button', { name: 'Справка', exact: true }).click();
   await page.getByRole('button', { name: 'Правила' }).click();
   expect(await axe(page), 'Правила').toEqual([]);
 });

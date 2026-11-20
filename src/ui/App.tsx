@@ -21,7 +21,7 @@ import { Notices } from './Notices';
 import { NotesScreen, upPlace, useNotes } from './Notes';
 import { Plan } from './Plan';
 import { Realm } from './Realm';
-import { Settings } from './Settings';
+import { Settings, type SettingsPart } from './Settings';
 import { Shop } from './Shop';
 import { Sheets, type SheetState } from './Sheets';
 import { useSync } from './SyncPanel';
@@ -57,6 +57,8 @@ export interface Ui {
   calDay: DayKey | null;
   /** Открыть в Календаре шкалу дня или вернуться к месяцу. */
   openDay(day: DayKey | null): void;
+  settingsPart: SettingsPart | null;
+  openSettings(part: SettingsPart | null): void;
   open(sheet: SheetState): void;
   close(): void;
   /** Короткое сообщение внизу; с действием живёт дольше, чтобы успеть нажать. */
@@ -100,6 +102,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   const [screen, setScreen] = useState<Screen>(() => (s.litDay !== s.day && s.closedDay !== s.day ? 'plan' : 'camp'));
   const [section, setSection] = useState<string | null>(null);
   const [calDay, setCalDay] = useState<DayKey | null>(null);
+  const [settingsPart, setSettingsPart] = useState<SettingsPart | null>(null);
   const [sheet, setSheet] = useState<SheetState | null>(null);
   /** Лист закрыт, но ещё уезжает вниз. */
   const [closing, setClosing] = useState(false);
@@ -215,6 +218,27 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
 
   // Фокус возвращается, как только лист начал закрываться: экран под ним уже доступен.
   const openSheet = closing ? null : sheet;
+  const toastBox = useRef<HTMLDivElement>(null);
+  // Сообщение остаётся над нижним действием, даже если лист или кнопка меняют высоту.
+  useLayoutEffect(() => {
+    if (!toast) return;
+    let frame = 0;
+    const place = () => {
+      const el = toastBox.current;
+      if (!el) return;
+      const footer = openSheet
+        ? document.querySelector<HTMLElement>('.sheet-layer:not(.is-closing) .modal-foot') ?? document.querySelector<HTMLElement>('.sheet-layer:not(.is-closing) .actions')
+        : document.querySelector<HTMLElement>('.screen .page-foot');
+      const r = footer?.getBoundingClientRect();
+      const app = el.closest('.app')!.getBoundingClientRect();
+      const top = r && footer ? openSheet ? Math.min(r.top, app.bottom - footer.offsetHeight) : r.top : app.bottom;
+      el.style.bottom = r && top < app.bottom && r.bottom > app.top ? `${app.bottom - Math.max(app.top, top) + 8}px` : '';
+      // Геометрия меняется и при выезде листа: ResizeObserver не замечает transform.
+      frame = requestAnimationFrame(place);
+    };
+    place();
+    return () => cancelAnimationFrame(frame);
+  }, [toast, screen, openSheet]);
   useEffect(() => {
     if (openSheet || !opener.current) return;
     const spot = opener.current;
@@ -271,6 +295,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
       setScreen(sc);
       if (sc === 'notes' && screen === 'notes') setSection(null);
       if (sc === 'calendar') setCalDay(null);
+      if (sc === 'settings') setSettingsPart(null);
     },
     section: screen === 'notes' ? section : null,
     openSection: (slug) => {
@@ -285,6 +310,12 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
       if (screen !== 'calendar' || day !== calDay) pageLeave(main.current);
       setCalDay(day);
       setScreen('calendar');
+    },
+    settingsPart,
+    openSettings: (part) => {
+      closeSheet();
+      setSettingsPart(part);
+      setScreen('settings');
     },
     open: (next) => {
       if (!sheetShown.current) opener.current = spotOf(document.activeElement);
@@ -318,13 +349,14 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
 
   // «Назад» на телефоне закрывает знакомство или лист, сворачивает шторку задач дня, из папки Летописи ведёт в папку выше, из раздела к списку разделов,
   // из шкалы дня в Календаре к месяцу, с других разделов в Лагерь, и только из Лагеря без открытых листов выходит из приложения.
-  const inSection = (screen === 'notes' && section !== null) || (screen === 'calendar' && calDay !== null);
+  const inSection = (screen === 'notes' && section !== null) || (screen === 'calendar' && calDay !== null) || (screen === 'settings' && settingsPart !== null);
   const shadeUp = screen === 'camp' && shade;
   useBackButton((covered ? 1 : 0) + (screen !== 'camp' ? 1 : 0) + (inSection ? 1 : 0) + (shadeUp ? 1 : 0), () => {
     if (intro) closeIntro();
     else if (sheetShown.current) (sheetBack() ?? closeSheet)();
     else if (shadeUp) setShade(false);
     else if (inSection && screen === 'calendar') ui.openDay(null);
+    else if (inSection && screen === 'settings') ui.openSettings(null);
     else if (inSection) ui.openSection(upPlace(section ?? ''));
     else if (screen !== 'camp') ui.go('camp');
   });
@@ -362,7 +394,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
           Вместе с сообщением он прочтёт и кнопку «Вернуть», если она есть. */}
       <div role="status">
         {toast && (
-          <div class={`toast${toast.action ? ' toast-act' : ''}`} key={toast.id}>
+          <div ref={toastBox} class={`toast${toast.action ? ' toast-act' : ''}`} key={toast.id}>
             {toast.text}
             {toast.action && (
               <button

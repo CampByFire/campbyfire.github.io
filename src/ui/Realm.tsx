@@ -8,6 +8,7 @@ import { SPHERE_KIND_NAME, W } from '../game/words';
 import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
 import { QuestDot } from './parts';
+import { PageHelp } from './PageHelp';
 
 export function Realm({ ui }: { ui: Ui }) {
   const s = ui.store.state;
@@ -20,7 +21,10 @@ export function Realm({ ui }: { ui: Ui }) {
   const due = ratingDue(s);
   return (
     <div class="page">
-      <h1 class="page-title">{W.realm}</h1>
+      <div class="page-heading">
+        <h1 class="page-title">{W.realm}</h1>
+        <PageHelp title={W.realm}>Сферы — части твоей жизни, проекты — большие цели внутри них. Оцени сферы, чтобы увидеть колесо баланса. Нажми на сектор колеса, чтобы записать, как улучшить эту сферу.</PageHelp>
+      </div>
 
       <section class="group">
         <div class="group-head">

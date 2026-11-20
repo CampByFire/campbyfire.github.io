@@ -14,6 +14,7 @@ import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
 import { Chips } from './parts';
 import { RichText } from './Rich';
+import { PageHelp } from './PageHelp';
 
 export function useNotes(notes: Notes): void {
   const [, setN] = useState(0);
@@ -64,8 +65,10 @@ function SectionList({ ui }: { ui: Ui }) {
   const searching = query.trim().length >= 2;
   return (
     <div class="page">
-      <h1 class="page-title">{W.chronicle}</h1>
-      <p class="page-sub">Дневник, мысли, идеи и статьи. Каждая заметка лежит отдельным файлом в твоём репозитории.</p>
+      <div class="page-heading">
+        <h1 class="page-title">{W.chronicle}</h1>
+        <PageHelp title={W.chronicle}>Дневник, мысли, идеи и статьи. Каждая заметка лежит отдельным файлом в твоём репозитории.</PageHelp>
+      </div>
       <button class="btn btn-gold btn-wide" onClick={() => ui.open({ kind: 'thought' })}>
         <LIcon name="bulb" size={19} />
         Записать мысль

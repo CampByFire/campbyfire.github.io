@@ -20,7 +20,7 @@ test('«когда начну» видно у огня, а файл календ
   const day = page.getByRole('region', { name: 'Задачи дня' });
   await expect(day.locator('.cue')).toHaveText('Когда начать: Когда приду домой, наберу номер');
 
-  await openSettings(page);
+  await openSettings(page, 'Напоминания');
   const remind = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Напоминания' }) });
   await expect(remind).toContainText('утренний костёр в 09:00, 1 задача со временем');
   await remind.getByRole('radiogroup', { name: 'Утренний костёр' }).getByRole('radio', { name: 'Каждый день' }).click();
@@ -41,6 +41,6 @@ test('«когда начну» видно у огня, а файл календ
 
   // Выбор помнит устройство.
   await page.reload();
-  await openSettings(page);
+  await openSettings(page, 'Напоминания');
   await expect(remind).toContainText('утренний костёр в 08:15');
 });

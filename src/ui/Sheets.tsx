@@ -87,8 +87,10 @@ import { SyncConflictSheet, SyncSheet } from './SyncPanel';
 import { setSheetBack } from './back';
 import { MeetingSheet, MoveMeetingSheet } from './MeetingSheet';
 import { PrizeSheet } from './Shop';
+import { PlanActions } from './Plan';
 
 export type SheetState =
+  | { kind: 'planActions'; taskId: string; prev?: string; next?: string }
   | { kind: 'add'; questId?: string | null; day?: DayKey | null; period?: PeriodKey | null; main?: boolean }
   | { kind: 'edit'; taskId: string }
   | { kind: 'routine'; routineId: string }
@@ -120,6 +122,8 @@ export type SheetState =
 
 export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
   switch (sheet.kind) {
+    case 'planActions':
+      return <PlanActions ui={ui} {...sheet} />;
     case 'add':
       return <TaskForm ui={ui} preset={sheet} />;
     case 'edit':

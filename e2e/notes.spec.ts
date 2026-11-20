@@ -87,7 +87,7 @@ test('«Последние дни» теперь в Летописи, а рас�
   await expect(page.getByRole('heading', { level: 1, name: 'Последние дни' })).toBeVisible();
   await openSettings(page);
   await expect(page.getByRole('heading', { level: 1, name: 'Настройки' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Распорядок' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Разделы настроек' }).getByRole('button', { name: 'Распорядок', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Последние дни' })).toHaveCount(0);
 });
 

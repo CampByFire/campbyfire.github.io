@@ -1,6 +1,6 @@
 // Настройки: герой, распорядок, магия, сохранение в GitHub, копия в файл, справка и «Стереть всё».
 // Раньше этот раздел назывался Летописью; теперь Летопись это заметки (Notes.tsx).
-import { useRef, useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { MEETING_REMIND_MIN, REMIND_BEFORE_MIN, heroLevel } from '../game/rules';
 import { buildIcs, calendarEvents, type IcsOptions } from '../game/ics';
 import { isNewerSave, parseSave } from '../game/store';
@@ -18,12 +18,27 @@ import type { Motion } from './magic/mode';
 import { Chips, WeekdayPicker } from './parts';
 import { Sheet } from './Sheets';
 import { SyncPanel, useSync } from './SyncPanel';
+import { PageHelp } from './PageHelp';
+
+const SETTINGS_PARTS = ['Распорядок', 'Напоминания', 'Сохранение', 'Магия', 'Справка', 'Стереть'] as const;
+export type SettingsPart = typeof SETTINGS_PARTS[number];
 
 export function Settings({ ui }: { ui: Ui }) {
   const { store } = ui;
   const s = store.state;
   const lvl = heroLevel(s.hero.xp);
   const file = useRef<HTMLInputElement>(null);
+  const part = ui.settingsPart;
+  const page = useRef<HTMLDivElement>(null);
+  const previous = useRef(part);
+  useLayoutEffect(() => {
+    if (part === previous.current) return;
+    const was = previous.current;
+    previous.current = part;
+    page.current?.scrollTo(0, 0);
+    const target = part ? page.current?.querySelector<HTMLElement>('h1') : page.current?.querySelector<HTMLElement>(`[data-settings="${was}"]`);
+    target?.focus();
+  }, [part]);
 
   const setSetting = (patch: Partial<Schedule>) => store.act((st) => Object.assign(st.settings, patch));
   const [timeError, setTimeError] = useState<string | null>(null);
@@ -49,16 +64,20 @@ export function Settings({ ui }: { ui: Ui }) {
   };
 
   return (
-    <div class="page">
+    <div class="page" ref={page}>
       <div class="page-top">
         <span class="page-date">
           <LIcon name="gear" size={15} class="ic-gold" />
           {formatDate(s.day)} · {formatClock(ui.now)}
         </span>
       </div>
-      <h1 class="page-title">{W.settings}</h1>
+      {part && <button class="link-btn" onClick={() => ui.openSettings(null)}><LIcon name="back" size={16} />Настройки</button>}
+      <div class="page-heading">
+        <h1 class="page-title" tabIndex={-1}>{part ?? W.settings}</h1>
+        <PageHelp title={part ?? W.settings}>Здесь можно настроить распорядок, напоминания, сохранение и магию. Выбор силы магии и токен GitHub помнит только это устройство.</PageHelp>
+      </div>
 
-      <div class="hero-card">
+      {!part && <><div class="hero-card">
         <div class="hero-level">
           <span class="hero-level-n">{lvl.level}</span>
           <span class="hero-level-l">уровень</span>
@@ -86,8 +105,11 @@ export function Settings({ ui }: { ui: Ui }) {
           </div>
         </div>
       </div>
+      <nav class="settings-list" aria-label="Разделы настроек">
+        {SETTINGS_PARTS.map((name) => <button class="row" data-settings={name} onClick={() => ui.openSettings(name)}><span class="row-title">{name}</span><LIcon name="chevron" size={18} /></button>)}
+      </nav></>}
 
-      <section class="group">
+      {part === 'Распорядок' && <section class="group">
         <div class="group-head">
           <h2 class="sc">Распорядок</h2>
         </div>
@@ -104,19 +126,19 @@ export function Settings({ ui }: { ui: Ui }) {
           options={(['week', 'month', 'quarter', 'never'] as RateEvery[]).map((k) => ({ value: k, label: RATE_EVERY_NAME[k] }))}
           onChange={(v) => setSetting({ rateEvery: v })}
         />
-      </section>
+      </section>}
 
-      <Reminders ui={ui} />
+      {part === 'Напоминания' && <Reminders ui={ui} />}
 
-      <section class="group">
+      {part === 'Магия' && <section class="group">
         <div class="group-head">
           <h2 class="sc">Магия</h2>
         </div>
         <Chips label="Сколько анимаций" value={ui.motion} options={MOTION_CHIPS} onChange={ui.setMotion} />
         <p class="note">{MOTION_NOTE[ui.motion]} Выбор помнит только это устройство.</p>
-      </section>
+      </section>}
 
-      <section class="group">
+      {part === 'Сохранение' && <><section class="group">
         <div class="group-head">
           <h2 class="sc">Сохранение в GitHub</h2>
         </div>
@@ -126,8 +148,8 @@ export function Settings({ ui }: { ui: Ui }) {
       <section class="group">
         <div class="group-head">
           <h2 class="sc">Копия в файл</h2>
+          <PageHelp title="Копия в файл">Игра хранится в этом браузере. Копия в файле пригодится, чтобы перенести игру без GitHub или просто не потерять.</PageHelp>
         </div>
-        <p class="note">Игра хранится в этом браузере. Копия в файле пригодится, чтобы перенести игру без GitHub или просто не потерять.</p>
         <div class="btns">
           <button class="btn btn-ghost" onClick={download}>
             Сохранить копию
@@ -141,9 +163,9 @@ export function Settings({ ui }: { ui: Ui }) {
           if (f) void upload(f);
           e.currentTarget.value = '';
         }} />
-      </section>
+      </section></>}
 
-      <section class="group">
+      {part === 'Справка' && <section class="group">
         <div class="group-head">
           <h2 class="sc">Справка</h2>
         </div>
@@ -158,9 +180,9 @@ export function Settings({ ui }: { ui: Ui }) {
         <p class="note version">
           Версия {VERSION} от {BUILD}
         </p>
-      </section>
+      </section>}
 
-      <section class="group">
+      {part === 'Стереть' && <section class="group">
         <div class="group-head">
           <h2 class="sc">Стереть всё</h2>
         </div>
@@ -171,7 +193,7 @@ export function Settings({ ui }: { ui: Ui }) {
             Стереть игру…
           </button>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

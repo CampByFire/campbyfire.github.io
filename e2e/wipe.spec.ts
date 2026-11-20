@@ -10,7 +10,7 @@ test('стёртая игра начинается заново со знако�
   await page.getByRole('button', { name: 'Записать мысль' }).click();
   await sheet(page, 'Записать мысль').getByLabel('Мысль').fill('Личная мысль');
   await sheet(page, 'Записать мысль').getByRole('button', { name: 'Записать', exact: true }).click();
-  await openSettings(page);
+  await openSettings(page, 'Стереть');
   await page.getByRole('button', { name: 'Стереть игру…' }).click();
   const confirm = sheet(page, 'Стереть всё');
   await expect(confirm.getByText('Часть заметок есть только в этом браузере')).toBeVisible();
@@ -30,6 +30,8 @@ test('вместе с сохранением в GitHub: без связи нич
   await openGame(page, { intro: true });
   await page.getByRole('button', { name: 'Пропустить' }).click();
   await connectGitHub(page);
+  await page.getByRole('button', { name: 'Настройки', exact: true }).click();
+  await page.getByRole('navigation', { name: 'Разделы настроек' }).getByRole('button', { name: 'Стереть', exact: true }).click();
   await addTask(page, 'Купить хлеб');
   await page.getByRole('button', { name: 'Стереть игру…' }).click();
   const confirm = sheet(page, 'Стереть всё');

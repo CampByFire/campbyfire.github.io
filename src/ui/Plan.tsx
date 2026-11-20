@@ -1,7 +1,7 @@
 // Сбор отряда: утренний план дня. Кого позвать к костру, хватит ли сил.
-import { MANA_DRAIN_PER_HOUR, MANA_MAX, WEEK_MAIN_MAX, estimateOf, heroLevel, planXp } from '../game/rules';
+import { MANA_DRAIN_PER_HOUR, MANA_LOW, MANA_MAX, WEEK_MAIN_MAX, estimateOf, heroLevel, planXp } from '../game/rules';
 import { mainOf, weekOf } from '../game/habits';
-import { useState } from 'preact/hooks';
+import { useRef, useState } from 'preact/hooks';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { backlogOf, findQuest, inboxOf, isUndead, kindOf as kindOfQuest, leftoversOf, lightFire, nestedTasks, periodTasks, planOf, planTask, quickGather, swapInPlan, tailsOf, waitingOf } from '../game/state';
 import { addDays, formatClock, formatDate, formatDuration, isMainFor, plural, shiftAt } from '../game/time';
@@ -13,6 +13,8 @@ import { AgendaRow, openCalendar, tomorrowNews } from './Calendar';
 import { GIcon, LIcon } from './Icon';
 import { ignite } from './magic/spells';
 import { HabitWeekView, QuestDot, TaskMeta } from './parts';
+import { usePlanDrag } from './drag';
+import { Sheet } from './Sheets';
 
 type View = 'day' | PeriodKind;
 
@@ -37,21 +39,21 @@ export function Plan({ ui }: { ui: Ui }) {
         </span>
       </div>
       <h1 class="page-title">{W.plan}</h1>
-      <div class="page-sub">
-        {mana >= 95 ? 'Долгий отдых позади, силы полны' : `Сил осталось на ~${formatDuration(canMin)}`}
+      {s.hero.mana < MANA_LOW && <div class="page-sub">
+        {`Сил осталось на ~${formatDuration(canMin)}`}
         <span class="chip chip-mana chip-inline">
           <span class="mana-gem" aria-hidden="true" />
           <span aria-hidden="true">{mana}</span>
           <span class="sr-only">{`${W.mana}: ${mana} из ${MANA_MAX}`}</span>
         </span>
-      </div>
+      </div>}
       <ViewTabs value={view} onChange={pick} />
       {view === 'day' ? <DayPlan ui={ui} /> : <PeriodPlan key={view} ui={ui} kind={view} />}
     </div>
   );
 }
 
-const VIEWS: { value: View; label: string }[] = [{ value: 'day', label: 'День' }, ...PERIOD_KINDS.map((k) => ({ value: k as View, label: PERIOD_KIND_NAME[k] }))];
+const VIEWS: { value: View; label: string }[] = [{ value: 'day', label: 'День' }, { value: 'week', label: PERIOD_KIND_NAME.week }];
 
 /** Вкладки сбора отряда: день и горизонты. Как у радиокнопок: Tab на выбранную, стрелки на соседнюю. */
 function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => void }) {
@@ -66,6 +68,7 @@ function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => voi
     requestAnimationFrame(() => (group?.children[i] as HTMLElement | undefined)?.focus());
   };
   return (
+    <div class="plan-horizons">
     <div class="seg" role="radiogroup" aria-label="Что собирать">
       {VIEWS.map((v, i) => (
         <button
@@ -73,7 +76,7 @@ function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => voi
           type="button"
           role="radio"
           aria-checked={i === at}
-          tabIndex={i === at ? 0 : -1}
+          tabIndex={i === at || (at < 0 && i === 0) ? 0 : -1}
           class={`seg-btn${i === at ? ' is-on' : ''}`}
           onClick={() => onChange(v.value)}
           onKeyDown={onKey}
@@ -81,6 +84,11 @@ function ViewTabs({ value, onChange }: { value: View; onChange: (v: View) => voi
           {v.label}
         </button>
       ))}
+    </div>
+    <select class={`horizon-more${at < 0 ? ' is-on' : ''}`} aria-label="Дальше" value={at < 0 ? value : ''} onChange={(e) => onChange(e.currentTarget.value as PeriodKind)}>
+      <option value="" disabled>Дальше</option>
+      {PERIOD_KINDS.filter((k) => k !== 'week').map((k) => <option value={k}>{PERIOD_KIND_NAME[k]}</option>)}
+    </select>
     </div>
   );
 }
@@ -174,9 +182,7 @@ function DayPlan({ ui }: { ui: Ui }) {
           </div>
         )}
         {dayTasks.length === 0 && eveningTasks.length === 0 && <p class="note">Пока никого. Позови задачи из отряда ниже или добавь новую.</p>}
-        {dayTasks.map((t, i) => (
-          <PlanRow key={t.id} ui={ui} s={s} t={t} prev={dayTasks[i - 1]} next={dayTasks[i + 1]} />
-        ))}
+        <PlanRows ui={ui} s={s} tasks={dayTasks} />
         {done > 0 && (
           <div class="done-line">
             <GIcon name="check" size={13} />
@@ -190,9 +196,7 @@ function DayPlan({ ui }: { ui: Ui }) {
           <div class="group-head">
             <h2 class="sc">После заката</h2>
           </div>
-          {eveningTasks.map((t, i) => (
-            <PlanRow key={t.id} ui={ui} s={s} t={t} prev={eveningTasks[i - 1]} next={eveningTasks[i + 1]} />
-          ))}
+          <PlanRows ui={ui} s={s} tasks={eveningTasks} />
         </section>
       )}
 
@@ -567,25 +571,52 @@ function keepFocus(e: Event, act: () => void) {
   });
 }
 
-function PlanRow({ ui, s, t, prev, next }: { ui: Ui; s: State; t: Task; prev?: Task; next?: Task }) {
+function PlanRows({ ui, s, tasks }: { ui: Ui; s: State; tasks: Task[] }) {
+  const box = useRef<HTMLDivElement>(null);
+  const drag = usePlanDrag(box, (from, to) => {
+    const a = tasks.findIndex((t) => t.id === from);
+    const b = tasks.findIndex((t) => t.id === to);
+    if (a < 0 || b < 0 || a === b) return;
+    ui.store.act((st) => {
+      const step = b > a ? 1 : -1;
+      for (let i = a; i !== b; i += step) swapInPlan(st, from, tasks[i + step].id);
+    });
+    ui.toast(`Порядок изменён: ${tasks[a].title}`);
+  });
   return (
-    <div class="prow">
+    <div ref={box} class="plan-rows" onClickCapture={drag.onClickCapture}>
+      {tasks.map((t, i) => <div key={t.id} data-plan-task={t.id} class={`prow${drag.held === t.id ? ' is-held' : ''}${drag.target === t.id && drag.held !== t.id ? ' is-drop-target' : ''}`} onPointerDown={(e) => {
+        if (!(e.target as Element).closest('.plan-actions')) drag.onPointerDown(e, t.id);
+      }}>
       <button class="prow-main" onClick={() => ui.open({ kind: 'task', taskId: t.id })}>
         <QuestDot q={findQuest(s, t.questId)} />
         <span class="row-title">{t.title}</span>
         <TaskMeta s={s} t={t} estimate />
       </button>
-      <button class="icon-btn" aria-label={`Выше: ${t.title}`} disabled={!prev} onClick={(e) => keepFocus(e, () => ui.store.act((st) => prev && swapInPlan(st, t.id, prev.id)))}>
-        <LIcon name="up" size={16} />
+      <button class="icon-btn plan-actions" aria-label={`Действия: ${t.title}`} onClick={() => ui.open({ kind: 'planActions', taskId: t.id, prev: tasks[i - 1]?.id, next: tasks[i + 1]?.id })}>
+        <span aria-hidden="true">⋯</span>
       </button>
-      <button class="icon-btn" aria-label={`Ниже: ${t.title}`} disabled={!next} onClick={(e) => keepFocus(e, () => ui.store.act((st) => next && swapInPlan(st, t.id, next.id)))}>
-        <LIcon name="down" size={16} />
-      </button>
-      <button class="icon-btn" aria-label={`Не сегодня: ${t.title}`} onClick={(e) => keepFocus(e, () => ui.store.act((st) => planTask(st, t.id, null)))}>
-        <LIcon name="close" size={16} />
-      </button>
+      </div>)}
     </div>
   );
+}
+
+/** Те же действия доступны без перетаскивания: с клавиатуры и с диктором. */
+export function PlanActions({ ui, taskId, prev, next }: { ui: Ui; taskId: string; prev?: string; next?: string }) {
+  const t = ui.store.state.tasks.find((t) => t.id === taskId);
+  const act = (other?: string) => {
+    ui.store.act((st) => other ? swapInPlan(st, taskId, other) : planTask(st, taskId, null));
+    ui.close();
+    ui.toast(other ? `Порядок изменён: ${t?.title ?? ''}` : 'Задача ждёт в отряде');
+  };
+  return <Sheet title="Действия задачи" onClose={ui.close}>
+    <p>{t?.title}</p>
+    <div class="actions">
+      <button class="act" disabled={!prev} onClick={() => act(prev)}><LIcon name="up" size={16} />Выше</button>
+      <button class="act" disabled={!next} onClick={() => act(next)}><LIcon name="down" size={16} />Ниже</button>
+      <button class="act" onClick={() => act()}><LIcon name="close" size={16} />Не сегодня</button>
+    </div>
+  </Sheet>;
 }
 
 function AddRow({ ui, s, t, inPeriod = false }: { ui: Ui; s: State; t: Task; inPeriod?: boolean }) {

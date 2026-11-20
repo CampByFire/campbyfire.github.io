@@ -61,7 +61,9 @@ export function SyncPanel({ ui }: { ui: Ui }) {
   if (!sync.connected) {
     return (
       <div class="sync">
-        <p class="note">
+        <details class="form-details">
+          <summary>Как подключить GitHub</summary>
+          <p class="note">
           Игра сохраняется в твой приватный репозиторий {REPO_NAME} на GitHub, и телефон с компьютером видят одну и ту же игру. Каждое сохранение остаётся в
           истории репозитория. Рядом лежат дневник и заметки Летописи, в папках diary и notes.
         </p>
@@ -69,6 +71,7 @@ export function SyncPanel({ ui }: { ui: Ui }) {
           <RepoSteps />
           <li>На втором устройстве вставь тот же токен: сохранение найдётся само.</li>
         </ol>
+        </details>
         <TokenForm label="Токен GitHub" button="Подключить" busyText="Подключаю…" submit={(t) => sync.connect(t)} onDone={() => {
           // Если в GitHub другая игра, сейчас откроется выбор, и сообщение его только заслонит.
           if (sync.status.phase !== 'conflict') ui.toast('GitHub подключён');

@@ -68,11 +68,11 @@ test('год и вложенные задачи, листание периодо
   await form.getByRole('button', { name: 'Взять в отряд' }).click();
 
   await tab(page, 'План').click();
-  await view(page, 'Год').click();
+  await page.getByRole('combobox', { name: 'Дальше' }).selectOption('year');
   await expect(page.locator('.prow', { hasText: 'Выучить испанский' })).toBeVisible();
   await page.getByText('Внутри года').click();
   await expect(page.locator('.period-nested')).toContainText('Поменять резину');
-  await view(page, 'Месяц').click();
+  await page.getByRole('combobox', { name: 'Дальше' }).selectOption('month');
   await expect(page.getByRole('heading', { name: 'Ноябрь' })).toBeVisible();
   await page.getByRole('button', { name: 'Позже: Декабрь' }).click();
   await expect(page.getByRole('heading', { name: 'Декабрь' })).toBeVisible();

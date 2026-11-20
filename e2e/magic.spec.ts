@@ -125,7 +125,7 @@ test('сила магии выбирается в Настройках и пом
   const reduced = await reducedMotion(page);
   await expect(html).toHaveAttribute('data-motion', reduced ? 'calm' : 'full');
 
-  await openSettings(page);
+  await openSettings(page, 'Магия');
   const magic = page.getByRole('radiogroup', { name: 'Сколько анимаций' });
   await expect(magic.getByRole('radio', { name: reduced ? 'Спокойная' : 'Вся' })).toBeChecked();
   await magic.getByRole('radio', { name: 'Без анимаций' }).click();
@@ -135,7 +135,7 @@ test('сила магии выбирается в Настройках и пом
   await page.reload();
   await expect(page.locator('.app')).toBeVisible();
   await expect(html).toHaveAttribute('data-motion', 'off');
-  await openSettings(page);
+  await openSettings(page, 'Магия');
   await expect(magic.getByRole('radio', { name: 'Без анимаций' })).toBeChecked();
   await magic.getByRole('radio', { name: 'Вся' }).click();
   await expect(html).toHaveAttribute('data-motion', 'full');

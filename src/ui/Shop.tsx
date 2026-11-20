@@ -29,6 +29,7 @@ import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
 import { spend } from './magic/spells';
 import { Sheet } from './Sheets';
+import { PageHelp } from './PageHelp';
 
 const TIERS: PrizeTier[] = ['small', 'medium', 'big', 'dream'];
 const num = (n: number) => n.toLocaleString('ru-RU');
@@ -74,8 +75,10 @@ export function Shop({ ui }: { ui: Ui }) {
           {formatDate(s.day)} · {formatClock(ui.now)}
         </span>
       </div>
-      <h1 class="page-title">{W.shop}</h1>
-      <div class="page-sub">Золото за дела меняется здесь на радости в жизни. Заведи то, чего тебе хочется, назначь цену и покупай: всё куплено честно.</div>
+      <div class="page-heading">
+        <h1 class="page-title">{W.shop}</h1>
+        <PageHelp title={W.shop}>Золото за дела меняется здесь на радости в жизни. Заведи то, чего тебе хочется, назначь цену и покупай: всё куплено честно.</PageHelp>
+      </div>
 
       <div class="purse" data-magic="purse">
         <GIcon name="coins" size={30} class="purse-ic" />

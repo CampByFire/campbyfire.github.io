@@ -29,11 +29,12 @@ export async function openGame(page: Page, { time = at(9), intro = false }: { ti
 export const tab = (page: Page, name: string): Locator => page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name, exact: true });
 
 /** Открыть Настройки: шестерёнка в верхней полосе Лагеря. */
-export async function openSettings(page: Page) {
+export async function openSettings(page: Page, part?: string) {
   const nav = page.getByRole('navigation', { name: 'Разделы' });
   await nav.getByRole('button', { name: 'Лагерь', exact: true }).click();
   await page.locator('.topbar').getByRole('button', { name: 'Настройки', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Настройки' })).toBeVisible();
+  if (part) await page.getByRole('navigation', { name: 'Разделы настроек' }).getByRole('button', { name: part, exact: true }).click();
 }
 
 /** Всплывающее сообщение внизу экрана. */
@@ -171,7 +172,7 @@ export async function fakeGitHub(page: Page) {
 
 /** Подключить GitHub в Настройках токеном good. */
 export async function connectGitHub(page: Page) {
-  await openSettings(page);
+  await openSettings(page, 'Сохранение');
   await page.getByLabel('Токен GitHub').fill('good');
   await page.getByRole('button', { name: 'Подключить' }).click();
   await expect(toast(page)).toHaveText('GitHub подключён');
