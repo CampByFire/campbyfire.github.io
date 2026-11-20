@@ -48,9 +48,11 @@ test('идея встаёт на полку, покупка тратит зол�
   expect(await axe(page), 'Пустая лавка').toEqual([]);
   expect(await tooSmall(page), 'Пустая лавка').toEqual([]);
 
-  // Идеи раскрыты, пока полка пуста, и не сворачиваются, пока с них набирают награды.
+  // Первая награда сворачивает идеи; их можно открыть снова.
   await page.getByRole('button', { name: /^Серия сериала/ }).click();
   await expect(toast(page)).toContainText('На полке: Серия сериала');
+  await expect(page.locator('.ideas')).not.toHaveAttribute('open');
+  await page.locator('.ideas summary').click();
   await page.getByRole('button', { name: /^Кафе/ }).click();
   await expect(shelf(page).getByRole('listitem')).toHaveCount(2);
   await expect(page.getByRole('button', { name: /^Серия сериала, 150 золота/ })).toHaveCount(0);
@@ -163,6 +165,7 @@ test('награду можно поправить, подвинуть и убр
   await openGame(page, { time: at(14) });
   await openShop(page);
   await page.getByRole('button', { name: /^Серия сериала/ }).click();
+  await page.locator('.ideas summary').click();
   await page.getByRole('button', { name: /^Кафе/ }).click();
   const names = () => shelf(page).locator('.prize-name').allTextContents();
   expect(await names()).toEqual(['Серия сериала', 'Кафе']);

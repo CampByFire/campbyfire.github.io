@@ -28,12 +28,12 @@ test('подробности сохраняют выбор при сворачи
   await form.getByRole('radio', { name: 'сфера Развитие', exact: true }).click();
   await form.getByLabel('Во сколько').fill('17:30');
   const details = form.locator('details.form-details');
-  await details.locator('summary').click();
-  await details.locator('summary').focus();
+  await details.locator(':scope > summary').click();
+  await details.locator(':scope > summary').focus();
   await page.keyboard.press('Enter');
   await expect(form.getByLabel('Во сколько')).toHaveValue('17:30');
   expect(await axe(page), 'Подробная форма').toEqual([]);
-  await details.locator('summary').click();
+  await details.locator(':scope > summary').click();
   await form.getByRole('button', { name: 'Взять в отряд' }).click();
   await tab(page, 'Добавить задачу').click();
   await expect(form.getByRole('radio', { name: 'сфера Развитие', exact: true })).toBeVisible();
@@ -45,14 +45,15 @@ test('время задачи само задаёт уровень и спутн
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
   await expandTaskForm(form);
-  await expect(form.getByRole('radiogroup', { name: /уровень/i })).toHaveCount(1);
+  await expect(form.getByRole('radiogroup', { name: /уровень/i })).toHaveCount(0);
   const size = form.getByRole('radiogroup', { name: /^Сколько займёт/ });
-  await expect(size).toHaveAccessibleName('Сколько займёт: разбойник, уровень 1');
+  await expect(size).toHaveAccessibleName('Сколько займёт');
+  await form.locator('.duration-help summary').click();
+  await expect(form.locator('.duration-help')).toContainText('Разбойник, уровень 1');
   await size.getByRole('radio', { name: '4 ч', exact: true }).click();
-  await expect(size).toHaveAccessibleName('Сколько займёт: маг, уровень 3');
-  await expect(form).toContainText('маг, III уровень');
+  await expect(form.locator('.duration-help')).toContainText('Маг, уровень 3');
   await size.getByRole('radio', { name: 'дни', exact: true }).click();
-  await expect(size).toHaveAccessibleName('Сколько займёт: рыцарь, уровень 4');
+  await expect(form.locator('.duration-help')).toContainText('Рыцарь, уровень 4');
   await page.keyboard.press('Escape');
 
   await addTask(page, 'Собрать шкаф', { size: '4 ч' });

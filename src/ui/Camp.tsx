@@ -63,6 +63,7 @@ export function Camp({ ui }: { ui: Ui }) {
   const [up, setUp] = useState(ui.shade);
   const [drag, setDrag] = useState(false);
   const [showDone, setShowDone] = useState(false);
+  const [mini, setMini] = useState(false);
   const isUp = ui.shade || up || drag;
   /** Высота свёрнутой шторки: на её место встаёт пустое место, пока она развёрнута, и сцена не прыгает. */
   const lowH = useRef(0);
@@ -374,6 +375,10 @@ export function Camp({ ui }: { ui: Ui }) {
           </div>
         )}
         <div class="sheet-body" id="day-tasks" ref={bodyRef}>
+          <button class="link-btn camp-fold" aria-expanded={!mini || isUp} onClick={() => { setMini(isUp || !mini); if (isUp) setShade(false); }}>
+            {mini && !isUp ? 'Показать задачи дня' : 'Свернуть до текущей задачи'}
+          </button>
+          <div hidden={mini && !isUp}>
           {v.summaryDue && (
             <button class="banner" onClick={() => ui.open({ kind: 'summary' })}>
               <GIcon name="zzz" size={16} />
@@ -382,8 +387,10 @@ export function Camp({ ui }: { ui: Ui }) {
             </button>
           )}
           {!v.asleep && restedLeft(s) > 0 && <RestedHint left={restedLeft(s)} />}
+          </div>
           <MainCard ui={ui} v={v} timer={timer} seconds={current ? formatTimerSeconds(spent) : ''} />
 
+          <div hidden={mini && !isUp}>
           {!v.asleep && (list.length > 0 || v.doneToday > 0) && (
             <div class="list-head">
               <h2 class="sc">{W.moreToday}</h2>
@@ -443,6 +450,7 @@ export function Camp({ ui }: { ui: Ui }) {
               ))}
             </div>
           )}
+          </div>
         </div>
       </section>
     </div>

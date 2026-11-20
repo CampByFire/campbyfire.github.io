@@ -71,6 +71,7 @@ test('axe не находит нарушений в Лавке и листе н�
   expect(await axe(page), 'Пустая лавка').toEqual([]);
   expect(await tooSmall(page), 'Пустая лавка').toEqual([]);
   await page.getByRole('button', { name: /^Серия сериала/ }).click();
+  await page.locator('.ideas summary').click();
   await page.getByRole('button', { name: /^Вещь из списка желаний/ }).click();
   expect(await axe(page), 'Лавка с наградами').toEqual([]);
   expect(await tooSmall(page), 'Лавка с наградами').toEqual([]);

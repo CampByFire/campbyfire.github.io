@@ -67,7 +67,7 @@ test('заклинания не держат кнопки: следующее н
   await expect(page.locator('.topbar')).toContainText('Золото: 50');
 
   // «Вернуть» посреди Победной искры: награда уходит, числа сразу встают на итог.
-  await tapNow(day.getByRole('button', { name: 'Вернуть' }));
+  await tapNow(day.getByRole('button', { name: 'Вернуть', exact: true }));
   await expect(toast(page)).toHaveText('Задача снова в плане');
   await expect(page.locator('.topbar')).toContainText('Золото: 0');
   await expectNumbersSettled(page);

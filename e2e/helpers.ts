@@ -48,7 +48,7 @@ export async function expandTaskForm(form: Locator) {
   const more = form.getByRole('button', { name: 'Ещё сферы и проекты' });
   if (await more.isVisible()) await more.click();
   const details = form.locator('details.form-details').first();
-  if (await details.getAttribute('open') === null) await details.locator('summary').click();
+  if (await details.getAttribute('open') === null) await details.locator(':scope > summary').click();
 }
 
 /** Добавить задачу через большой «+» внизу. */

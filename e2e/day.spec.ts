@@ -4,6 +4,20 @@ import { expect, test } from '@playwright/test';
 import { addTask as addGameTask, newState } from '../src/game/state';
 import { addTask, at, expectNoSideScroll, openGame, seedGame, setTime, sheet, tab, toast } from './helpers';
 
+test('лист сворачивается до карточки и освобождает место лагерю', async ({ page }) => {
+  await openGame(page);
+  for (const title of ['Первое дело', 'Второе дело', 'Третье дело']) await addTask(page, title);
+  await page.getByRole('button', { name: /Разжечь костёр/ }).click();
+  const day = page.getByRole('region', { name: 'Задачи дня' });
+  const before = (await day.boundingBox())!.height;
+  await day.getByRole('button', { name: 'Свернуть до текущей задачи' }).click();
+  await expect(day.getByRole('button', { name: 'Показать задачи дня' })).toHaveAttribute('aria-expanded', 'false');
+  await expect.poll(async () => (await day.boundingBox())!.height).toBeLessThan(before);
+  await expect(day.getByRole('heading', { name: 'Ещё сегодня' })).toBeHidden();
+  await day.getByRole('button', { name: 'Показать задачи дня' }).click();
+  await expect(day.getByRole('heading', { name: 'Ещё сегодня' })).toBeVisible();
+});
+
 test('номера и кнопки лагеря нажимаются по всей области 44 на 44', async ({ page }, testInfo) => {
   const s = newState(at(9).getTime());
   for (let i = 0; i < 6; i++) addGameTask(s, at(9).getTime(), { title: `Дело ${i + 1}`, questId: s.quests[0].id, level: 1, day: s.day });

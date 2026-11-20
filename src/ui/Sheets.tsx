@@ -433,12 +433,15 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       <details class="form-details" open={!!from || !!preset?.main}>
         <summary>Подробнее</summary>
         <Chips
-          label={`Сколько займёт: ${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]].toLowerCase()}, ${LEVEL_ROMAN[v.lvl]} уровень`}
-          sr={`Сколько займёт: ${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]].toLowerCase()}, уровень ${v.lvl}`}
+          label="Сколько займёт"
           value={v.estimate}
-          options={estimates.map((o) => ({ ...o, mark: LEVEL_ROMAN[levelOfEstimate(o.value)] }))}
+          options={estimates}
           onChange={(x) => { touch('estimate'); setEstimate(x); setLvl(levelOfEstimate(x)); }}
         />
+        <details class="duration-help">
+          <summary>Спутник по длительности</summary>
+          <p class="note">{CLASS_NAME[CLASS_BY_LEVEL[v.lvl]]}, уровень {v.lvl}. Длительность определяет класс и уровень спутника.</p>
+        </details>
         <Chips label="Повторять" value={repeatKind} options={routine && !editing ? REPEATS.slice(1) : REPEATS} onChange={setRepeatKind} />
         {repeatKind === 'week' && <Chips label="В какой день недели" value={weekday} options={WEEKDAY_CHIPS} onChange={setWeekday} />}
         {repeatKind === 'days' && <WeekdayPicker label="В какие дни" days={days} onChange={setDays} />}

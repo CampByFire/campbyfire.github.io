@@ -1,5 +1,5 @@
 // Лавка: награды, которые игрок заводит сам и покупает за золото. Золото за дела здесь меняется на радости в жизни.
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { GOLD_PER_LEVEL, PRIZE_IDEAS, PRIZE_PRICE_MAX, PRIZE_PRICE_MIN, PRIZE_PRICE_STEP, PRIZE_TITLE_MAX, PURCHASES_SHOWN, type PrizeTier } from '../game/rules';
 import {
   addPrize,
@@ -58,8 +58,15 @@ export function Shop({ ui }: { ui: Ui }) {
   const total = purchasesOf(s).length;
   const taken = new Set(prizes.map((p) => p.title.toLowerCase()));
   const ideas = PRIZE_IDEAS.filter((i) => !taken.has(PRIZE_IDEA_NAME[i.id].toLowerCase()));
-  // Идеи раскрыты, пока полка пуста, и не сворачиваются сами, пока с них набирают награды.
+  // Первая награда освобождает место на экране; идеи можно раскрыть снова.
   const [ideasOpen, setIdeasOpen] = useState(prizes.length === 0);
+  const ideasRef = useRef<HTMLDetailsElement>(null);
+  const hasPrizes = prizes.length > 0;
+  useEffect(() => {
+    const restore = hasPrizes && ideasRef.current?.contains(document.activeElement);
+    setIdeasOpen(!hasPrizes);
+    if (restore) requestAnimationFrame(() => ideasRef.current?.querySelector('summary')?.focus());
+  }, [hasPrizes]);
 
   const addIdea = (title: string, price: number) => {
     const id = ui.store.act((st, now) => addPrize(st, now, { title, price }));
@@ -148,7 +155,7 @@ export function Shop({ ui }: { ui: Ui }) {
       </section>
 
       {ideas.length > 0 && (
-        <details class="group ideas" open={ideasOpen} onToggle={(e) => setIdeasOpen(e.currentTarget.open)}>
+        <details ref={ideasRef} class="group ideas" open={ideasOpen} onToggle={(e) => setIdeasOpen(e.currentTarget.open)}>
           <summary class="group-head">
             <span class="sc">Идеи наград</span>
             <span class="group-meta">

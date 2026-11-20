@@ -841,6 +841,9 @@ h2.sc {
   opacity: 0;
   transition: opacity 0.26s ease;
 }
+
+.camp-fold { margin: 0 12px; min-height: 44px; }
+.duration-help > summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--gold); }
 .shade-dim.is-on {
   opacity: 1;
 }
