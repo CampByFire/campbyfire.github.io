@@ -2822,7 +2822,7 @@ h3.field-label {
   margin: 6px 0 4px;
 }
 
-.wheel svg {
+.wheel > svg {
   max-width: 100%;
   height: auto;
 }
@@ -2868,6 +2868,47 @@ h3.field-label {
   stroke: var(--bg);
   stroke-width: 3px;
   paint-order: stroke;
+}
+
+.wheel-building-mark {
+  transform: var(--wheel-rim-position);
+  pointer-events: none;
+}
+
+.wheel-building-mark .wheel-value {
+  transform: translateY(13px);
+}
+
+.wheel-building,
+.sphere-building-list {
+  color: var(--gold-hi);
+}
+
+.sphere-building-list {
+  display: none;
+  flex: none;
+}
+
+.wheel-legend-buildings .sphere-building-list {
+  display: inline-flex;
+}
+
+@media (max-width: 374px) {
+  .wheel-building-mark {
+    transform: var(--wheel-value-position);
+  }
+
+  .wheel-building-mark .wheel-value {
+    transform: none;
+  }
+
+  .wheel-building {
+    display: none;
+  }
+
+  .sphere-building-list {
+    display: inline-flex;
+  }
 }
 
 .wheel-legend {

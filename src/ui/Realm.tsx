@@ -1,6 +1,6 @@
 // Королевство: колесо баланса, сферы с их проектами, зал трофеев и отпущенные задачи.
 import { questHex } from '../game/color';
-import { SCORE_MAX } from '../game/rules';
+import { SCORE_MAX, SPHERE_BUILDING_SCORE } from '../game/rules';
 import { lairOf, lastRating, projectsOf, ratingDue, releasedOf, spheresOf, unrelease } from '../game/state';
 import { formatDue } from '../game/time';
 import type { Quest, Rating, State } from '../game/types';
@@ -19,11 +19,16 @@ export function Realm({ ui }: { ui: Ui }) {
   const last = lastRating(s);
   const prev = last ? lastRating(s, last.id) : undefined;
   const due = ratingDue(s);
+  const buildingsOnWheel = spheres.length <= MAX_WHEEL_BUILDINGS;
   return (
     <div class="page">
       <div class="page-heading">
         <h1 class="page-title">{W.realm}</h1>
-        <PageHelp title={W.realm}>Сферы — части твоей жизни, проекты — большие цели внутри них. Оцени сферы, чтобы увидеть колесо баланса. Нажми на сектор колеса, чтобы записать, как улучшить эту сферу.</PageHelp>
+        <PageHelp title={W.realm}>
+          Колесо баланса — карта твоего Королевства. Каждый сектор показывает одну сферу жизни, например работу, здоровье или отдых.
+          Оцени, насколько ты доволен каждой сферой. Чем выше оценка, тем дальше сектор тянется от центра и тем крупнее здание — от хижины до замка.
+          Внутри сфер можно вести проекты. Нажми на сектор, чтобы записать, что хочешь улучшить.
+        </PageHelp>
       </div>
 
       <section class="group">
@@ -35,7 +40,7 @@ export function Realm({ ui }: { ui: Ui }) {
             {last ? `Пора оценить сферы: прошлая оценка ${formatDue(last.id, s.day).toLowerCase()}.` : 'Оцени сферы, чтобы увидеть своё колесо баланса.'}
           </p>
         )}
-        {spheres.length > 0 && <Wheel spheres={spheres} last={last} prev={prev} onPick={(id) => ui.open({ kind: 'improve', questId: id })} />}
+        {spheres.length > 0 && <Wheel spheres={spheres} last={last} prev={prev} buildingsOnWheel={buildingsOnWheel} onPick={(id) => ui.open({ kind: 'improve', questId: id })} />}
         {last && <p class="note">Оценка {formatDue(last.id, s.day).toLowerCase()}{prev ? `, бледный контур: прошлая, ${formatDue(prev.id, s.day).toLowerCase()}` : ''}.</p>}
         {spheres.length > 0 ? (
           <button class={`btn ${due || !last ? 'btn-gold' : 'btn-ghost'} btn-wide`} onClick={() => ui.open({ kind: 'rate' })}>
@@ -54,7 +59,7 @@ export function Realm({ ui }: { ui: Ui }) {
             новая сфера
           </button>
         </div>
-        <ul class="wheel-legend">
+        <ul class={buildingsOnWheel ? 'wheel-legend' : 'wheel-legend wheel-legend-buildings'}>
           {spheres.map((q) => (
             <li key={q.id} class="sphere">
               <SphereCard ui={ui} s={s} q={q} score={last?.scores[q.id]} previous={prev?.scores[q.id]} />
@@ -135,14 +140,29 @@ function openIn(s: State, questId: string): number {
   return s.tasks.filter((t) => t.questId === questId && t.status === 'open').length;
 }
 
+function buildingForScore(score: number) {
+  if (score >= SCORE_MAX) return 'castle';
+  if (score >= SPHERE_BUILDING_SCORE.tower) return 'tower';
+  if (score >= SPHERE_BUILDING_SCORE.house) return 'house';
+  return 'hut';
+}
+
+function SphereBuilding({ building, size }: { building: ReturnType<typeof buildingForScore>; size: number }) {
+  return building === 'castle'
+    ? <GIcon name="kingdom" size={size} />
+    : <LIcon name={building} size={size} stroke={1.6} />;
+}
+
 function SphereCard({ ui, s, q, score, previous }: { ui: Ui; s: State; q: Quest; score: number | undefined; previous: number | undefined }) {
   const open = openIn(s, q.id);
   const delta = score !== undefined && previous !== undefined ? score - previous : 0;
+  const building = score === undefined ? undefined : buildingForScore(score);
   return (
     <button class="quest-card sphere-card" data-sphere={q.id} onClick={() => ui.open({ kind: 'quest', questId: q.id })}>
       <span class="quest-card-top">
         <QuestDot q={q} />
         <span class="quest-card-name">{q.name}</span>
+        {building && <span class="sphere-building-list" data-building={building} aria-hidden="true"><SphereBuilding building={building} size={18} /></span>}
         <span class="wheel-score">
           {score === undefined ? 'нет оценки' : `${score} из ${SCORE_MAX}`}
           {delta !== 0 && <span class={delta > 0 ? 'wheel-up' : 'wheel-down'}>{delta > 0 ? ` +${delta}` : ` −${-delta}`}</span>}
@@ -179,8 +199,11 @@ function ProjectCard({ ui, s, q }: { ui: Ui; s: State; q: Quest }) {
   );
 }
 
-const SIZE = 260;
+const SIZE = 292;
 const R = 104;
+/** Если сфер больше, значки лучше читаются в списке. */
+const MAX_WHEEL_BUILDINGS = 12;
+const RIM_LABEL_RADIUS = R + 20;
 /** На сколько подпись с оценкой отстоит от края сектора. */
 const VALUE_GAP = 11;
 
@@ -194,7 +217,13 @@ const scoreText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1)
  * Прошлая оценка видна бледным контуром. Диктору колесо не нужно: те же баллы стоят списком под ним.
  * Нажатие на сектор открывает заметку «Как улучшить», строка в списке открывает саму сферу.
  */
-function Wheel({ spheres, last, prev, onPick }: { spheres: Quest[]; last: Rating | undefined; prev: Rating | undefined; onPick: (id: string) => void }) {
+function Wheel({ spheres, last, prev, buildingsOnWheel, onPick }: {
+  spheres: Quest[];
+  last: Rating | undefined;
+  prev: Rating | undefined;
+  buildingsOnWheel: boolean;
+  onPick: (id: string) => void;
+}) {
   const c = SIZE / 2;
   const n = spheres.length;
   const step = (2 * Math.PI) / n;
@@ -251,11 +280,21 @@ function Wheel({ spheres, last, prev, onPick }: { spheres: Quest[]; last: Rating
         {spheres.map((q, i) => {
           const v = last?.scores[q.id];
           if (v === undefined) return null;
-          const [x, y] = point((i + 0.5) * step, radius(v) + VALUE_GAP).split(' ');
+          const angle = (i + 0.5) * step;
+          const [x, y] = point(angle, radius(v) + VALUE_GAP).split(' ');
+          if (!buildingsOnWheel) return <text key={`v-${q.id}`} x={x} y={y} class="wheel-value">{scoreText(v)}</text>;
+          const [rimX, rimY] = point(angle, RIM_LABEL_RADIUS).split(' ');
+          const building = buildingForScore(v);
           return (
-            <text key={`v-${q.id}`} x={x} y={y} class="wheel-value">
-              {scoreText(v)}
-            </text>
+            <g key={`v-${q.id}`} class="wheel-building-mark" style={{
+              '--wheel-rim-position': `translate(${rimX}px, ${rimY}px)`,
+              '--wheel-value-position': `translate(${x}px, ${y}px)`,
+            }}>
+              <g class="wheel-building" data-building={building} transform="translate(-11 -17)">
+                <SphereBuilding building={building} size={22} />
+              </g>
+              <text class="wheel-value">{scoreText(v)}</text>
+            </g>
           );
         })}
         {spheres.map((q, i) => (

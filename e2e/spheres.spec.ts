@@ -1,6 +1,6 @@
 // Королевство: сферы как в колесе баланса, их оценка, проекты в сферах и напоминание оценить сферы.
 import { expect, test, type Page } from '@playwright/test';
-import { addQuest, addTask as addGameTask, newState } from '../src/game/state';
+import { addQuest, addTask as addGameTask, newState, rateSpheres, spheresOf } from '../src/game/state';
 import { addTask, at, axe, openGame, openSettings, seedGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Кнопки и поля в открытом листе, которые меньше 44×44. */
@@ -59,6 +59,42 @@ test('оценка сфер рисует колесо, а вторая оцен�
   await again.getByRole('button', { name: 'Сохранить оценку' }).click();
   await expect(page.locator('.wheel-legend li').first()).toContainText('7 из 10 −1');
   await expect(page.locator('.wheel-prev')).toHaveCount(8);
+});
+
+test('строения показывают оценку сферы и на узком экране переходят в строки', async ({ page }) => {
+  const time = at(9);
+  const state = newState(time.getTime());
+  const scores = [1, 3, 4, 6, 7, 9, 10];
+  const spheres = spheresOf(state);
+  rateSpheres(state, time.getTime(), Object.fromEntries(scores.map((score, i) => [spheres[i].id, score])));
+  await seedGame(page, state);
+  await openGame(page, { time });
+  await tab(page, 'Королевство').click();
+
+  await page.getByLabel('Справка: Королевство').click();
+  await expect(page.getByText(/Колесо баланса — карта твоего Королевства/)).toBeVisible();
+  await page.getByLabel('Справка: Королевство').click();
+
+  const buildings = ['hut', 'hut', 'house', 'house', 'tower', 'tower', 'castle'];
+  const wheelBuildings = page.locator('.wheel-building:visible');
+  const rowBuildings = page.locator('.sphere-building-list:visible');
+  await expect(wheelBuildings).toHaveCount(buildings.length);
+  await expect(rowBuildings).toHaveCount(0);
+  for (const [i, building] of buildings.entries()) {
+    await expect(wheelBuildings.nth(i)).toHaveAttribute('data-building', building);
+    await expect(page.locator('.wheel-value').nth(i)).toHaveText(String(scores[i]));
+  }
+  const unrated = page.locator('.sphere-card').last();
+  await expect(unrated).toContainText('нет оценки');
+  await expect(unrated.locator('[data-building]')).toHaveCount(0);
+
+  await page.setViewportSize({ width: 360, height: 640 });
+  await expect(wheelBuildings).toHaveCount(0);
+  await expect(rowBuildings).toHaveCount(buildings.length);
+  for (const [i, building] of buildings.entries()) {
+    await expect(rowBuildings.nth(i)).toHaveAttribute('data-building', building);
+  }
+  await expect(page.locator('.wheel-value')).toHaveCount(scores.length);
 });
 
 test('нажатие на сферу в колесе открывает заметку «Как улучшить», она сохраняется и видна под колесом', async ({ page }) => {
