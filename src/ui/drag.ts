@@ -1,8 +1,7 @@
 // Перетаскивание в Плане и Календаре. Короткое движение пальцем листает экран.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { dropStart } from '../game/calendar';
-import { CALENDAR_DRAG_HOLD_MS, DRAG_HOLD_MS } from '../game/rules';
-import type { DayKey } from '../game/types';
+import { DRAG_HOLD_MS } from '../game/rules';
 
 /** Сдвиг мышью, после которого нажатие считается перетаскиванием, а не щелчком. */
 const MOUSE_SLOP = 5;
@@ -11,6 +10,10 @@ const TOUCH_SLOP = 8;
 /** У края шкалы ближе стольких пикселей она едет сама. */
 const EDGE = 40;
 const EDGE_SPEED = 8;
+/** Ширина боковой зоны переноса на соседний день. */
+const DATE_EDGE = 28;
+
+export type DayStep = -1 | 1;
 
 /** Порядок в Плане: короткое движение листает страницу, удержание берёт строку. */
 export function usePlanDrag(box: { current: HTMLElement | null }, onDrop: (from: string, to: string) => void) {
@@ -115,12 +118,15 @@ export function usePlanDrag(box: { current: HTMLElement | null }, onDrop: (from:
 
 export function useCalendarDrag<T>(
   scroller: { current: HTMLElement | null },
-  onDrop: (item: T, to: { day: DayKey } | { start: number }) => void,
+  canDropDay: (item: T, step: DayStep) => boolean,
+  onDrop: (item: T, to: { step: DayStep } | { start: number }) => void,
 ) {
-  const [held, setHeld] = useState<{ item: T; day?: DayKey; start?: number } | null>(null);
+  const [held, setHeld] = useState<{ item: T; step?: DayStep; start?: number } | null>(null);
   const dropped = useRef(0);
   const drop = useRef(onDrop);
   drop.current = onDrop;
+  const allowsDay = useRef(canDropDay);
+  allowsDay.current = canDropDay;
   const stop = useRef<(() => void) | null>(null);
   useEffect(() => () => stop.current?.(), []);
 
@@ -137,25 +143,31 @@ export function useCalendarDrag<T>(
     let y = e.clientY;
     let moved = false;
     const targetAt = () => document.elementFromPoint(x, y);
-    const destination = () => {
+    const destination = (): { step?: DayStep; start?: number } => {
+      const bounds = page?.getBoundingClientRect();
+      if (bounds && y >= bounds.top && y < bounds.bottom) {
+        const dx = x - e.clientX;
+        // Рядом с краем короткого движения вбок хватает, а вертикальный перенос остаётся на шкале.
+        const horizontal = Math.abs(dx) >= DATE_EDGE || Math.abs(dx) > Math.max(TOUCH_SLOP, Math.abs(y - e.clientY));
+        const step = !horizontal ? null : x <= bounds.left + DATE_EDGE && dx < 0 ? -1 : x >= bounds.right - DATE_EDGE && dx > 0 ? 1 : null;
+        if (step !== null) return allowsDay.current(item, step) ? { step } : {};
+      }
       const over = targetAt();
-      const target = over?.closest<HTMLElement>('[data-calendar-target]');
-      if (target && page?.contains(target)) return { day: target.dataset.calendarTarget! };
       if (slot && moved && over && box?.contains(over)) {
         const dy = y - e.clientY + box.scrollTop - scroll0;
         if (Math.abs(dy) > MOUSE_SLOP) return { start: dropStart(slot.start + (dy / slot.hourPx) * 60, slot.end - slot.start) };
       }
       return {};
     };
-    let shown: { day?: DayKey; start?: number } = {};
+    let shown: { step?: DayStep; start?: number } = {};
     const locate = () => {
       const next = destination();
-      if (next.day === shown.day && next.start === shown.start) return;
+      if (next.step === shown.step && next.start === shown.start) return;
       shown = next;
       setHeld({ item, ...next });
     };
     const edgeScroll = () => {
-      if (box && moved && box.contains(targetAt())) {
+      if (box && moved && shown.step === undefined && box.contains(targetAt())) {
         const r = box.getBoundingClientRect();
         const v = y < r.top + EDGE && y < e.clientY - MOUSE_SLOP ? -EDGE_SPEED : y > r.bottom - EDGE && y > e.clientY + MOUSE_SLOP ? EDGE_SPEED : 0;
         if (v) {
@@ -171,8 +183,12 @@ export function useCalendarDrag<T>(
       y = ev.clientY;
       moved ||= Math.hypot(x - e.clientX, y - e.clientY) > (active || !touch ? MOUSE_SLOP : TOUCH_SLOP);
       if (!active) {
-        if (moved) finish(false);
-        return;
+        if (!moved) return;
+        if (touch) {
+          finish(false);
+          return;
+        }
+        activate();
       }
       locate();
     };
@@ -207,7 +223,7 @@ export function useCalendarDrag<T>(
       if (!commit || !moved) return;
       const next = destination();
       try {
-        if (next.day !== undefined) drop.current(item, { day: next.day });
+        if (next.step !== undefined) drop.current(item, { step: next.step });
         else if (next.start !== undefined && next.start !== slot?.start) drop.current(item, { start: next.start });
       } catch (err) {
         console.error(err);
@@ -215,12 +231,13 @@ export function useCalendarDrag<T>(
     };
     const cancel = () => finish(false);
     stop.current = cancel;
-    const timer = window.setTimeout(() => {
+    const activate = () => {
       active = true;
       setHeld({ item });
       if (touch) navigator.vibrate?.(10);
       frame = requestAnimationFrame(edgeScroll);
-    }, CALENDAR_DRAG_HOLD_MS);
+    };
+    const timer = touch ? window.setTimeout(activate, DRAG_HOLD_MS) : 0;
     addEventListener('pointermove', move);
     addEventListener('pointerup', up);
     addEventListener('pointercancel', up);
@@ -237,5 +254,11 @@ export function useCalendarDrag<T>(
     e.stopPropagation();
   };
 
-  return { held, onPointerDown, onClickCapture, justDropped, resetClick: () => { dropped.current = 0; } };
+  const edgeClass = held && [
+    canDropDay(held.item, -1) && 'cal-drop-left',
+    canDropDay(held.item, 1) && 'cal-drop-right',
+    held.step === -1 && 'is-over-left',
+    held.step === 1 && 'is-over-right',
+  ].filter(Boolean).join(' ');
+  return { held, edgeClass, onPointerDown, onClickCapture, justDropped, resetClick: () => { dropped.current = 0; } };
 }

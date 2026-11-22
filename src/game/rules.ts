@@ -121,8 +121,6 @@ export const ALL_DAY_REMIND_HOURS = 6;
 export const DRAG_STEP_MIN = 15;
 /** Пальцем дело берётся после стольких миллисекунд нажатия: короткое движение листает шкалу. */
 export const DRAG_HOLD_MS = 400;
-/** Сколько держать дело в календаре, прежде чем его можно перетащить. */
-export const CALENDAR_DRAG_HOLD_MS = 3000;
 
 /** Перерыв не меньше стольких игровых дней, и герой возвращается отдохнувшим. */
 export const RESTED_AFTER_DAYS = 2;

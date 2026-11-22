@@ -3349,15 +3349,21 @@ button.trophy {
   box-shadow: inset 0 0 0 2px var(--gold);
   cursor: grabbing;
 }
-.cal-day.cal-drop,
-.tl-nav .cal-drop {
-  outline: 2px dashed var(--gold);
-  outline-offset: -2px;
+.cal-drop-left,
+.cal-drop-right {
+  box-shadow: inset 3px 0 var(--cal-edge-left, transparent), inset -3px 0 var(--cal-edge-right, transparent);
 }
-.cal-day.cal-drop.is-over,
-.tl-nav .cal-drop.is-over {
-  outline-style: solid;
-  background: var(--card-2);
+.cal-drop-left {
+  --cal-edge-left: var(--line-2);
+}
+.cal-drop-right {
+  --cal-edge-right: var(--line-2);
+}
+.cal-drop-left.is-over-left {
+  --cal-edge-left: var(--gold);
+}
+.cal-drop-right.is-over-right {
+  --cal-edge-right: var(--gold);
 }
 
 /* ---------- шкала дня ---------- */

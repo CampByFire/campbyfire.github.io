@@ -254,7 +254,6 @@ async function dragMouse(page: Page, ev: ReturnType<Page['locator']>, dy: number
   const y = box.y + Math.min(12, box.height / 2);
   await page.mouse.move(x, y);
   await page.mouse.down();
-  await page.clock.runFor(3000);
   for (let i = 1; i <= 6; i++) await page.mouse.move(x, y + (dy * i) / 6);
   await page.mouse.up();
 }
@@ -267,7 +266,7 @@ async function dragTouch(page: Page, ev: ReturnType<Page['locator']>, dy: number
   const cdp = await page.context().newCDPSession(page);
   const touch = (type: 'touchStart' | 'touchMove' | 'touchEnd', ty: number) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y: ty }] });
   await touch('touchStart', y);
-  await page.clock.runFor(3000);
+  await page.clock.runFor(600);
   for (let i = 1; i <= 6; i++) await touch('touchMove', Math.round(y + (dy * i) / 6));
   await touch('touchEnd', y + dy);
   await cdp.detach();
@@ -350,7 +349,7 @@ test('дела на шкале дня переносятся перетаски�
   expect(await axe(page), 'День после переноса').toEqual([]);
 });
 
-test('событие переносится на соседний день только после трёх секунд удержания', async ({ page }) => {
+test('событие переносится через правый и левый края мышью и пальцем', async ({ page }) => {
   await openGame(page);
   await page.getByRole('button', { name: /На завтра ничего не запланировано/ }).click();
   await page.getByRole('button', { name: 'Событие', exact: true }).click();
@@ -359,40 +358,53 @@ test('событие переносится на соседний день то�
   await form.getByLabel('Конец').fill('10:45');
   await form.getByRole('button', { name: 'Добавить в календарь' }).click();
   const event = timeline(page).getByRole('button', { name: /Стоматолог/ });
+  await event.tap();
+  const edit = sheet(page, 'Событие');
+  await expect(edit).toBeVisible();
+  await edit.getByRole('button', { name: 'Закрыть' }).click();
   const later = page.getByRole('button', { name: /^Позже: / });
   const source = await steadyBox(event);
-  const target = (await later.boundingBox())!;
   const start = { x: source.x + source.width / 2, y: source.y + 12 };
-  const end = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
-  const cdp = await page.context().newCDPSession(page);
+  const nav = (await later.boundingBox())!;
+  const right = page.viewportSize()!.width - 2;
+  const calendar = page.locator('.cal-dayview');
 
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
-  await page.clock.runFor(2000);
-  await expect(later).not.toHaveClass(/cal-drop/);
-  await page.mouse.move(end.x, end.y, { steps: 6 });
+  await page.mouse.move(nav.x + nav.width / 2, nav.y + nav.height / 2, { steps: 6 });
+  await expect(calendar).not.toHaveClass(/is-over-right/);
   await page.mouse.up();
   await expect(event).toHaveAccessibleName('10:00–10:45, Стоматолог, событие');
   await expect(page.getByRole('heading', { name: 'Суббота, 24 октября', level: 1 })).toBeVisible();
 
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [start] });
-  await page.clock.runFor(3000);
-  await expect(later).toHaveClass(/cal-drop/);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [end] });
-  await expect(later).toHaveClass(/is-over/);
-  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  await cdp.detach();
+  const beforeDrop = await steadyBox(event);
+  const dropY = beforeDrop.y + 12;
+  await page.mouse.move(beforeDrop.x + beforeDrop.width / 2, dropY);
+  await page.mouse.down();
+  await page.mouse.move(right, dropY, { steps: 6 });
+  await expect(calendar).toHaveClass(/is-over-right/);
+  await page.mouse.up();
   await expect(toast(page)).toContainText('Событие перенесено на 25 октября');
   await expect(event).toHaveCount(0);
   await later.click();
   await expect(event).toHaveAccessibleName('10:00–10:45, Стоматолог, событие');
-  await toast(page).getByRole('button', { name: 'Вернуть' }).click();
+
+  const touchBox = await steadyBox(event);
+  const finger = { x: Math.round(touchBox.x + touchBox.width / 2), y: Math.round(touchBox.y + 12) };
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [finger] });
+  await page.clock.runFor(600);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ ...finger, x: 2 }] });
+  await expect(calendar).toHaveClass(/is-over-left/);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await cdp.detach();
+  await expect(toast(page)).toContainText('Событие перенесено на 24 октября');
   await expect(event).toHaveCount(0);
-  await page.getByRole('button', { name: /^Раньше: / }).click();
-  await expect(event).toBeVisible();
+  await toast(page).getByRole('button', { name: 'Вернуть' }).click();
+  await expect(event).toHaveAccessibleName('10:00–10:45, Стоматолог, событие');
 });
 
-test('задача без времени переносится из списка на соседнюю дату в сетке месяца', async ({ page }) => {
+test('задача без времени переносится к краю экрана месяца и с клавиатуры', async ({ page }) => {
   await openGame(page);
   await page.getByRole('button', { name: /На завтра ничего не запланировано/ }).click();
   await page.getByRole('button', { name: 'Задача', exact: true }).click();
@@ -404,12 +416,10 @@ test('задача без времени переносится из списк�
   const task = page.getByRole('button', { name: /Купить торт/ });
   const later = page.getByRole('button', { name: /^25 октября, воскресенье/ });
   const source = await steadyBox(task);
-  const target = (await later.boundingBox())!;
-  await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
+  await page.mouse.move(source.x + source.width - 8, source.y + source.height / 2);
   await page.mouse.down();
-  await page.clock.runFor(3000);
-  await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 6 });
-  await expect(later).toHaveClass(/is-over/);
+  await page.mouse.move(page.viewportSize()!.width - 2, source.y + source.height / 2, { steps: 6 });
+  await expect(page.getByRole('main').locator('.page')).toHaveClass(/is-over-right/);
   await page.mouse.up();
   await expect(toast(page)).toContainText('Задача перенесена на 25 октября');
   await expect(later).toHaveAccessibleName('25 октября, воскресенье: 1 задача');

@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { SLOT_MIN_SHOWN, agendaOf, canMoveAgendaDay, clockOf, dropStart, moveAgendaDay, moveMeeting, restoreMeetingTime, dayCount, meetingsOn, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
 import { colorName, isDark, meetingTint, questHex } from '../game/color';
 import { findQuest, setRoutineAt, updateTask } from '../game/state';
-import { CALENDAR_DRAG_HOLD_MS, DRAG_STEP_MIN } from '../game/rules';
+import { DRAG_STEP_MIN } from '../game/rules';
 import { addDays, formatClock, formatDate, formatTime, minutesOfDay, parseDay, type ClockFormat } from '../game/time';
 import type { DayKey, Meeting, State } from '../game/types';
 import { MEETING_REPEAT_NAME, MONTH_NAME, MONTH_OF, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
@@ -63,7 +63,7 @@ function shiftDay(ui: Ui, item: AgendaItem, from: DayKey, to: DayKey) {
   const focus = document.activeElement;
   if (focus?.hasAttribute('data-calendar-item')) {
     const page = focus.closest('.page');
-    (page?.querySelector<HTMLElement>(`[data-calendar-target="${to}"]`) ?? page?.querySelector<HTMLElement>('.cal-agenda h2'))?.focus({ preventScroll: true });
+    (page?.querySelector<HTMLElement>(`[data-day="${to}"]`) ?? page?.querySelector<HTMLElement>('.cal-agenda h2, .tl-title'))?.focus({ preventScroll: true });
   }
   const date = parseDay(to);
   const when = `${date.getDate()} ${MONTH_OF[date.getMonth()]}`;
@@ -85,10 +85,10 @@ function dayMoveProps(ui: Ui, item: AgendaItem, day: DayKey, onPointerDown: (e: 
   };
 }
 
-function DateDragHint({ timeline = false }: { timeline?: boolean }) {
+function DateDragHint() {
   return (
     <p class="note cal-drag-note">
-      Удерживай дело {CALENDAR_DRAG_HOLD_MS / 1000} секунды и перетащи {timeline ? 'на стрелку соседнего дня' : 'на соседнюю дату'}.
+      Перетащи дело к краю экрана и отпусти. Слева предыдущий день, справа следующий. Пальцем сначала ненадолго удержи дело.
       <span class="sr-only" id="cal-date-drag-hint"> Для переноса на соседний день нажми Alt и стрелку влево или вправо.</span>
     </p>
   );
@@ -101,10 +101,10 @@ function MonthView({ ui }: { ui: Ui }) {
   const [month, setMonth] = useState<MonthKey>(monthOf(start));
   const page = useRef<HTMLDivElement>(null);
   const items = agendaOf(s, day);
-  const drag = useCalendarDrag<AgendaItem>(page, (item, to) => {
-    if ('day' in to) shiftDay(ui, item, day, to.day);
-  });
-  const canDrop = (d: DayKey) => !!drag.held && canMoveAgendaDay(s, drag.held.item, day, d);
+  const drag = useCalendarDrag<AgendaItem>(page,
+    (item, step) => canMoveAgendaDay(s, item, day, addDays(day, step)),
+    (item, to) => { if ('step' in to) shiftDay(ui, item, day, addDays(day, to.step)); },
+  );
   const setDay = (d: DayKey) => {
     picked = { day: d, on: s.day };
     setDayState(d);
@@ -117,7 +117,7 @@ function MonthView({ ui }: { ui: Ui }) {
     ui.openDay(d);
   };
   return (
-    <div class="page" ref={page} onPointerDownCapture={drag.resetClick} onClickCapture={drag.onClickCapture}>
+    <div class={`page ${drag.edgeClass ?? ''}`} ref={page} onPointerDownCapture={drag.resetClick} onClickCapture={drag.onClickCapture}>
       <div class="page-top">
         <span class="page-date">
           <LIcon name="calendar" size={15} class="ic-gold" />
@@ -148,7 +148,7 @@ function MonthView({ ui }: { ui: Ui }) {
         </button>
       </div>
 
-      <MonthGrid s={s} month={month} day={day} onPick={setDay} onOpen={open} canDrop={canDrop} target={drag.held?.day} />
+      <MonthGrid s={s} month={month} day={day} onPick={setDay} onOpen={open} />
 
       <DayAgenda ui={ui} day={day} items={items} held={drag.held?.item} onPointerDown={drag.onPointerDown} />
     </div>
@@ -160,9 +160,8 @@ function MonthView({ ui }: { ui: Ui }) {
  * Home и End к началу и концу недели, нажатие открывает день шкалой по часам. Диктор слышит дату
  * и сколько на ней событий и задач.
  */
-function MonthGrid({ s, month, day, onPick, onOpen, canDrop, target }: {
+function MonthGrid({ s, month, day, onPick, onOpen }: {
   s: State; month: MonthKey; day: DayKey; onPick: (d: DayKey) => void; onOpen: (d: DayKey) => void;
-  canDrop: (d: DayKey) => boolean; target?: DayKey;
 }) {
   const weeks = monthWeeks(month);
   const focusable = monthOf(day) === month ? day : `${month}-01`;
@@ -202,14 +201,12 @@ function MonthGrid({ s, month, day, onPick, onOpen, canDrop, target }: {
               const date = parseDay(d);
               const what = agendaCount(c.meetings, c.tasks);
               const label = `${date.getDate()} ${MONTH_OF[date.getMonth()]}, ${WEEKDAY_NAME[date.getDay()]}${d === s.day ? ', сегодня' : ''}: ${what || 'ничего'}`;
-              const cls = ['cal-day', out && 'is-out', d === s.day && 'is-today', d === day && 'is-on', d < s.day && 'is-past',
-                canDrop(d) && 'cal-drop', canDrop(d) && d === target && 'is-over'].filter(Boolean).join(' ');
+              const cls = ['cal-day', out && 'is-out', d === s.day && 'is-today', d === day && 'is-on', d < s.day && 'is-past'].filter(Boolean).join(' ');
               return (
                 <td key={d}>
                   <button
                     class={cls}
                     data-day={d}
-                    data-calendar-target={d}
                     aria-label={label}
                     aria-pressed={d === day}
                     aria-current={d === s.day ? 'date' : undefined}
@@ -343,16 +340,17 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
       ui.toast(`Задача перенесена на ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => updateTask(st, id, { at: was })) });
     }
   };
-  const drag = useCalendarDrag<{ item: AgendaItem; slot?: Slot }>(box, ({ item, slot }, to) => {
-    if ('day' in to) shiftDay(ui, item, day, to.day);
-    else if (slot) moveTo(slot, to.start);
-  });
+  const drag = useCalendarDrag<{ item: AgendaItem; slot?: Slot }>(box,
+    ({ item }, step) => canMoveAgendaDay(s, item, day, addDays(day, step)),
+    ({ item, slot }, to) => {
+      if ('step' in to) shiftDay(ui, item, day, addDays(day, to.step));
+      else if (slot) moveTo(slot, to.start);
+    },
+  );
   const dayButton = (step: number, label: string) => {
     const target = addDays(day, step);
-    const ready = drag.held && canMoveAgendaDay(s, drag.held.item.item, day, target);
     return (
-      <button class={`icon-btn${ready ? ' cal-drop' : ''}${ready && drag.held?.day === target ? ' is-over' : ''}`}
-        data-calendar-target={target} aria-label={`${label}: ${dayTitle(target, s.day)}`} onClick={() => go(step)}>
+      <button class="icon-btn" aria-label={`${label}: ${dayTitle(target, s.day)}`} onClick={() => go(step)}>
         <LIcon name={step < 0 ? 'back' : 'chevron'} size={18} />
       </button>
     );
@@ -367,7 +365,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
   const what = agendaCount(c.meetings, c.tasks);
   const rel = dayTitle(day, s.day).split(',')[0];
   return (
-    <div class="page cal-dayview" onPointerDownCapture={drag.resetClick} onClickCapture={drag.onClickCapture}>
+    <div class={`page cal-dayview ${drag.edgeClass ?? ''}`} onPointerDownCapture={drag.resetClick} onClickCapture={drag.onClickCapture}>
       <div class="page-top">
         <button class="link-btn" onClick={() => ui.openDay(null)}>
           <LIcon name="back" size={16} />
@@ -377,7 +375,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
       <div class="period-nav tl-nav">
         {dayButton(-1, 'Раньше')}
         <div class="period-title">
-          <h1 class="tl-title">{dayLong(day, s.day)}</h1>
+          <h1 class="tl-title" tabIndex={-1}>{dayLong(day, s.day)}</h1>
           <span>
             {/^(Сегодня|Завтра|Вчера)$/.test(rel) ? `${rel} · ` : ''}
             {what || 'ничего не запланировано'}
@@ -391,7 +389,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
         </button>
       )}
       <AddButtons ui={ui} day={day} small />
-      {items.some(dayMovable) && <DateDragHint timeline />}
+      {items.some(dayMovable) && <DateDragHint />}
 
       {allDay.length > 0 && (
         <section class="tl-allday" aria-labelledby="tl-allday-h">
@@ -428,7 +426,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
         }}
       >
         <p class="sr-only" id="tl-drag-hint">
-          Чтобы поменять время, удерживай дело {CALENDAR_DRAG_HOLD_MS / 1000} секунды и перетащи или нажми Alt со стрелкой вверх или вниз.
+          Чтобы поменять время, перетащи дело или нажми Alt со стрелкой вверх или вниз.
         </p>
         <div class={`tl${drag.held ? ' is-dragging' : ''}`} style={{ height: `${24 * HOUR_PX}px` }} onClick={newAt}>
           {HOURS.map((h) => (
