@@ -1,15 +1,15 @@
 // Календарь: месяц сеткой и что стоит на выбранный день. События (Meeting) живут только здесь,
 // а задачи берутся из игры: на какой день позваны к костру, какой у них срок, когда придут повторы.
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { SLOT_MIN_SHOWN, agendaOf, clockOf, dropStart, moveMeeting, restoreMeetingTime, dayCount, meetingsOn, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
+import { SLOT_MIN_SHOWN, agendaOf, canMoveAgendaDay, clockOf, dropStart, moveAgendaDay, moveMeeting, restoreMeetingTime, dayCount, meetingsOn, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
 import { colorName, isDark, meetingTint, questHex } from '../game/color';
 import { findQuest, setRoutineAt, updateTask } from '../game/state';
-import { DRAG_STEP_MIN } from '../game/rules';
+import { CALENDAR_DRAG_HOLD_MS, DRAG_STEP_MIN } from '../game/rules';
 import { addDays, formatClock, formatDate, minutesOfDay, parseDay } from '../game/time';
 import type { DayKey, Meeting, State } from '../game/types';
 import { MEETING_REPEAT_NAME, MONTH_NAME, MONTH_OF, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
 import type { Ui } from './App';
-import { useTimelineDrag } from './drag';
+import { useCalendarDrag } from './drag';
 import { GIcon, LIcon } from './Icon';
 import { ColorDot, QuestDot } from './parts';
 
@@ -54,11 +54,57 @@ export function CalendarScreen({ ui }: { ui: Ui }) {
   return <MonthView ui={ui} />;
 }
 
+const dayMovable = (x: AgendaItem) => x.kind === 'meeting' || (x.kind === 'task' && !x.done);
+
+function shiftDay(ui: Ui, item: AgendaItem, from: DayKey, to: DayKey) {
+  if (!canMoveAgendaDay(ui.store.state, item, from, to)) return;
+  const undo = ui.store.act((st, now) => moveAgendaDay(st, now, item, from, to));
+  if (!undo) return;
+  const focus = document.activeElement;
+  if (focus?.hasAttribute('data-calendar-item')) {
+    const page = focus.closest('.page');
+    (page?.querySelector<HTMLElement>(`[data-calendar-target="${to}"]`) ?? page?.querySelector<HTMLElement>('.cal-agenda h2'))?.focus({ preventScroll: true });
+  }
+  const date = parseDay(to);
+  const when = `${date.getDate()} ${MONTH_OF[date.getMonth()]}`;
+  ui.toast(`${item.kind === 'meeting' ? 'Событие перенесено' : 'Задача перенесена'} на ${when}`, { label: 'Вернуть', run: () => ui.store.act(undo) });
+}
+
+function dayMoveKeys(e: KeyboardEvent, ui: Ui, item: AgendaItem, from: DayKey) {
+  if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+  e.preventDefault();
+  shiftDay(ui, item, from, addDays(from, e.key === 'ArrowLeft' ? -1 : 1));
+}
+
+function dayMoveProps(ui: Ui, item: AgendaItem, day: DayKey, onPointerDown: (e: PointerEvent) => void, hint = 'cal-date-drag-hint') {
+  return {
+    'data-calendar-item': true,
+    'aria-describedby': hint,
+    onPointerDown,
+    onKeyDown: (e: KeyboardEvent) => dayMoveKeys(e, ui, item, day),
+  };
+}
+
+function DateDragHint({ timeline = false }: { timeline?: boolean }) {
+  return (
+    <p class="note cal-drag-note">
+      Удерживай дело {CALENDAR_DRAG_HOLD_MS / 1000} секунды и перетащи {timeline ? 'на стрелку соседнего дня' : 'на соседнюю дату'}.
+      <span class="sr-only" id="cal-date-drag-hint"> Для переноса на соседний день нажми Alt и стрелку влево или вправо.</span>
+    </p>
+  );
+}
+
 function MonthView({ ui }: { ui: Ui }) {
   const s = ui.store.state;
   const start = picked && picked.on === s.day ? picked.day : s.day;
   const [day, setDayState] = useState<DayKey>(start);
   const [month, setMonth] = useState<MonthKey>(monthOf(start));
+  const page = useRef<HTMLDivElement>(null);
+  const items = agendaOf(s, day);
+  const drag = useCalendarDrag<AgendaItem>(page, (item, to) => {
+    if ('day' in to) shiftDay(ui, item, day, to.day);
+  });
+  const canDrop = (d: DayKey) => !!drag.held && canMoveAgendaDay(s, drag.held.item, day, d);
   const setDay = (d: DayKey) => {
     picked = { day: d, on: s.day };
     setDayState(d);
@@ -71,7 +117,7 @@ function MonthView({ ui }: { ui: Ui }) {
     ui.openDay(d);
   };
   return (
-    <div class="page">
+    <div class="page" ref={page} onPointerDownCapture={drag.resetClick} onClickCapture={drag.onClickCapture}>
       <div class="page-top">
         <span class="page-date">
           <LIcon name="calendar" size={15} class="ic-gold" />
@@ -102,9 +148,9 @@ function MonthView({ ui }: { ui: Ui }) {
         </button>
       </div>
 
-      <MonthGrid s={s} month={month} day={day} onPick={setDay} onOpen={open} />
+      <MonthGrid s={s} month={month} day={day} onPick={setDay} onOpen={open} canDrop={canDrop} target={drag.held?.day} />
 
-      <DayAgenda ui={ui} day={day} />
+      <DayAgenda ui={ui} day={day} items={items} held={drag.held?.item} onPointerDown={drag.onPointerDown} />
     </div>
   );
 }
@@ -114,7 +160,10 @@ function MonthView({ ui }: { ui: Ui }) {
  * Home и End к началу и концу недели, нажатие открывает день шкалой по часам. Диктор слышит дату
  * и сколько на ней событий и задач.
  */
-function MonthGrid({ s, month, day, onPick, onOpen }: { s: State; month: MonthKey; day: DayKey; onPick: (d: DayKey) => void; onOpen: (d: DayKey) => void }) {
+function MonthGrid({ s, month, day, onPick, onOpen, canDrop, target }: {
+  s: State; month: MonthKey; day: DayKey; onPick: (d: DayKey) => void; onOpen: (d: DayKey) => void;
+  canDrop: (d: DayKey) => boolean; target?: DayKey;
+}) {
   const weeks = monthWeeks(month);
   const focusable = monthOf(day) === month ? day : `${month}-01`;
   // День, на который ушли стрелкой: фокус встаёт на него, как только сетка перерисована (и в другом месяце тоже).
@@ -153,12 +202,14 @@ function MonthGrid({ s, month, day, onPick, onOpen }: { s: State; month: MonthKe
               const date = parseDay(d);
               const what = agendaCount(c.meetings, c.tasks);
               const label = `${date.getDate()} ${MONTH_OF[date.getMonth()]}, ${WEEKDAY_NAME[date.getDay()]}${d === s.day ? ', сегодня' : ''}: ${what || 'ничего'}`;
-              const cls = ['cal-day', out && 'is-out', d === s.day && 'is-today', d === day && 'is-on', d < s.day && 'is-past'].filter(Boolean).join(' ');
+              const cls = ['cal-day', out && 'is-out', d === s.day && 'is-today', d === day && 'is-on', d < s.day && 'is-past',
+                canDrop(d) && 'cal-drop', canDrop(d) && d === target && 'is-over'].filter(Boolean).join(' ');
               return (
                 <td key={d}>
                   <button
                     class={cls}
                     data-day={d}
+                    data-calendar-target={d}
                     aria-label={label}
                     aria-pressed={d === day}
                     aria-current={d === s.day ? 'date' : undefined}
@@ -186,25 +237,27 @@ function MonthGrid({ s, month, day, onPick, onOpen }: { s: State; month: MonthKe
   );
 }
 
-function DayAgenda({ ui, day }: { ui: Ui; day: DayKey }) {
+function DayAgenda({ ui, day, items, held, onPointerDown }: {
+  ui: Ui; day: DayKey; items: AgendaItem[]; held?: AgendaItem; onPointerDown: (e: PointerEvent, item: AgendaItem) => void;
+}) {
   const s = ui.store.state;
-  const items = agendaOf(s, day);
   const past = day < s.day;
   return (
     <section class="group cal-agenda">
       <div class="group-head">
-        <h2 class="sc">{dayTitle(day, s.day)}</h2>
+        <h2 class="sc" tabIndex={-1}>{dayTitle(day, s.day)}</h2>
         <button class="link-btn" onClick={() => ui.openDay(day)}>
           по часам
           <LIcon name="chevron" size={15} />
         </button>
       </div>
+      {items.some(dayMovable) && <DateDragHint />}
       {items.length === 0 && <p class="note">{past ? 'В этот день ничего не было.' : 'Ничего не запланировано.'}</p>}
       {items.length > 0 && (
         <ul class="cal-list">
           {items.map((x) => (
             <li key={key(x)}>
-              <AgendaRow ui={ui} s={s} x={x} />
+              <AgendaRow ui={ui} s={s} x={x} held={!!held && key(held) === key(x)} dragProps={dayMovable(x) ? dayMoveProps(ui, x, day, (e) => onPointerDown(e, x)) : undefined} />
             </li>
           ))}
         </ul>
@@ -290,7 +343,20 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
       ui.toast(`Задача перенесена на ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => updateTask(st, id, { at: was })) });
     }
   };
-  const drag = useTimelineDrag(box, HOUR_PX, moveTo);
+  const drag = useCalendarDrag<{ item: AgendaItem; slot?: Slot }>(box, ({ item, slot }, to) => {
+    if ('day' in to) shiftDay(ui, item, day, to.day);
+    else if (slot) moveTo(slot, to.start);
+  });
+  const dayButton = (step: number, label: string) => {
+    const target = addDays(day, step);
+    const ready = drag.held && canMoveAgendaDay(s, drag.held.item.item, day, target);
+    return (
+      <button class={`icon-btn${ready ? ' cal-drop' : ''}${ready && drag.held?.day === target ? ' is-over' : ''}`}
+        data-calendar-target={target} aria-label={`${label}: ${dayTitle(target, s.day)}`} onClick={() => go(step)}>
+        <LIcon name={step < 0 ? 'back' : 'chevron'} size={18} />
+      </button>
+    );
+  };
   const touch = useRef<{ x: number; y: number } | null>(null);
   const newAt = (e: MouseEvent) => {
     if ((e.target as HTMLElement).closest('.tl-ev') || drag.held) return;
@@ -301,7 +367,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
   const what = agendaCount(c.meetings, c.tasks);
   const rel = dayTitle(day, s.day).split(',')[0];
   return (
-    <div class="page cal-dayview">
+    <div class="page cal-dayview" onPointerDownCapture={drag.resetClick} onClickCapture={drag.onClickCapture}>
       <div class="page-top">
         <button class="link-btn" onClick={() => ui.openDay(null)}>
           <LIcon name="back" size={16} />
@@ -309,9 +375,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
         </button>
       </div>
       <div class="period-nav tl-nav">
-        <button class="icon-btn" aria-label={`Раньше: ${dayTitle(addDays(day, -1), s.day)}`} onClick={() => go(-1)}>
-          <LIcon name="back" size={18} />
-        </button>
+        {dayButton(-1, 'Раньше')}
         <div class="period-title">
           <h1 class="tl-title">{dayLong(day, s.day)}</h1>
           <span>
@@ -319,9 +383,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
             {what || 'ничего не запланировано'}
           </span>
         </div>
-        <button class="icon-btn" aria-label={`Позже: ${dayTitle(addDays(day, 1), s.day)}`} onClick={() => go(1)}>
-          <LIcon name="chevron" size={18} />
-        </button>
+        {dayButton(1, 'Позже')}
       </div>
       {!isToday && (
         <button class="link-btn period-back" onClick={() => ui.openDay(s.day)}>
@@ -329,6 +391,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
         </button>
       )}
       <AddButtons ui={ui} day={day} small />
+      {items.some(dayMovable) && <DateDragHint timeline />}
 
       {allDay.length > 0 && (
         <section class="tl-allday" aria-labelledby="tl-allday-h">
@@ -338,7 +401,8 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
           <ul class="cal-list">
             {allDay.map((x) => (
               <li key={key(x)}>
-                <AgendaRow ui={ui} s={s} x={x} />
+                <AgendaRow ui={ui} s={s} x={x} held={!!drag.held && key(drag.held.item.item) === key(x)}
+                  dragProps={dayMovable(x) ? dayMoveProps(ui, x, day, (e) => drag.onPointerDown(e, { item: x })) : undefined} />
               </li>
             ))}
           </ul>
@@ -364,9 +428,9 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
         }}
       >
         <p class="sr-only" id="tl-drag-hint">
-          Чтобы поменять время, перетащи дело или нажми Alt со стрелкой вверх или вниз.
+          Чтобы поменять время, удерживай дело {CALENDAR_DRAG_HOLD_MS / 1000} секунды и перетащи или нажми Alt со стрелкой вверх или вниз.
         </p>
-        <div class={`tl${drag.held ? ' is-dragging' : ''}`} style={{ height: `${24 * HOUR_PX}px` }} onClick={newAt} onClickCapture={drag.onClickCapture}>
+        <div class={`tl${drag.held ? ' is-dragging' : ''}`} style={{ height: `${24 * HOUR_PX}px` }} onClick={newAt}>
           {HOURS.map((h) => (
             <div key={h} class="tl-hour" style={{ top: `${h * HOUR_PX}px` }} aria-hidden="true">
               <span class="tl-label">{h ? `${h}:00` : ''}</span>
@@ -376,9 +440,10 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
           {slots.length === 0 && <p class="tl-empty">Нажми на час, чтобы добавить событие</p>}
           <ul class="tl-evs">
             {slots.map((x) => {
-              const held = drag.held && key(drag.held.slot.item) === key(x.item) ? drag.held : null;
-              const start = held ? held.start : x.start;
+              const held = drag.held && key(drag.held.item.item) === key(x.item) ? drag.held : null;
+              const start = held?.start ?? x.start;
               const shown = held ? { ...x, start, end: start + x.end - x.start } : x;
+              const onPointerDown = (e: PointerEvent) => drag.onPointerDown(e, { item: x.item, slot: x }, { ...x, hourPx: HOUR_PX });
               return (
                 <li
                   key={key(x.item)}
@@ -390,7 +455,9 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
                     width: `calc((100% - var(--tl-gutter)) / ${x.cols} - 3px)`,
                   }}
                 >
-                  <TimelineEvent ui={ui} s={s} slot={shown} onPointerDown={movable(x.item) ? (e) => drag.onPointerDown(e, x) : undefined} onShift={(n) => moveTo(x, dropStart(x.start + n, x.end - x.start))} />
+                  <TimelineEvent ui={ui} s={s} slot={shown} onPointerDown={movable(x.item) ? onPointerDown : undefined}
+                    dateDragProps={dayMovable(x.item) ? dayMoveProps(ui, x.item, day, onPointerDown, 'tl-drag-hint cal-date-drag-hint') : undefined}
+                    onShift={(n) => moveTo(x, dropStart(x.start + n, x.end - x.start))} />
                 </li>
               );
             })}
@@ -411,7 +478,9 @@ function dayLong(day: DayKey, today: DayKey): string {
 /** Что можно перетащить: события, задачи плана и повторы. Сделанное остаётся там, где его сделали. */
 const movable = (x: AgendaItem) => x.kind !== 'due' && !(x.kind === 'task' && x.done);
 
-function TimelineEvent({ ui, s, slot, onPointerDown, onShift }: { ui: Ui; s: State; slot: Slot; onPointerDown?: (e: PointerEvent) => void; onShift: (min: number) => void }) {
+function TimelineEvent({ ui, s, slot, onPointerDown, dateDragProps, onShift }: {
+  ui: Ui; s: State; slot: Slot; onPointerDown?: (e: PointerEvent) => void; dateDragProps?: ReturnType<typeof dayMoveProps>; onShift: (min: number) => void;
+}) {
   const x = slot.item;
   const range = `${hm(slot.start)}–${hm(slot.end)}`;
   let title: string;
@@ -449,7 +518,9 @@ function TimelineEvent({ ui, s, slot, onPointerDown, onShift }: { ui: Ui; s: Sta
       aria-describedby={onPointerDown ? 'tl-drag-hint' : undefined}
       onClick={open}
       onPointerDown={onPointerDown}
+      {...dateDragProps}
       onKeyDown={(e) => {
+        dateDragProps?.onKeyDown(e);
         if (!onPointerDown || !e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
         e.preventDefault();
         onShift(e.key === 'ArrowUp' ? -DRAG_STEP_MIN : DRAG_STEP_MIN);
@@ -472,7 +543,7 @@ const key = (x: AgendaItem) => (x.kind === 'meeting' ? `m-${x.meeting.id}` : x.k
 const repeatOf = (m: Meeting) => (m.repeat && MEETING_REPEAT_NAME[m.repeat]?.toLowerCase()) || null;
 
 /** Строка дня: время, название и что это такое. */
-export function AgendaRow({ ui, s, x }: { ui: Ui; s: State; x: AgendaItem }) {
+export function AgendaRow({ ui, s, x, held, dragProps }: { ui: Ui; s: State; x: AgendaItem; held?: boolean; dragProps?: ReturnType<typeof dayMoveProps> }) {
   const time = x.at ? x.at.replace(/^0/, '') : x.kind === 'meeting' ? 'весь день' : '';
   let title: string;
   let sub: string;
@@ -500,7 +571,7 @@ export function AgendaRow({ ui, s, x }: { ui: Ui; s: State; x: AgendaItem }) {
   }
   const done = x.kind === 'task' && x.done;
   return (
-    <button class={`cal-row${done ? ' row-done' : ''}`} onClick={open}>
+    <button class={`cal-row${done ? ' row-done' : ''}${held ? ' is-held' : ''}`} onClick={open} {...dragProps}>
       <span class="cal-time">{time}</span>
       <span class="cal-dot">{dot}</span>
       <span class="cal-text">

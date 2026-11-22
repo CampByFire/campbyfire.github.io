@@ -2,7 +2,7 @@
 // из задач (день у костра, срок, сделано в этот день) и повторяющихся задач.
 import { parsePhrase } from './phrase';
 import { DRAG_STEP_MIN, EVENT_MIN, MEETING_MIN, estimateOf } from './rules';
-import { nextId, waitingOf } from './state';
+import { findTask, nextId, planTask, setMain, settle, waitingOf } from './state';
 import { addDays, daysBetween, parseDay, repeatsOn } from './time';
 import type { DayKey, Meeting, MeetingRepeat, QuestColor, Routine, State, Task } from './types';
 
@@ -198,13 +198,13 @@ export function restoreMeetingTime(s: State, id: string, was: MeetingTime): void
  * событие без повтора с тем же названием, местом и цветом. Остальные дни серии не меняются.
  * Возвращает id нового события; null, если такого дня в серии нет.
  */
-export function moveMeetingOnce(s: State, now: number, id: string, day: DayKey, at: string): string | null {
+export function moveMeetingOnce(s: State, now: number, id: string, day: DayKey, at: string | null, to = day): string | null {
   const m = findMeeting(s, id);
   const clean = cleanTime(at);
-  if (!m || !clean || !m.repeat || !meetingOccursOn(m, day)) return null;
+  if (!m || (at !== null && !clean) || !m.repeat || !meetingOccursOn(m, day)) return null;
   skipMeetingDay(s, id, day);
-  const next = shifted(m, clean);
-  return addMeeting(s, now, { title: m.title, day, at: next.at, until: next.until ?? null, place: m.place ?? null, color: m.color ?? null });
+  const next = clean ? shifted(m, clean) : { at: null };
+  return addMeeting(s, now, { ...next, title: m.title, day: to, place: m.place ?? null, color: m.color ?? null });
 }
 
 /** Отменить перенос одного дня серии: отдельное событие убирается, день серии возвращается. */
@@ -231,6 +231,53 @@ export type AgendaItem =
   | { kind: 'task'; at: string | null; task: Task; done: boolean }
   | { kind: 'due'; at: string | null; task: Task }
   | { kind: 'routine'; at: string | null; routine: Routine };
+
+/** На соседний день можно перенести событие или открытую задачу, позванную на день. */
+export function canMoveAgendaDay(s: State, item: AgendaItem, from: DayKey, to: DayKey): boolean {
+  return (to === addDays(from, -1) || to === addDays(from, 1))
+    && (item.kind === 'meeting' || (item.kind === 'task' && !item.done && to >= s.day));
+}
+
+/** Переносит дело с сохранением времени и возвращает действие для отмены. */
+export function moveAgendaDay(s: State, now: number, item: AgendaItem, from: DayKey, to: DayKey): ((state: State) => void) | null {
+  if (!canMoveAgendaDay(s, item, from, to)) return null;
+  if (item.kind === 'meeting') {
+    const id = item.meeting.id;
+    const meeting = findMeeting(s, id);
+    if (!meeting || !meetingOccursOn(meeting, from)) return null;
+    if (meeting.repeat) {
+      const copy = moveMeetingOnce(s, now, id, from, meeting.at, to);
+      return copy ? (st) => undoMoveOnce(st, id, from, copy) : null;
+    }
+    meeting.day = to;
+    return (st) => {
+      const current = findMeeting(st, id);
+      if (current?.day === to) current.day = from;
+    };
+  }
+  if (item.kind !== 'task') return null;
+  const id = item.task.id;
+  const task = findTask(s, id);
+  if (!task || task.status !== 'open' || task.day !== from) return null;
+  const { order, leftDay, main } = task;
+  const atFire = s.current?.taskId === id;
+  if (atFire) {
+    settle(s, now);
+    planTask(s, id, null);
+  }
+  planTask(s, id, to);
+  return (st) => {
+    const current = findTask(st, id);
+    if (current?.status !== 'open' || current.day !== to) return;
+    planTask(st, id, from);
+    current.order = order;
+    if (leftDay) current.leftDay = leftDay;
+    if (main) setMain(st, id, main);
+    if (atFire && !st.current && st.day === from) {
+      st.current = { taskId: id, runningSince: null, seenAt: st.settledAt, idleSince: null };
+    }
+  };
+}
 
 const rank = (x: AgendaItem) => (x.kind === 'meeting' && !x.at ? 0 : x.at ? 1 : 2);
 

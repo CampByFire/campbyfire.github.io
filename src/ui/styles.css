@@ -3324,6 +3324,23 @@ button.trophy {
 .cal-agenda .note {
   margin-top: 8px;
 }
+.cal-drag-note {
+  margin: 8px 0 6px;
+}
+.cal-row.is-held {
+  box-shadow: inset 0 0 0 2px var(--gold);
+  cursor: grabbing;
+}
+.cal-day.cal-drop,
+.tl-nav .cal-drop {
+  outline: 2px dashed var(--gold);
+  outline-offset: -2px;
+}
+.cal-day.cal-drop.is-over,
+.tl-nav .cal-drop.is-over {
+  outline-style: solid;
+  background: var(--card-2);
+}
 
 /* ---------- шкала дня ---------- */
 .cal-dayview {

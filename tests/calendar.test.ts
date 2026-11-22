@@ -1,10 +1,10 @@
 // Календарь: встречи, что стоит на день, сетка месяца, файл календаря и слияние встреч.
 import { describe, expect, it } from 'vitest';
-import { addMeeting, agendaOf, dropStart, moveMeeting, moveMeetingOnce, restoreMeetingTime, undoMoveOnce, cleanTime, meetingOccursOn, nextMeetingDay, parseMeeting, skipMeetingDay, timelineOf, unskipMeetingDay, dayCount, findMeeting, meetingsOn, monthWeeks, removeMeeting, restoreMeeting, shiftMonth, updateMeeting } from '../src/game/calendar';
+import { addMeeting, agendaOf, dropStart, moveAgendaDay, moveMeeting, moveMeetingOnce, restoreMeetingTime, undoMoveOnce, cleanTime, meetingOccursOn, nextMeetingDay, parseMeeting, skipMeetingDay, timelineOf, unskipMeetingDay, dayCount, findMeeting, meetingsOn, monthWeeks, removeMeeting, restoreMeeting, shiftMonth, updateMeeting } from '../src/game/calendar';
 import { contrast, meetingTint } from '../src/game/color';
 import { buildIcs } from '../src/game/ics';
 import { mergeGames } from '../src/game/merge';
-import { addRoutine, addTask, complete, findRoutine, findTask, newState, planTask, setRoutineAt, settle, waitingOf } from '../src/game/state';
+import { addRoutine, addTask, complete, findRoutine, findTask, newState, planTask, setRoutineAt, settle, start, waitingOf } from '../src/game/state';
 import { checkSave } from '../src/game/store';
 import type { Meeting, MeetingRepeat, State } from '../src/game/types';
 
@@ -505,5 +505,62 @@ describe('перенос на шкале дня', () => {
     const m = mergeGames(base, local, remote, at(10, 5));
     expect(findMeeting(m, id)).toMatchObject({ title: 'Планёрка отдела', skip: ['2026-11-02'] });
     expect(meetingsOn(m, '2026-11-02').map((x) => [x.id, x.at])).toEqual([[copy, '15:00']]);
+  });
+});
+
+describe('перенос на соседний день', () => {
+  it('событие переезжает через границу месяца вместе со временем, «Вернуть» ставит прежнюю дату', () => {
+    const s = newState(at(8));
+    const from = '2026-10-31';
+    const to = '2026-11-01';
+    const id = addMeeting(s, at(8), { title: 'Стоматолог', day: from, at: '10:00', until: '10:45' });
+    const [item] = agendaOf(s, from);
+    expect(moveAgendaDay(s, at(9), item, from, '2026-11-02')).toBeNull();
+    const undo = moveAgendaDay(s, at(9), item, from, to)!;
+    expect(findMeeting(s, id)).toMatchObject({ day: to, at: '10:00', until: '10:45' });
+    undo(s);
+    expect(findMeeting(s, id)?.day).toBe(from);
+  });
+
+  it('событие на весь день переезжает отдельно от серии и возвращается в неё при отмене', () => {
+    const s = newState(at(8));
+    const from = '2026-10-31';
+    const to = '2026-11-01';
+    const id = addMeeting(s, at(8), { title: 'Прогулка', day: from, repeat: 'week', color: 'green' });
+    const undo = moveAgendaDay(s, at(9), agendaOf(s, from)[0], from, to)!;
+    expect(meetingsOn(s, from)).toEqual([]);
+    expect(meetingsOn(s, to)).toMatchObject([{ at: null, title: 'Прогулка', color: 'green' }]);
+    expect(meetingsOn(s, to)[0].repeat).toBeUndefined();
+    expect(meetingsOn(s, '2026-11-07')[0].id).toBe(id);
+    undo(s);
+    expect(meetingsOn(s, to)).toEqual([]);
+    expect(meetingsOn(s, from)[0].id).toBe(id);
+  });
+
+  it('задача меняет день плана, сохраняет срок и время и возвращается на прежнее место в плане', () => {
+    const s = newState(at(8));
+    const from = s.day;
+    const to = '2026-10-24';
+    const id = addTask(s, at(8), { title: 'Купить торт', day: from, due: from, at: '17:00', questId: null, level: 1 });
+    const [item] = agendaOf(s, from);
+    const order = findTask(s, id)?.order;
+    expect(moveAgendaDay(s, at(9), item, from, '2026-10-22')).toBeNull();
+    const undo = moveAgendaDay(s, at(9), item, from, to)!;
+    expect(findTask(s, id)).toMatchObject({ day: to, due: from, at: '17:00' });
+    expect(agendaOf(s, from)[0].kind).toBe('due');
+    undo(s);
+    expect(findTask(s, id)).toMatchObject({ day: from, order });
+  });
+
+  it('перенос задачи от огня останавливает таймер и сохраняет отработанное время', () => {
+    const s = newState(at(8));
+    const id = addTask(s, at(8), { title: 'Купить торт', day: s.day, questId: null, level: 1 });
+    start(s, at(8), id);
+    const undo = moveAgendaDay(s, at(8, 1), agendaOf(s, s.day)[0], s.day, '2026-10-24')!;
+    expect(s.current).toBeNull();
+    settle(s, at(8, 2));
+    expect(findTask(s, id)?.spentMs).toBe(60_000);
+    undo(s);
+    expect(s.current).toMatchObject({ taskId: id, runningSince: null });
   });
 });

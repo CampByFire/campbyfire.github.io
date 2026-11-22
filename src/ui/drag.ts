@@ -1,9 +1,8 @@
-// Перетаскивание дел на шкале дня, как в календаре телефона. Мышью дело берётся сразу, как только
-// его сдвинули; пальцем после долгого нажатия (DRAG_HOLD_MS), а короткое движение пальцем листает шкалу.
-// Пока дело в руке, шкала сама едет у верхнего и нижнего края. Время встаёт на шаг DRAG_STEP_MIN.
+// Перетаскивание в Плане и Календаре. Короткое движение пальцем листает экран.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { dropStart, type Slot } from '../game/calendar';
-import { DRAG_HOLD_MS } from '../game/rules';
+import { dropStart } from '../game/calendar';
+import { CALENDAR_DRAG_HOLD_MS, DRAG_HOLD_MS } from '../game/rules';
+import type { DayKey } from '../game/types';
 
 /** Сдвиг мышью, после которого нажатие считается перетаскиванием, а не щелчком. */
 const MOUSE_SLOP = 5;
@@ -114,146 +113,129 @@ export function usePlanDrag(box: { current: HTMLElement | null }, onDrop: (from:
   return { held, target, onPointerDown, onClickCapture };
 }
 
-interface Gesture {
-  slot: Slot;
-  len: number;
-  pointer: number;
-  touch: boolean;
-  x0: number;
-  y0: number;
-  y: number;
-  scroll0: number;
-  active: boolean;
-  timer: number;
-  frame: number;
-  start: number;
-}
-
-export interface TimelineDrag {
-  /** Какое дело сейчас в руке и с какой минуты оно встанет. */
-  held: { slot: Slot; start: number } | null;
-  onPointerDown(e: PointerEvent, slot: Slot): void;
-  /** Ловит щелчок, который браузер шлёт после перетаскивания, чтобы он не открыл лист. */
-  onClickCapture(e: MouseEvent): void;
-  /** Только что закончили перетаскивание: смахивание вбок не листает день. */
-  justDropped(): boolean;
-}
-
-export function useTimelineDrag(box: { current: HTMLElement | null }, hourPx: number, onDrop: (slot: Slot, start: number) => void): TimelineDrag {
-  const [held, setHeld] = useState<{ slot: Slot; start: number } | null>(null);
-  const g = useRef<Gesture | null>(null);
+export function useCalendarDrag<T>(
+  scroller: { current: HTMLElement | null },
+  onDrop: (item: T, to: { day: DayKey } | { start: number }) => void,
+) {
+  const [held, setHeld] = useState<{ item: T; day?: DayKey; start?: number } | null>(null);
   const dropped = useRef(0);
   const drop = useRef(onDrop);
   drop.current = onDrop;
-  const stop = useRef<() => void>(() => {});
+  const stop = useRef<(() => void) | null>(null);
+  useEffect(() => () => stop.current?.(), []);
 
-  useEffect(() => () => stop.current(), []);
-
-  const place = (x: Gesture) => {
-    const el = box.current;
-    const dy = x.y - x.y0 + (el ? el.scrollTop - x.scroll0 : 0);
-    const start = dropStart(x.slot.start + (dy / hourPx) * 60, x.len);
-    if (start !== x.start) {
-      x.start = start;
-      setHeld({ slot: x.slot, start });
-    }
-  };
-
-  const edgeScroll = () => {
-    const x = g.current;
-    const el = box.current;
-    if (!x?.active || !el) return;
-    const r = el.getBoundingClientRect();
-    // Едет, только если к краю тянут: дело, взятое у самого края, не уезжает само.
-    const v = x.y < r.top + EDGE && x.y < x.y0 - MOUSE_SLOP ? -EDGE_SPEED : x.y > r.bottom - EDGE && x.y > x.y0 + MOUSE_SLOP ? EDGE_SPEED : 0;
-    if (v) {
-      el.scrollTop += v;
-      place(x);
-    }
-    x.frame = requestAnimationFrame(edgeScroll);
-  };
-
-  const activate = (x: Gesture) => {
-    x.active = true;
-    x.start = x.slot.start;
-    setHeld({ slot: x.slot, start: x.slot.start });
-    if (x.touch) navigator.vibrate?.(10);
-    x.frame = requestAnimationFrame(edgeScroll);
-  };
-
-  const onPointerDown = (e: PointerEvent, slot: Slot) => {
-    if (g.current || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  const onPointerDown = (e: PointerEvent, item: T, slot?: { start: number; end: number; hourPx: number }) => {
+    if (stop.current || !e.isPrimary || e.button !== 0) return;
     const touch = e.pointerType !== 'mouse';
-    const x: Gesture = {
-      slot,
-      len: slot.end - slot.start,
-      pointer: e.pointerId,
-      touch,
-      x0: e.clientX,
-      y0: e.clientY,
-      y: e.clientY,
-      scroll0: box.current?.scrollTop ?? 0,
-      active: false,
-      timer: 0,
-      frame: 0,
-      start: slot.start,
-    };
-    g.current = x;
-    if (touch) x.timer = window.setTimeout(() => g.current === x && activate(x), DRAG_HOLD_MS);
-
-    const move = (ev: PointerEvent) => {
-      if (ev.pointerId !== x.pointer) return;
-      x.y = ev.clientY;
-      if (!x.active) {
-        const dist = Math.hypot(ev.clientX - x.x0, ev.clientY - x.y0);
-        if (x.touch) {
-          if (dist > TOUCH_SLOP) finish(false);
-          return;
-        }
-        if (dist <= MOUSE_SLOP) return;
-        activate(x);
+    const source = e.currentTarget as HTMLElement;
+    const page = source.closest('.page');
+    const box = scroller.current;
+    const scroll0 = box?.scrollTop ?? 0;
+    let active = false;
+    let frame = 0;
+    let x = e.clientX;
+    let y = e.clientY;
+    let moved = false;
+    const targetAt = () => document.elementFromPoint(x, y);
+    const destination = () => {
+      const over = targetAt();
+      const target = over?.closest<HTMLElement>('[data-calendar-target]');
+      if (target && page?.contains(target)) return { day: target.dataset.calendarTarget! };
+      if (slot && moved && over && box?.contains(over)) {
+        const dy = y - e.clientY + box.scrollTop - scroll0;
+        if (Math.abs(dy) > MOUSE_SLOP) return { start: dropStart(slot.start + (dy / slot.hourPx) * 60, slot.end - slot.start) };
       }
-      place(x);
+      return {};
     };
-    // Пока дело в руке, палец не листает шкалу и не тянет страницу.
+    let shown: { day?: DayKey; start?: number } = {};
+    const locate = () => {
+      const next = destination();
+      if (next.day === shown.day && next.start === shown.start) return;
+      shown = next;
+      setHeld({ item, ...next });
+    };
+    const edgeScroll = () => {
+      if (box && moved && box.contains(targetAt())) {
+        const r = box.getBoundingClientRect();
+        const v = y < r.top + EDGE && y < e.clientY - MOUSE_SLOP ? -EDGE_SPEED : y > r.bottom - EDGE && y > e.clientY + MOUSE_SLOP ? EDGE_SPEED : 0;
+        if (v) {
+          box.scrollTop += v;
+          locate();
+        }
+      }
+      frame = requestAnimationFrame(edgeScroll);
+    };
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      x = ev.clientX;
+      y = ev.clientY;
+      moved ||= Math.hypot(x - e.clientX, y - e.clientY) > (active || !touch ? MOUSE_SLOP : TOUCH_SLOP);
+      if (!active) {
+        if (moved) finish(false);
+        return;
+      }
+      locate();
+    };
     const holdTouch = (ev: TouchEvent) => {
-      if (x.active && ev.cancelable) ev.preventDefault();
+      if (active && ev.cancelable) ev.preventDefault();
     };
-    const up = (ev: PointerEvent) => ev.pointerId === x.pointer && finish(ev.type === 'pointerup');
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== e.pointerId) return;
+      x = ev.clientX;
+      y = ev.clientY;
+      finish(ev.type === 'pointerup');
+    };
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      ev.preventDefault();
+      finish(false);
+    };
     const finish = (commit: boolean) => {
-      clearTimeout(x.timer);
-      cancelAnimationFrame(x.frame);
+      clearTimeout(timer);
+      cancelAnimationFrame(frame);
       removeEventListener('pointermove', move);
       removeEventListener('pointerup', up);
       removeEventListener('pointercancel', up);
       removeEventListener('touchmove', holdTouch);
-      if (g.current === x) g.current = null;
-      stop.current = () => {};
-      if (!x.active) return;
+      removeEventListener('keydown', key);
+      removeEventListener('blur', cancel);
+      stop.current = null;
+      if (!active && (touch || !moved)) return;
       dropped.current = Date.now();
+      if (!active) return;
       setHeld(null);
-      if (commit && x.start !== x.slot.start) {
-        try {
-          drop.current(x.slot, x.start);
-        } catch (err) {
-          console.error(err);
-        }
+      if (!commit || !moved) return;
+      const next = destination();
+      try {
+        if (next.day !== undefined) drop.current(item, { day: next.day });
+        else if (next.start !== undefined && next.start !== slot?.start) drop.current(item, { start: next.start });
+      } catch (err) {
+        console.error(err);
       }
     };
-    stop.current = () => finish(false);
+    const cancel = () => finish(false);
+    stop.current = cancel;
+    const timer = window.setTimeout(() => {
+      active = true;
+      setHeld({ item });
+      if (touch) navigator.vibrate?.(10);
+      frame = requestAnimationFrame(edgeScroll);
+    }, CALENDAR_DRAG_HOLD_MS);
     addEventListener('pointermove', move);
     addEventListener('pointerup', up);
     addEventListener('pointercancel', up);
     addEventListener('touchmove', holdTouch, { passive: false });
+    addEventListener('keydown', key);
+    addEventListener('blur', cancel);
   };
 
   const justDropped = () => Date.now() - dropped.current < 400;
 
   const onClickCapture = (e: MouseEvent) => {
-    if (!justDropped()) return;
+    if (!e.detail || !justDropped()) return;
     e.preventDefault();
     e.stopPropagation();
   };
 
-  return { held, onPointerDown, onClickCapture, justDropped };
+  return { held, onPointerDown, onClickCapture, justDropped, resetClick: () => { dropped.current = 0; } };
 }
