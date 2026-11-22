@@ -2,7 +2,7 @@
 // другая игра, и значок в верхней полосе лагеря, когда сохранение не работает.
 import { useEffect, useState } from 'preact/hooks';
 import { HOUR, heroLevel } from '../game/rules';
-import { addDays, dayKey, daysBetween, formatClock, formatDate, formatDayLong, plural } from '../game/time';
+import { addDays, dayKey, daysBetween, formatClock, formatDate, formatDayLong, plural, type ClockFormat } from '../game/time';
 import type { State } from '../game/types';
 import { GitHubError, NEW_REPO_URL, REPO_NAME, TOKEN_URL, TOKENS_URL, historyUrl, repoUrl } from '../sync/github';
 import type { Sync } from '../sync/sync';
@@ -47,8 +47,8 @@ export function SyncSheet({ ui }: { ui: Ui }) {
   );
 }
 
-function when(ts: number, now: number): string {
-  return dayKey(ts) === dayKey(now) ? `сегодня в ${formatClock(ts)}` : `${formatDate(dayKey(ts))}, в ${formatClock(ts)}`;
+function when(ts: number, now: number, format: ClockFormat): string {
+  return dayKey(ts) === dayKey(now) ? `сегодня в ${formatClock(ts, format)}` : `${formatDate(dayKey(ts))}, в ${formatClock(ts, format)}`;
 }
 
 const FROM_DEVICE: Record<string, string> = { телефон: 'с телефона', компьютер: 'с компьютера' };
@@ -98,7 +98,7 @@ export function SyncPanel({ ui }: { ui: Ui }) {
       line = 'В GitHub другая игра, нужно выбрать';
       break;
     default:
-      line = st.syncedAt ? `Сохранено ${when(st.syncedAt, now).replace('сегодня ', '')}` : 'Подключено';
+      line = st.syncedAt ? `Сохранено ${when(st.syncedAt, now, ui.clockFormat).replace('сегодня ', '')}` : 'Подключено';
   }
 
   return (
@@ -376,7 +376,7 @@ export function SyncConflictSheet({ ui }: { ui: Ui }) {
       }
     >
       <p class="note">
-        В GitHub лежит другая игра, её сохранили {FROM_DEVICE[c.device] ?? c.device} {when(c.savedAt, ui.now)}. Оставить можно одну: вторая заменится.
+        В GitHub лежит другая игра, её сохранили {FROM_DEVICE[c.device] ?? c.device} {when(c.savedAt, ui.now, ui.clockFormat)}. Оставить можно одну: вторая заменится.
       </p>
       <div class="compare">
         <div class="compare-row">

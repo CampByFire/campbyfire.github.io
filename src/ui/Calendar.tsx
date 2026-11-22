@@ -5,7 +5,7 @@ import { SLOT_MIN_SHOWN, agendaOf, canMoveAgendaDay, clockOf, dropStart, moveAge
 import { colorName, isDark, meetingTint, questHex } from '../game/color';
 import { findQuest, setRoutineAt, updateTask } from '../game/state';
 import { CALENDAR_DRAG_HOLD_MS, DRAG_STEP_MIN } from '../game/rules';
-import { addDays, formatClock, formatDate, minutesOfDay, parseDay } from '../game/time';
+import { addDays, formatClock, formatDate, formatTime, minutesOfDay, parseDay, type ClockFormat } from '../game/time';
 import type { DayKey, Meeting, State } from '../game/types';
 import { MEETING_REPEAT_NAME, MONTH_NAME, MONTH_OF, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
 import type { Ui } from './App';
@@ -31,12 +31,12 @@ const monthName = (m: MonthKey, today: DayKey) => {
 };
 
 /** «Завтра 1 событие и 2 задачи, с 9:00» или «На завтра ничего не запланировано». */
-export function tomorrowNews(s: State): string {
+export function tomorrowNews(s: State, format: ClockFormat): string {
   const items = agendaOf(s, addDays(s.day, 1));
   const c = countOf(items);
   if (!c.meetings && !c.tasks) return 'На завтра ничего не запланировано';
   const first = items.find((x) => x.at && !(x.kind === 'task' && x.done));
-  return `Завтра ${agendaCount(c.meetings, c.tasks)}${first ? `, с ${first.at!.replace(/^0/, '')}` : ''}`;
+  return `Завтра ${agendaCount(c.meetings, c.tasks)}${first?.at ? `, с ${formatTime(first.at, format).replace(/^0/, '')}` : ''}`;
 }
 
 function countOf(items: AgendaItem[]): { meetings: number; tasks: number } {
@@ -121,11 +121,11 @@ function MonthView({ ui }: { ui: Ui }) {
       <div class="page-top">
         <span class="page-date">
           <LIcon name="calendar" size={15} class="ic-gold" />
-          {formatDate(s.day)} · {formatClock(ui.now)}
+          {formatDate(s.day)} · {formatClock(ui.now, ui.clockFormat)}
         </span>
       </div>
       <h1 class="page-title">{W.calendar}</h1>
-      <p class="page-sub">{tomorrowNews(s)}.</p>
+      <p class="page-sub">{tomorrowNews(s, ui.clockFormat)}.</p>
 
       <div class="cal-jump">
         <button class="chipbtn" onClick={() => open(s.day)}>
@@ -291,7 +291,7 @@ function AddButtons({ ui, day, small = false }: { ui: Ui; day: DayKey; small?: b
 /** Высота часа на шкале дня, в пикселях. */
 const HOUR_PX = 56;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
-const hm = (min: number) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`;
+const hm = (min: number, format: ClockFormat) => formatTime(clockOf(min), format).replace(/^0/, '');
 
 /**
  * День шкалой по часам, как в календаре телефона. Сверху то, что без времени («Весь день»),
@@ -323,7 +323,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
     const x = slot.item;
     if (start === slot.start) return;
     const at = clockOf(start);
-    const when = hm(start);
+    const when = hm(start, ui.clockFormat);
     if (x.kind === 'meeting') {
       const id = x.meeting.id;
       if (x.meeting.repeat) {
@@ -410,7 +410,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
       )}
 
       <section
-        class="tl-scroll"
+        class={`tl-scroll${ui.clockFormat === '12h' ? ' clock-12' : ''}`}
         ref={box}
         tabIndex={0}
         aria-label="По часам"
@@ -433,7 +433,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
         <div class={`tl${drag.held ? ' is-dragging' : ''}`} style={{ height: `${24 * HOUR_PX}px` }} onClick={newAt}>
           {HOURS.map((h) => (
             <div key={h} class="tl-hour" style={{ top: `${h * HOUR_PX}px` }} aria-hidden="true">
-              <span class="tl-label">{h ? `${h}:00` : ''}</span>
+              <span class="tl-label">{h || ui.clockFormat === '12h' ? hm(h * 60, ui.clockFormat) : ''}</span>
             </div>
           ))}
           {isToday && nowMin < 24 * 60 && <div class="tl-now" style={{ top: `${(nowMin / 60) * HOUR_PX}px` }} aria-hidden="true" />}
@@ -482,7 +482,7 @@ function TimelineEvent({ ui, s, slot, onPointerDown, dateDragProps, onShift }: {
   ui: Ui; s: State; slot: Slot; onPointerDown?: (e: PointerEvent) => void; dateDragProps?: ReturnType<typeof dayMoveProps>; onShift: (min: number) => void;
 }) {
   const x = slot.item;
-  const range = `${hm(slot.start)}–${hm(slot.end)}`;
+  const range = `${hm(slot.start, ui.clockFormat)}–${hm(slot.end, ui.clockFormat)}`;
   let title: string;
   let kind: string;
   let cls = 'tl-ev';
@@ -544,7 +544,7 @@ const repeatOf = (m: Meeting) => (m.repeat && MEETING_REPEAT_NAME[m.repeat]?.toL
 
 /** Строка дня: время, название и что это такое. */
 export function AgendaRow({ ui, s, x, held, dragProps }: { ui: Ui; s: State; x: AgendaItem; held?: boolean; dragProps?: ReturnType<typeof dayMoveProps> }) {
-  const time = x.at ? x.at.replace(/^0/, '') : x.kind === 'meeting' ? 'весь день' : '';
+  const time = x.at ? formatTime(x.at, ui.clockFormat).replace(/^0/, '') : x.kind === 'meeting' ? 'весь день' : '';
   let title: string;
   let sub: string;
   let open: () => void;
@@ -552,7 +552,7 @@ export function AgendaRow({ ui, s, x, held, dragProps }: { ui: Ui; s: State; x: 
   if (x.kind === 'meeting') {
     const m = x.meeting;
     title = m.title;
-    sub = ['событие', repeatOf(m), m.until && `до ${m.until.replace(/^0/, '')}`, m.place].filter(Boolean).join(' · ');
+    sub = ['событие', repeatOf(m), m.until && `до ${formatTime(m.until, ui.clockFormat).replace(/^0/, '')}`, m.place].filter(Boolean).join(' · ');
     open = () => ui.open({ kind: 'meeting', meetingId: m.id, day: x.day });
     dot = m.color ? <ColorDot hex={questHex(m.color)} /> : <LIcon name="calendar" size={15} class="cal-ic-meet" />;
   } else if (x.kind === 'routine') {
@@ -572,7 +572,7 @@ export function AgendaRow({ ui, s, x, held, dragProps }: { ui: Ui; s: State; x: 
   const done = x.kind === 'task' && x.done;
   return (
     <button class={`cal-row${done ? ' row-done' : ''}${held ? ' is-held' : ''}`} onClick={open} {...dragProps}>
-      <span class="cal-time">{time}</span>
+      <span class={`cal-time${ui.clockFormat === '12h' ? ' clock-12' : ''}`}>{time}</span>
       <span class="cal-dot">{dot}</span>
       <span class="cal-text">
         <span class="row-title">{title}</span>

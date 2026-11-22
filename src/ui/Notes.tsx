@@ -2,7 +2,7 @@
 // Заметки и дневник хранятся отдельными файлами в lager-data (src/notes), а не в сохранении игры.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { doneOn } from '../game/state';
-import { addDays, dayKey, formatClock, formatDate, formatDuration } from '../game/time';
+import { addDays, dayKey, formatClock, formatDate, formatDuration, formatTime } from '../game/time';
 import { W, entriesCount, notesCount } from '../game/words';
 import { addTag, diaryTags, filterDiary, textTags, type DiaryDay } from '../notes/diary';
 import { sectionDrafts } from '../notes/drafts';
@@ -95,7 +95,7 @@ function SearchResults({ ui, query }: { ui: Ui; query: string }) {
       {hits.length === 0 && <p class="note">Ничего не нашлось.</p>}
       {hits.map((h) => (
         <button key={h.kind === 'note' ? h.path : `${h.path}|${h.entry.time}|${h.entry.title ?? ''}|${h.entry.text}`} class="ncard nhit" onClick={() => open(h)}>
-          <span class="ncard-date">{h.kind === 'note' ? h.where : `Дневник · ${dayName(ui, h.day)}${h.entry.time ? `, ${h.entry.time.replace(/^0/, '')}` : ''}`}</span>
+          <span class="ncard-date">{h.kind === 'note' ? h.where : `Дневник · ${dayName(ui, h.day)}${h.entry.time ? `, ${formatTime(h.entry.time, ui.clockFormat).replace(/^0/, '')}` : ''}`}</span>
           {(h.kind === 'note' ? h.title : h.entry.title) && <span class="ncard-title">{h.kind === 'note' ? h.title : h.entry.title}</span>}
           <span class="ncard-line nhit-text">
             {h.snippet.before}
@@ -360,7 +360,7 @@ function when(ui: Ui, at: number): string {
   const day = dayKey(at);
   const today = dayKey(ui.now);
   const name = day === today ? 'сегодня' : day === addDays(today, -1) ? 'вчера' : formatDate(day);
-  return `${name}, ${formatClock(at)}`;
+  return `${name}, ${formatClock(at, ui.clockFormat)}`;
 }
 
 function FeedCard({ ui, n }: { ui: Ui; n: Note }) {
@@ -457,7 +457,7 @@ function DiaryDayBlock({ ui, d }: { ui: Ui; d: DiaryDay }) {
       </h2>
       {d.entries.map((e, i) => (
         <button key={`${i}-${e.time}`} class="ncard" onClick={() => ui.open({ kind: 'diary', path: d.path, entry: e })}>
-          {e.time && <span class="ncard-date">{e.time.replace(/^0/, '')}</span>}
+          {e.time && <span class="ncard-date">{formatTime(e.time, ui.clockFormat).replace(/^0/, '')}</span>}
           {e.title && <span class="ncard-title">{e.title}</span>}
           {e.text ?<RichText class="ncard-text" text={e.text} links={false} /> : <span class="ncard-text">Пустая запись</span>}
         </button>

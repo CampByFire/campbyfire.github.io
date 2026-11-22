@@ -40,6 +40,50 @@ test('пояснения разделов доступны по вопросит
   expect(await axe(page), 'Справка Лавки').toEqual([]);
 });
 
+test('формат времени меняется в Распорядке, действует в календаре и помнится после перезагрузки', async ({ page }) => {
+  await openGame(page, { time: at(15) });
+  await openSettings(page, 'Распорядок');
+  const formats = page.getByRole('radiogroup', { name: 'Формат времени' });
+  const pageDate = page.getByRole('main').locator('.page-date');
+  const clock24 = formats.getByRole('radio', { name: '24 часа', exact: true });
+  const clock12 = formats.getByRole('radio', { name: '12 часов (AM/PM)' });
+  await expect(clock24).toBeChecked();
+  await expect(pageDate).toContainText('15:00');
+  await clock24.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(clock12).toBeChecked();
+  await expect(pageDate).toContainText('3:00 PM');
+  const workEnd = page.getByRole('group', { name: 'до', exact: true });
+  const workEndMinutes = workEnd.getByRole('combobox', { name: 'до, минуты' });
+  await expect(workEnd.getByRole('combobox', { name: 'до, часы' })).toHaveValue('6');
+  await expect(workEnd.getByRole('combobox', { name: 'до, половина дня' })).toHaveValue('PM');
+  await workEndMinutes.focus();
+  await workEndMinutes.selectOption('15');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
+  await clock24.click();
+  await expect(page.getByLabel('до', { exact: true })).toHaveValue('18:15');
+  await clock12.click();
+  expect(await axe(page), '12-часовой распорядок').toEqual([]);
+
+  await page.reload();
+  await openSettings(page, 'Распорядок');
+  await expect(clock12).toBeChecked();
+  await tab(page, 'План').click();
+  await expect(pageDate).toContainText('3:00 PM');
+  await page.getByRole('button', { name: /На завтра ничего не запланировано/ }).click();
+  await page.locator('.tl').click({ position: { x: 200, y: 15 * 56 + 20 } });
+  const form = sheet(page, 'Новое событие');
+  await form.getByLabel('Что за событие').fill('Созвон');
+  await expect(form.getByRole('combobox', { name: 'Начало, часы' })).toHaveValue('3');
+  await expect(form.getByRole('combobox', { name: 'Начало, половина дня' })).toHaveValue('PM');
+  await expect(form.getByRole('combobox', { name: 'Конец, часы' })).toHaveValue('4');
+  await form.getByRole('combobox', { name: 'Конец, минуты' }).selectOption('15');
+  expect(await axe(page), 'Событие с 12-часовым временем').toEqual([]);
+  await form.getByRole('button', { name: 'Добавить в календарь' }).click();
+  await expect(page.getByRole('button', { name: '3:00 PM–4:15 PM, Созвон, событие' })).toBeVisible();
+});
+
 test('все пять горизонтов доступны вкладками и с клавиатуры', async ({ page }) => {
   await openGame(page);
   const tabs = page.getByRole('radiogroup', { name: 'Что собирать' });

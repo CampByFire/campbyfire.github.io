@@ -1,6 +1,6 @@
 // Календарь: встречи, что стоит на день, сетка месяца, файл календаря и слияние встреч.
 import { describe, expect, it } from 'vitest';
-import { addMeeting, agendaOf, dropStart, moveAgendaDay, moveMeeting, moveMeetingOnce, restoreMeetingTime, undoMoveOnce, cleanTime, meetingOccursOn, nextMeetingDay, parseMeeting, skipMeetingDay, timelineOf, unskipMeetingDay, dayCount, findMeeting, meetingsOn, monthWeeks, removeMeeting, restoreMeeting, shiftMonth, updateMeeting } from '../src/game/calendar';
+import { addMeeting, agendaOf, defaultMeetingEnd, dropStart, moveAgendaDay, moveMeeting, moveMeetingOnce, restoreMeetingTime, undoMoveOnce, cleanTime, meetingOccursOn, nextMeetingDay, parseMeeting, skipMeetingDay, timelineOf, unskipMeetingDay, dayCount, findMeeting, meetingsOn, monthWeeks, removeMeeting, restoreMeeting, shiftMonth, updateMeeting } from '../src/game/calendar';
 import { contrast, meetingTint } from '../src/game/color';
 import { buildIcs } from '../src/game/ics';
 import { mergeGames } from '../src/game/merge';
@@ -13,6 +13,13 @@ const at = (h: number, m = 0, d = 23) => new Date(2026, 9, d, h, m).getTime();
 const titles = (s: State, day: string) => agendaOf(s, day).map((x) => (x.kind === 'meeting' ? x.meeting.title : x.kind === 'routine' ? x.routine.title : x.task.title));
 
 describe('встречи', () => {
+  it('событие со шкалы длится час по умолчанию в пределах выбранного дня', () => {
+    expect(defaultMeetingEnd('09:15')).toBe('10:15');
+    expect(defaultMeetingEnd('23:00')).toBe('23:59');
+    expect(defaultMeetingEnd('23:59')).toBe('');
+    expect(defaultMeetingEnd('')).toBe('');
+  });
+
   it('встреча сохраняет дату, время, конец и место, лишнее убирается', () => {
     const s = newState(at(8));
     const id = addMeeting(s, at(8), { title: '  Стоматолог ', day: '2026-10-24', at: '9:05', until: '10:00', place: ' Ленина, 5 ' });

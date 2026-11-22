@@ -3,6 +3,19 @@
 import { expect, test, type Page } from '@playwright/test';
 import { expandTaskForm, addTask, axe, newFolder, newSection, openGame, openSettings, sheet, tab, write } from './helpers';
 
+test('первое дело в Лагере доступно с клавиатуры', async ({ page }) => {
+  await openGame(page, { intro: true });
+  await sheet(page, 'Знакомство').getByRole('button', { name: 'К костру', exact: true }).press('Enter');
+  const first = page.getByRole('button', { name: 'Добавить первое дело' });
+  await expect(first).toBeVisible();
+  expect(await axe(page), 'Первый запуск в Лагере').toEqual([]);
+  await first.press('Enter');
+  const form = sheet(page, 'Новая задача');
+  await expect(form.getByLabel('Что сделать')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(first).toBeFocused();
+});
+
 test('axe не находит нарушений на экранах и в листах', async ({ page }) => {
   await openGame(page);
   await addTask(page, 'Сдать отчёт', { quest: 'Работа', size: '1 ч' });

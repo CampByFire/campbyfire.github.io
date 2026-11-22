@@ -4,7 +4,7 @@ import { habitWeek, habitWeeksWon, weekOf } from '../game/habits';
 import { mondayOf } from '../game/period';
 import { estimateOf } from '../game/rules';
 import { daysOverdue, findQuest, findRoutine, isUndead } from '../game/state';
-import { addDays, formatDue, formatDuration, formatSpent, plural } from '../game/time';
+import { addDays, formatDue, formatDuration, formatSpent, formatTime, plural, type ClockFormat } from '../game/time';
 import type { Level, Quest, Routine, State, Task } from '../game/types';
 import type { Tone } from '../game/view';
 import { LEVEL_ROMAN, WEEKDAY_CHIPS, periodShort } from '../game/words';
@@ -24,7 +24,7 @@ export function SpentMark({ ms }: { ms: number }) {
  * Подпись справа в строке задачи: нежить, время, срок, оценка или горизонт. У повторяющейся перед ней значок.
  * period: показывать ли горизонт (на вкладке самого периода он лишний).
  */
-export function TaskMeta({ s, t, estimate = false, period = true }: { s: State; t: Task; estimate?: boolean; period?: boolean }) {
+export function TaskMeta({ s, t, format, estimate = false, period = true }: { s: State; t: Task; format: ClockFormat; estimate?: boolean; period?: boolean }) {
   const routine = t.status !== 'done' ? findRoutine(s, t.routineId) : undefined;
   const hw = routine?.habit ? habitWeek(s, routine, weekOf(s.day)) : null;
   const star = t.main && t.status !== 'done' && (
@@ -60,8 +60,9 @@ export function TaskMeta({ s, t, estimate = false, period = true }: { s: State; 
     );
   }
   // Задача позвана на будущий день: видно, когда она придёт к костру.
-  if (t.status === 'open' && t.day && t.day > s.day) return <span class="meta">{repeat}{formatDue(t.day, s.day)}{t.at && `, ${t.at}`}</span>;
-  if (t.at) return <span class="meta">{repeat}в {t.at}</span>;
+  const time = t.at && formatTime(t.at, format);
+  if (t.status === 'open' && t.day && t.day > s.day) return <span class="meta">{repeat}{formatDue(t.day, s.day)}{time && `, ${time}`}</span>;
+  if (time) return <span class="meta">{repeat}в {time}</span>;
   if (t.due === s.day) return <span class="meta meta-gold">{repeat}сегодня</span>;
   if (estimate) {
     const e = estimateOf(t);

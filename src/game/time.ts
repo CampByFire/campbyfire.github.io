@@ -4,6 +4,7 @@ import type { DayKey, Repeat, Settings } from './types';
 
 export type Shift = 'morning' | 'work' | 'evening' | 'weekend' | 'night';
 export type Light = 'day' | 'evening' | 'night';
+export type ClockFormat = '12h' | '24h';
 
 function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n);
@@ -68,10 +69,10 @@ export function repeatOnDays(days: number[]): Repeat {
 }
 
 /** Что не так с распорядком, если смены в нём путаются; null, если всё в порядке. */
-export function scheduleError(s: Settings): string | null {
+export function scheduleError(s: Settings, format?: ClockFormat): string | null {
   const dayStart = DAY_STARTS_AT_HOUR * 60;
   const bed = s.bedtime < dayStart ? s.bedtime + 24 * 60 : s.bedtime;
-  if (s.workStart < dayStart) return `Работа может начаться не раньше ${DAY_STARTS_AT_HOUR}:00: в это время начинается новый игровой день.`;
+  if (s.workStart < dayStart) return `Работа может начаться не раньше ${formatMinutes(dayStart, format)}: в это время начинается новый игровой день.`;
   if (s.workEnd <= s.workStart) return 'Конец работы должен быть позже начала.';
   if (bed - SUMMARY_BEFORE_BED / 60_000 < s.workEnd) return `Отбой должен быть хотя бы на ${SUMMARY_BEFORE_BED / 60_000} минут позже конца работы.`;
   return null;
@@ -110,13 +111,22 @@ export function formatDate(day: DayKey): string {
   return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
 }
 
-export function formatClock(ts: number): string {
+export function formatClock(ts: number, format?: ClockFormat): string {
   const d = new Date(ts);
-  return `${d.getHours()}:${pad(d.getMinutes())}`;
+  return formatMinutes(d.getHours() * 60 + d.getMinutes(), format);
 }
 
-export function formatMinutes(m: number): string {
-  return `${Math.floor(m / 60) % 24}:${pad(m % 60)}`;
+export function formatMinutes(m: number, format: ClockFormat = '24h'): string {
+  const hour = Math.floor(m / 60) % 24;
+  if (format === '12h') return `${hour % 12 || 12}:${pad(m % 60)} ${hour < 12 ? 'AM' : 'PM'}`;
+  return `${hour}:${pad(m % 60)}`;
+}
+
+/** Часы из сохранения. В 24-часовом формате исходим из переданной строки. */
+export function formatTime(time: string, format: ClockFormat): string {
+  if (format === '24h') return time;
+  const [hour, minute] = time.split(':').map(Number);
+  return formatMinutes(hour * 60 + minute, format);
 }
 
 /** Таймер задачи в часах и минутах: «0:42», «2:05». */

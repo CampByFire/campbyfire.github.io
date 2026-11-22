@@ -1,7 +1,7 @@
 // Листы Летописи: быстрая мысль, заметка или статья, запись дневника, новый раздел и его настройки,
 // папка в разделе и перенос заметки или папки в другую папку.
 import { useState } from 'preact/hooks';
-import { formatDate } from '../game/time';
+import { formatDate, formatTime } from '../game/time';
 import { diaryDay, sameEntry, type DiaryEntry } from '../notes/diary';
 import { notesCount } from '../game/words';
 import { draftKey, draftOutdated, dropDraft, loadDraft, moveDraft, putDraft } from '../notes/drafts';
@@ -236,7 +236,7 @@ export function DiarySheet({ ui, path, entry }: { ui: Ui; path: string; entry: D
     >
       <p class="note">
         {day ? formatDate(day) : ''}
-        {entry.time ? `, ${entry.time.replace(/^0/, '')}` : ''}
+        {entry.time ? `, ${formatTime(entry.time, ui.clockFormat).replace(/^0/, '')}` : ''}
       </p>
       {entry.time && (
         <label class="field">

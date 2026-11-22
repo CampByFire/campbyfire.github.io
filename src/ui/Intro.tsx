@@ -8,7 +8,7 @@ const CARDS: { icon: GameIcon; title: string; text: string }[] = [
   {
     icon: 'campfire',
     title: 'Добро пожаловать в лагерь',
-    text: 'Это планировщик дня. Каждая задача здесь становится спутником в отряде, жизнь делится на сферы королевства, а большие цели становятся проектами.',
+    text: 'Добавь одно дело и начни его прямо в Лагере. Через две минуты работы у костра зажжётся первая искра.',
   },
   {
     icon: 'sunrise',
@@ -55,11 +55,11 @@ export function Intro({ onDone }: { onDone: () => void }) {
           </div>
         ) : (
           <div class="btns">
-            <button class="btn btn-ghost" onClick={onDone}>
-              Пропустить
+            <button class={`btn ${i === 0 ? 'btn-gold' : 'btn-ghost'}`} onClick={onDone}>
+              {i === 0 ? 'К костру' : 'Пропустить'}
             </button>
-            <button class="btn btn-gold" onClick={() => setI(i + 1)}>
-              Дальше
+            <button class={`btn ${i === 0 ? 'btn-ghost' : 'btn-gold'}`} onClick={() => setI(i + 1)}>
+              {i === 0 ? 'Как играть' : 'Дальше'}
             </button>
           </div>
         )}

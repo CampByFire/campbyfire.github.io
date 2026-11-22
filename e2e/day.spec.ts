@@ -43,12 +43,35 @@ test('номера и кнопки лагеря нажимаются по все
   await expect(page.getByRole('dialog')).toContainText(/дело/i);
 });
 
+test('первое дело можно начать прямо в Лагере и получить искру', async ({ page }) => {
+  await openGame(page, { intro: true });
+  await sheet(page, 'Знакомство').getByRole('button', { name: 'К костру', exact: true }).click();
+  const day = page.getByRole('region', { name: 'Задачи дня' });
+  const first = day.getByRole('button', { name: 'Добавить первое дело' });
+  await first.click();
+  const form = sheet(page, 'Новая задача');
+  await form.getByLabel('Что сделать').fill('Разобрать почту');
+  await form.getByRole('button', { name: 'Взять в отряд' }).click();
+  await expect(form).toBeHidden();
+  await expect(day).toContainText('Разобрать почту');
+  await day.getByRole('button', { name: 'Начать задачу' }).click();
+  await expect(day.getByRole('heading', { name: 'Сейчас у огня' })).toBeVisible();
+  await expect(day.getByRole('button', { name: 'Разобрать почту' })).toBeVisible();
+  await expect(day.getByText(/зажжётся искра/)).toBeVisible();
+  await setTime(page, new Date(await page.evaluate(() => Date.now()) + 2 * 60_000));
+  await expect(day.getByText(/Искра горит/)).toBeVisible();
+  await expect(toast(page)).toContainText('Искра зажглась');
+  await expect(day.getByRole('button', { name: 'Пауза' })).toBeVisible();
+  await expectNoSideScroll(page);
+});
+
 test('день от знакомства до отбоя', async ({ page }) => {
   await openGame(page, { time: at(9), intro: true });
 
-  // Первый запуск: знакомство, потом сбор отряда.
+  // Первый запуск: из знакомства в Лагерь, затем в сбор отряда.
   await expect(sheet(page, 'Знакомство')).toBeVisible();
-  await page.getByRole('button', { name: 'Пропустить' }).click();
+  await page.getByRole('button', { name: 'К костру', exact: true }).click();
+  await tab(page, 'План').click();
   await expect(page.getByRole('heading', { level: 1, name: 'Сбор отряда' })).toBeVisible();
   await expectNoSideScroll(page);
 

@@ -52,7 +52,7 @@ import {
   waitingOf,
   winQuest,
 } from '../game/state';
-import { addDays, formatDue, formatDuration, formatSpent, nextRepeat, parseDay, plural, repeatOnDays } from '../game/time';
+import { addDays, formatDue, formatDuration, formatSpent, formatTime, nextRepeat, parseDay, plural, repeatOnDays, type ClockFormat } from '../game/time';
 import type { DayKey, Level, Quest, QuestColor, QuestKind, Repeat, State, Task } from '../game/types';
 import type { DiaryEntry } from '../notes/diary';
 import {
@@ -88,6 +88,7 @@ import { setSheetBack } from './back';
 import { MeetingSheet, MoveMeetingSheet } from './MeetingSheet';
 import { PrizeSheet } from './Shop';
 import { PlanActions } from './Plan';
+import { TimeInput } from './TimeInput';
 
 export type SheetState =
   | { kind: 'planActions'; taskId: string; prev?: string; next?: string }
@@ -410,13 +411,13 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
             class="input"
             value={title}
             onInput={(e) => setTitle(e.currentTarget.value)}
-            placeholder={from ? 'Например, сдать модуль React' : 'Например, завтра в 19:00 позвонить маме'}
+            placeholder={from ? 'Например, сдать модуль React' : `Например, завтра в ${formatTime('19:00', ui.clockFormat)} позвонить маме`}
             maxLength={200}
             enterKeyHint="done"
             aria-describedby={parsed ? 'phrase-hint' : undefined}
           />
         </label>
-        {parsed && <PhraseHint s={s} parsed={parsed} raw={title} />}
+        {parsed && <PhraseHint s={s} parsed={parsed} raw={title} format={ui.clockFormat} />}
       </form>
       <Chips
         label={W.quest}
@@ -528,10 +529,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
               <input class="input" type="date" value={v.due ?? ''} onInput={(e) => { touch('due'); setDue(e.currentTarget.value || null); }} />
             </label>
           )}
-          <label class="field">
-            <span class="field-label">Во сколько</span>
-            <input class="input" type="time" value={v.at} onInput={(e) => { touch('at'); setAt(e.currentTarget.value); }} />
-          </label>
+          <TimeInput label="Во сколько" format={ui.clockFormat} value={v.at} optional onChange={(value) => { touch('at'); setAt(value); }} />
         </div>
         <label class="field">
           <span class="field-label">Когда начну</span>
@@ -615,19 +613,19 @@ const FOUND_NAME: Record<Parsed['found'][number]['kind'], string> = {
 };
 
 /** Под полем: что игра узнала во фразе и каким выйдет название. */
-function PhraseHint({ s, parsed, raw }: { s: State; parsed: Parsed; raw: string }) {
+function PhraseHint({ s, parsed, raw, format }: { s: State; parsed: Parsed; raw: string; format: ClockFormat }) {
   const changed = parsed.title !== raw.trim();
   if (!parsed.found.length && !changed) {
     return (
       <p class="field-hint" id="phrase-hint">
-        Можно фразой: «завтра», «до пятницы», «на неделю», «в 19:00», «на 2 часа», «#работа». Название в кавычках берётся как есть.
+        Можно фразой: «завтра», «до пятницы», «на неделю», «в {formatTime('19:00', format)}», «на 2 часа», «#работа». Название в кавычках берётся как есть.
       </p>
     );
   }
   const value = (k: Parsed['found'][number]['kind']): string => {
     if (k === 'day') return formatDue(parsed.day!, s.day);
     if (k === 'due') return formatDue(parsed.due!, s.day);
-    if (k === 'at') return parsed.at!;
+    if (k === 'at') return formatTime(parsed.at!, format);
     if (k === 'estimate') return parsed.estimate === null || parsed.estimate === undefined ? 'дни' : formatDuration(parsed.estimate);
     if (k === 'period') return periodName(parsed.period!, s.day).toLowerCase();
     return findQuest(s, parsed.questId ?? null)?.name ?? '';
@@ -693,7 +691,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
         <div class="task-facts">
           {spent > 0 && <span>{done ? 'Потрачено' : 'У огня уже'} {formatSpent(spent)}</span>}
           {t.due && <span class={undead ? 'meta-undead' : ''}>Срок: {formatDue(t.due, s.day)}</span>}
-          {t.at && <span>В {t.at}</span>}
+          {t.at && <span>В {formatTime(t.at, ui.clockFormat)}</span>}
           {t.period && <span>Горизонт: {periodName(t.period, s.day).toLowerCase()}</span>}
           {t.cue && <span class="fact-cue">{t.cue}</span>}
           {routine && (
@@ -1240,7 +1238,7 @@ function SummarySheet({ ui }: { ui: Ui }) {
             <label key={t.id} class="check-row">
               <input type="checkbox" checked={keep.has(t.id)} onChange={() => toggle(t.id)} />
               <span class="row-title">{t.title}</span>
-              <TaskMeta s={s} t={t} />
+              <TaskMeta s={s} t={t} format={ui.clockFormat} />
             </label>
           ))}
           <p class="note">Без галочки задача вернётся в отряд и будет ждать следующего сбора.</p>
@@ -1462,7 +1460,7 @@ function TaskList({ ui, s, tasks }: { ui: Ui; s: State; tasks: Task[] }) {
             {LEVEL_ROMAN[t.level]}
           </span>
           <span class="row-title">{t.title}</span>
-          <TaskMeta s={s} t={t} />
+          <TaskMeta s={s} t={t} format={ui.clockFormat} />
         </button>
       ))}
     </div>

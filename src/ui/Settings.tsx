@@ -6,6 +6,7 @@ import { buildIcs, calendarEvents, type IcsOptions } from '../game/ics';
 import { isNewerSave, parseSave } from '../game/store';
 import { formatClock, formatDate, formatMinutes, plural, scheduleError } from '../game/time';
 import type { RateEvery, Settings as Schedule } from '../game/types';
+import type { ClockFormat } from '../game/time';
 import { RATE_EVERY_NAME, W } from '../game/words';
 import { GitHubError } from '../sync/github';
 import { BUILD, VERSION } from '../version';
@@ -19,8 +20,13 @@ import { Chips, WeekdayPicker } from './parts';
 import { Sheet } from './Sheets';
 import { SyncPanel, useSync } from './SyncPanel';
 import { PageHelp } from './PageHelp';
+import { TimeInput } from './TimeInput';
 
 const SETTINGS_PARTS = ['Распорядок', 'Напоминания', 'Сохранение', 'Магия', 'Справка', 'Стереть'] as const;
+const CLOCK_FORMATS: { value: ClockFormat; label: string }[] = [
+  { value: '24h', label: '24 часа' },
+  { value: '12h', label: '12 часов (AM/PM)' },
+];
 export type SettingsPart = typeof SETTINGS_PARTS[number];
 
 export function Settings({ ui }: { ui: Ui }) {
@@ -44,7 +50,7 @@ export function Settings({ ui }: { ui: Ui }) {
   const [timeError, setTimeError] = useState<string | null>(null);
   // Время, при котором смены путаются, не сохраняется: поле возвращается к прежнему.
   const setTime = (patch: Partial<Schedule>) => {
-    const error = scheduleError({ ...s.settings, ...patch });
+    const error = scheduleError({ ...s.settings, ...patch }, ui.clockFormat);
     setTimeError(error);
     if (!error) setSetting(patch);
   };
@@ -68,7 +74,7 @@ export function Settings({ ui }: { ui: Ui }) {
       <div class="page-top">
         <span class="page-date">
           <LIcon name="gear" size={15} class="ic-gold" />
-          {formatDate(s.day)} · {formatClock(ui.now)}
+          {formatDate(s.day)} · {formatClock(ui.now, ui.clockFormat)}
         </span>
       </div>
       {part && <button class="link-btn" onClick={() => ui.openSettings(null)}><LIcon name="back" size={16} />Настройки</button>}
@@ -113,10 +119,11 @@ export function Settings({ ui }: { ui: Ui }) {
         <div class="group-head">
           <h2 class="sc">Распорядок</h2>
         </div>
+        <Chips label="Формат времени" value={ui.clockFormat} options={CLOCK_FORMATS} onChange={ui.setClockFormat} />
         <div class="field-row">
-          <TimeField label="Работа с" value={s.settings.workStart} onChange={(v) => setTime({ workStart: v })} />
-          <TimeField label="до" value={s.settings.workEnd} onChange={(v) => setTime({ workEnd: v })} />
-          <TimeField label="Отбой" value={s.settings.bedtime} onChange={(v) => setTime({ bedtime: v })} />
+          <TimeField label="Работа с" format={ui.clockFormat} value={s.settings.workStart} onChange={(v) => setTime({ workStart: v })} />
+          <TimeField label="до" format={ui.clockFormat} value={s.settings.workEnd} onChange={(v) => setTime({ workEnd: v })} />
+          <TimeField label="Отбой" format={ui.clockFormat} value={s.settings.bedtime} onChange={(v) => setTime({ bedtime: v })} />
         </div>
         {timeError && <p class="note note-error">{timeError}</p>}
         <WeekdayPicker label="Рабочие дни" days={s.settings.workDays} onChange={(workDays) => setSetting({ workDays })} />
@@ -302,7 +309,7 @@ function Reminders({ ui }: { ui: Ui }) {
   const o: IcsOptions = { morning: opt.morning, morningDays: opt.days, url };
   const what = calendarEvents(s, o);
   const parts: string[] = [];
-  if (what.morning) parts.push(`утренний костёр в ${formatMinutes(opt.morning!).padStart(5, '0')}`);
+  if (what.morning) parts.push(`утренний костёр в ${formatMinutes(opt.morning!, ui.clockFormat).padStart(5, '0')}`);
   if (what.tasks.length) parts.push(`${what.tasks.length} ${plural(what.tasks.length, 'задача', 'задачи', 'задач')} со временем`);
   if (what.meetings.length) parts.push(`${what.meetings.length} ${plural(what.meetings.length, 'событие', 'события', 'событий')}`);
   if (what.routines) parts.push(`${what.routines} ${plural(what.routines, 'повторяющаяся', 'повторяющиеся', 'повторяющихся')}`);
@@ -330,7 +337,7 @@ function Reminders({ ui }: { ui: Ui }) {
       />
       {opt.morning !== null && (
         <div class="field-row">
-          <TimeField label="Во сколько" value={opt.morning} onChange={(v) => change({ ...opt, morning: v })} />
+          <TimeField label="Во сколько" format={ui.clockFormat} value={opt.morning} onChange={(v) => change({ ...opt, morning: v })} />
         </div>
       )}
       <div class="btns btns-one">
@@ -344,20 +351,13 @@ function Reminders({ ui }: { ui: Ui }) {
   );
 }
 
-function TimeField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+function TimeField({ label, format, value, onChange }: { label: string; format: ClockFormat; value: number; onChange: (v: number) => void }) {
   const str = formatMinutes(value).padStart(5, '0');
   return (
-    <label class="field">
-      <span class="field-label">{label}</span>
-      <input
-        class="input"
-        type="time"
-        value={str}
-        onChange={(e) => {
-          const [h, m] = e.currentTarget.value.split(':').map(Number);
-          if (!Number.isNaN(h) && !Number.isNaN(m)) onChange(h * 60 + m);
-        }}
-      />
-    </label>
+    <TimeInput label={label} format={format} value={str} commitOnBlur onChange={(time) => {
+      if (!time) return;
+      const [h, m] = time.split(':').map(Number);
+      onChange(h * 60 + m);
+    }} />
   );
 }

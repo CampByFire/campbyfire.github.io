@@ -15,9 +15,11 @@ test('«Назад» закрывает открытое, а не приложе
 
   // Знакомство: человек листает карточки, потом жмёт «Назад».
   await expect(sheet(page, 'Знакомство')).toBeVisible();
-  await page.getByRole('button', { name: 'Дальше' }).click();
+  await page.getByRole('button', { name: 'Как играть' }).click();
   await page.goBack();
   await expect(sheet(page, 'Знакомство')).toBeHidden();
+  await inCamp(page);
+  await tab(page, 'План').click();
   await expect(plan(page)).toBeVisible();
 
   // Карточка задачи в сборе отряда: «Назад» закрывает её, план остаётся.

@@ -79,7 +79,7 @@ export function Shop({ ui }: { ui: Ui }) {
       <div class="page-top">
         <span class="page-date">
           <GIcon name="coins" size={15} class="ic-gold" />
-          {formatDate(s.day)} · {formatClock(ui.now)}
+          {formatDate(s.day)} · {formatClock(ui.now, ui.clockFormat)}
         </span>
       </div>
       <div class="page-heading">

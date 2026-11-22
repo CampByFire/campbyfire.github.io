@@ -2002,6 +2002,17 @@ h3.field-label {
   flex: 1;
 }
 
+.field-row:has(.time-12) {
+  flex-wrap: wrap;
+}
+.field-row:has(.time-12) .field {
+  min-width: min(100%, 158px);
+}
+.time-parts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(44px, 1fr)) minmax(58px, 1.2fr);
+  gap: 4px;
+}
 .input {
   width: 100%;
   min-height: 46px;
@@ -2012,6 +2023,10 @@ h3.field-label {
   color: var(--text-hi);
   font: inherit;
   font-size: 17px;
+}
+.time-parts .input {
+  padding: 0 3px;
+  font-size: 15px;
 }
 
 .input:focus {
@@ -3290,6 +3305,9 @@ button.trophy {
   color: var(--text-hi);
   font-variant-numeric: tabular-nums;
 }
+.cal-time.clock-12 {
+  width: 66px;
+}
 .cal-dot {
   flex: none;
   width: 16px;
@@ -3397,6 +3415,9 @@ button.trophy {
   padding: 0 12px 0 4px;
   overflow-y: auto;
   border-top: 1px solid var(--line-2);
+}
+.tl-scroll.clock-12 {
+  --tl-gutter: 68px;
 }
 .tl {
   position: relative;

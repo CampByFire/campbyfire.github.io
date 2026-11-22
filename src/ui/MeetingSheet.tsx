@@ -1,8 +1,8 @@
 // Лист события: новое событие в календаре или правка. Фраза «завтра в 10 стоматолог» сама ставит день и время.
 // Здесь же вопрос, когда день повторяющегося события перетащили на другое время: сдвинуть только его или всю серию.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { addMeeting, cleanTime, findMeeting, meetingOccursOn, moveMeeting, moveMeetingOnce, parseMeeting, removeMeeting, restoreMeeting, restoreMeetingTime, skipMeetingDay, undoMoveOnce, unskipMeetingDay, updateMeeting } from '../game/calendar';
-import { formatDue } from '../game/time';
+import { addMeeting, cleanTime, defaultMeetingEnd, findMeeting, meetingOccursOn, moveMeeting, moveMeetingOnce, parseMeeting, removeMeeting, restoreMeeting, restoreMeetingTime, skipMeetingDay, undoMoveOnce, unskipMeetingDay, updateMeeting } from '../game/calendar';
+import { formatDue, formatTime } from '../game/time';
 import type { DayKey, MeetingRepeat, QuestColor } from '../game/types';
 import { MEETING_REPEATS, MEETING_REPEAT_NAME, dayTitle } from '../game/words';
 import type { Ui } from './App';
@@ -10,6 +10,7 @@ import { LIcon } from './Icon';
 import { QuestColorPicker } from './QuestColorPicker';
 import { Chips } from './parts';
 import { Sheet } from './Sheets';
+import { TimeInput } from './TimeInput';
 
 /** day у нового события это его день, а у открытого события тот день серии, из которого его открыли. */
 export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui: Ui; meetingId?: string; day?: DayKey; at?: string }) {
@@ -18,7 +19,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
   const [title, setTitle] = useState(editing?.title ?? '');
   const [day, setDay] = useState<DayKey>(editing?.day ?? preset ?? s.day);
   const [at, setAt] = useState(editing?.at ?? atPreset ?? '');
-  const [until, setUntil] = useState(editing?.until ?? '');
+  const [until, setUntil] = useState(editing?.until);
   const [place, setPlace] = useState(editing?.place ?? '');
   const [repeat, setRepeat] = useState<MeetingRepeat | null>(editing?.repeat ?? null);
   const [repeatUntil, setRepeatUntil] = useState(editing?.repeatUntil ?? '');
@@ -36,6 +37,9 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
   const pDay = parsed?.day;
   const vDay = !touched.day && pDay ? pDay : day;
   const vAt = !touched.at && parsed?.at ? parsed.at : at;
+  const cleanAt = cleanTime(vAt);
+  const shownAt = cleanAt ? formatTime(cleanAt, ui.clockFormat).replace(/^0/, '') : '';
+  const vUntil = until ?? (atPreset && !editing ? defaultMeetingEnd(vAt) : '');
   const name = parsed && (pDay || parsed.at) ? parsed.title : title.trim();
   const heard = parsed && ((pDay && !touched.day) || (parsed.at && !touched.at));
 
@@ -51,10 +55,10 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
       return;
     }
     if (!vDay || color === null) return;
-    const fields = { title: name, day: vDay, at: vAt || null, until: until || null, place, color, repeat, repeatUntil: repeatUntil || null };
+    const fields = { title: name, day: vDay, at: vAt || null, until: vUntil || null, place, color, repeat, repeatUntil: repeatUntil || null };
     if (editing) ui.store.act((st) => updateMeeting(st, editing.id, fields));
     else ui.store.act((st, now) => addMeeting(st, now, fields));
-    const when = `${formatDue(vDay, s.day)}${cleanTime(vAt) ? ` в ${cleanTime(vAt)!.replace(/^0/, '')}` : ''}${repeat ? `, ${MEETING_REPEAT_NAME[repeat].toLowerCase()}` : ''}`;
+    const when = `${formatDue(vDay, s.day)}${shownAt ? ` в ${shownAt}` : ''}${repeat ? `, ${MEETING_REPEAT_NAME[repeat].toLowerCase()}` : ''}`;
     ui.toast(editing ? 'Событие сохранено' : `Событие в календаре: ${when}`);
     ui.close();
   };
@@ -91,7 +95,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
             class="input"
             value={title}
             onInput={(e) => setTitle(e.currentTarget.value)}
-            placeholder={editing ? 'Например, стоматолог' : 'Например, завтра в 10 стоматолог'}
+            placeholder={editing ? 'Например, стоматолог' : `Например, завтра в ${ui.clockFormat === '12h' ? '10 AM' : '10'} стоматолог`}
             maxLength={200}
             enterKeyHint="done"
             aria-describedby={heard ? 'meet-hint' : undefined}
@@ -100,7 +104,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
         {heard && (
           <p class="field-hint" id="meet-hint" aria-live="polite">
             Понял: {dayTitle(vDay, s.day).toLowerCase()}
-            {cleanTime(vAt) && `, в ${cleanTime(vAt)!.replace(/^0/, '')}`}
+            {shownAt && `, в ${shownAt}`}
           </p>
         )}
       </form>
@@ -120,22 +124,11 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
         />
       </label>
       <div class="field-row">
-        <label class="field">
-          <span class="field-label">Начало</span>
-          <input
-            class="input"
-            type="time"
-            value={vAt}
-            onInput={(e) => {
-              setTouched((x) => ({ ...x, at: true }));
-              setAt(e.currentTarget.value);
-            }}
-          />
-        </label>
-        <label class="field">
-          <span class="field-label">Конец</span>
-          <input class="input" type="time" value={until} disabled={!vAt} onInput={(e) => setUntil(e.currentTarget.value)} />
-        </label>
+        <TimeInput label="Начало" format={ui.clockFormat} value={vAt} optional onChange={(value) => {
+          setTouched((x) => ({ ...x, at: true }));
+          setAt(value);
+        }} />
+        <TimeInput label="Конец" format={ui.clockFormat} value={vUntil} optional disabled={!vAt} onChange={setUntil} />
       </div>
       <p class="note">Без времени событие стоит на весь день, например день рождения или поездка.</p>
       <label class="field">
@@ -182,7 +175,7 @@ export function MoveMeetingSheet({ ui, meetingId, day, at }: { ui: Ui; meetingId
   const s = ui.store.state;
   const m = findMeeting(s, meetingId);
   if (!m) return null;
-  const when = at.replace(/^0/, '');
+  const when = formatTime(at, ui.clockFormat).replace(/^0/, '');
   const date = formatDue(day, s.day);
   const once = () => {
     const copy = ui.store.act((st, now) => moveMeetingOnce(st, now, meetingId, day, at));

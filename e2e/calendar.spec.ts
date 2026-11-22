@@ -29,6 +29,7 @@ test('событие и задача на завтра: шкала дня, пл�
   const form = sheet(page, 'Новое событие');
   await form.getByLabel('Что за событие').fill('завтра в 10 стоматолог');
   await expect(form.locator('#meet-hint')).toHaveText('Понял: завтра, суббота, 24 октября, в 10:00');
+  await expect(form.getByLabel('Конец')).toHaveValue('');
   await form.getByLabel('Конец').fill('10:45');
   await form.getByLabel('Где').fill('Ленина, 5');
   expect(await axe(page), 'Новое событие').toEqual([]);
@@ -42,9 +43,17 @@ test('событие и задача на завтра: шкала дня, пл�
   await page.locator('.tl').click({ position: { x: 200, y: 15 * 56 + 20 } });
   const slot = sheet(page, 'Новое событие');
   await expect(slot.getByLabel('Начало')).toHaveValue('15:00');
+  await expect(slot.getByLabel('Конец')).toHaveValue('16:00');
+  await slot.getByLabel('Начало').fill('15:15');
+  await expect(slot.getByLabel('Конец')).toHaveValue('16:15');
+  await slot.getByLabel('Начало').fill('15:00');
   await slot.getByLabel('Что за событие').fill('Созвон');
   await slot.getByRole('button', { name: 'Добавить в календарь' }).click();
-  await expect(timeline(page).getByRole('button', { name: '15:00–16:00, Созвон, событие' })).toBeVisible();
+  const call = timeline(page).getByRole('button', { name: '15:00–16:00, Созвон, событие' });
+  await call.click();
+  const savedCall = sheet(page, 'Событие');
+  await expect(savedCall.getByLabel('Конец')).toHaveValue('16:00');
+  await savedCall.getByRole('button', { name: 'Закрыть' }).click();
 
   // Задача без времени встаёт в «Весь день».
   await page.getByRole('button', { name: 'Задача', exact: true }).click();

@@ -3,6 +3,7 @@ import type { Store } from '../game/store';
 import type { Notes } from '../notes/notes';
 import type { Sync } from '../sync/sync';
 import type { CompleteResult } from '../game/state';
+import type { ClockFormat } from '../game/time';
 import type { DayKey } from '../game/types';
 import { W } from '../game/words';
 import { CalendarScreen } from './Calendar';
@@ -74,6 +75,8 @@ export interface Ui {
   /** Сила магии на этом устройстве. */
   motion: Motion;
   setMotion(m: Motion): void;
+  clockFormat: ClockFormat;
+  setClockFormat(format: ClockFormat): void;
 }
 
 /** Знакомство показываем новичку. Тому, у кого уже есть задачи (обновился или взял игру из GitHub), не показываем. */
@@ -99,7 +102,8 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   useSync(sync);
   useNotes(notes);
   const s = store.state;
-  const [screen, setScreen] = useState<Screen>(() => (s.litDay !== s.day && s.closedDay !== s.day ? 'plan' : 'camp'));
+  const [intro, setIntro] = useState(() => needIntro(store));
+  const [screen, setScreen] = useState<Screen>(() => (!intro && s.litDay !== s.day && s.closedDay !== s.day ? 'plan' : 'camp'));
   const [section, setSection] = useState<string | null>(null);
   const [calDay, setCalDay] = useState<DayKey | null>(null);
   const [settingsPart, setSettingsPart] = useState<SettingsPart | null>(null);
@@ -118,8 +122,8 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   /** Где фокус стоял последним: если кнопка пропадёт после действия, он вернётся рядом. */
   const lastFocus = useRef<FocusSpot | null>(null);
   const [day, setDay] = useState(s.day);
-  const [intro, setIntro] = useState(() => needIntro(store));
   const [motion, setMotionState] = useState<Motion>(() => motionOf(store.now()));
+  const [clockFormat, setClockFormat] = useState<ClockFormat>(() => loadLocal(store.now()).clockFormat === '12h' ? '12h' : '24h');
   const [shade, setShade] = useState(false);
   // Из Лагеря уходят со свёрнутой шторкой: вернёшься, и снова видна сцена.
   useEffect(() => {
@@ -333,6 +337,11 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
       setIntro(true);
     },
     motion,
+    clockFormat,
+    setClockFormat: (format) => {
+      updateLocal(store.now(), (local) => { local.clockFormat = format; });
+      setClockFormat(format);
+    },
     setMotion: (m) => {
       updateLocal(store.now(), (l) => {
         l.magic = m;

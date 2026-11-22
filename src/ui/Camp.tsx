@@ -11,6 +11,7 @@ import {
   findQuest,
   isStarted,
   isUndead,
+  lightFire,
   pause,
   reopenDay,
   restedLeft,
@@ -21,7 +22,7 @@ import {
   toggleBreak,
   undoComplete,
 } from '../game/state';
-import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatSpent, formatTimer, formatTimerSeconds, minutesOfDay } from '../game/time';
+import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatSpent, formatTimer, formatTimerSeconds, formatTime, minutesOfDay, type ClockFormat } from '../game/time';
 import { meetingsOn } from '../game/calendar';
 import { habitWeek, weekOf } from '../game/habits';
 import { canBuy, goalOf, shortOf, unlockedBy } from '../game/shop';
@@ -409,6 +410,7 @@ export function Camp({ ui }: { ui: Ui }) {
                   key={t.id}
                   s={s}
                   t={t}
+                  format={ui.clockFormat}
                   n={v.numbers.get(t.id) ?? 0}
                   tone={v.tones.get(t.id) ?? 'today'}
                   color={v.colors.get(t.id)}
@@ -522,11 +524,11 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
         <span class="chip-day" aria-hidden="true">
           {formatDate(s.day).split(',')[0]}
         </span>
-        <span aria-hidden="true">{formatClock(now)}</span>
+        <span aria-hidden="true">{formatClock(now, ui.clockFormat)}</span>
         <span class="chip-shift" aria-hidden="true">
           {SHIFT_NAME[v.asleep ? 'night' : v.shift]}
         </span>
-        <span class="sr-only">{`${formatDate(s.day)}, ${formatClock(now)}, ${SHIFT_NAME[v.asleep ? 'night' : v.shift]}`}</span>
+        <span class="sr-only">{`${formatDate(s.day)}, ${formatClock(now, ui.clockFormat)}, ${SHIFT_NAME[v.asleep ? 'night' : v.shift]}`}</span>
       </div>
       <SyncBadge ui={ui} />
       <button class="camp-hit" data-magic="gold" title={W.shop} onClick={() => ui.go('shop')}>
@@ -569,12 +571,13 @@ function CalendarChip({ ui }: { ui: Ui }) {
   const s = ui.store.state;
   const nowAt = formatMinutes(Math.min(minutesOfDay(ui.now), 24 * 60 - 1)).padStart(5, '0');
   const next = meetingsOn(s, s.day).find((m) => m.at && m.at >= nowAt);
-  const label = next ? `Календарь: сегодня в ${next.at!.replace(/^0/, '')} ${next.title}` : `Календарь. ${tomorrowNews(s)}`;
+  const nextAt = next?.at && formatTime(next.at, ui.clockFormat).replace(/^0/, '');
+  const label = next ? `Календарь: сегодня в ${nextAt} ${next.title}` : `Календарь. ${tomorrowNews(s, ui.clockFormat)}`;
   return (
     <button class="camp-hit" aria-label={label} title={label} onClick={() => openCalendar(ui, next ? s.day : addDays(s.day, 1))}>
       <span class="chip camp-book-btn">
         <LIcon name="calendar" size={18} />
-        {next && <span aria-hidden="true">{next.at!.replace(/^0/, '')}</span>}
+        {next && <span aria-hidden="true">{nextAt}</span>}
       </span>
     </button>
   );
@@ -724,7 +727,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
         </div>
         <div class="card-title">Отряд отдыхает у огня</div>
         <div class="card-sub">
-          {mana >= MANA_MAX ? 'Мана полна, можно в путь.' : `Мана растёт на ${MANA_REST_PER_HOUR} в час, полной станет к ${formatClock(fullAt)}.`}
+          {mana >= MANA_MAX ? 'Мана полна, можно в путь.' : `Мана растёт на ${MANA_REST_PER_HOUR} в час, полной станет к ${formatClock(fullAt, ui.clockFormat)}.`}
           {v.current && ` Ждёт: ${v.current.title}.`}
         </div>
         <SecondWind ui={ui} />
@@ -746,7 +749,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
           <h2 class="sc">Ты ещё у огня?</h2>
         </div>
         <div class="card-title card-title-sm">{v.current.title}</div>
-        <div class="card-sub">В игру долго не заглядывали, и таймер встал в {formatClock(since)}. Если работа всё это время шла, нажми «{W.stillWorking}»: эти минуты вернутся в задачу.</div>
+        <div class="card-sub">В игру долго не заглядывали, и таймер встал в {formatClock(since, ui.clockFormat)}. Если работа всё это время шла, нажми «{W.stillWorking}»: эти минуты вернутся в задачу.</div>
         <div class="btns">
           <button class="btn btn-gold" onClick={() => store.act((st, n) => confirmWorking(st, n))}>
             {W.stillWorking}
@@ -828,29 +831,47 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
   }
 
   const next = v.main[0] ?? v.later[0] ?? null;
+  const unlit = s.litDay !== s.day;
   if (next) {
     return (
       <div class="card">
         <div class="card-head">
           <GIcon name="campfire" size={18} class="ic-fire" />
-          <h2 class="sc">{W.atFireEmpty}</h2>
+          <h2 class="sc">{unlit ? 'Задача на сегодня' : W.atFireEmpty}</h2>
         </div>
         <div class="next next-big">
           <span {...numLook(v.tones.get(next.id) ?? 'today', v.colors.get(next.id), 'num-sm')} aria-hidden="true">
             {v.numbers.get(next.id)}
           </span>
           <span class="next-title">{next.title}</span>
-          {isStarted(s, next) ? <SpentMark ms={next.spentMs} /> : <TaskMeta s={s} t={next} />}
+          {isStarted(s, next) ? <SpentMark ms={next.spentMs} /> : <TaskMeta s={s} t={next} format={ui.clockFormat} />}
         </div>
         {next.cue && !isStarted(s, next) && <Cue text={next.cue} />}
         <SecondWind ui={ui} />
         <div class="btns">
-          <button class="btn btn-gold" onClick={() => callToFire(ui, next)}>
+          <button class="btn btn-gold" onClick={() => callToFire(ui, next, unlit)}>
             <GIcon name="campfire" size={18} />
-            {isStarted(s, next) ? W.resume : <CallLabel />}
+            {isStarted(s, next) ? W.resume : unlit ? 'Начать задачу' : <CallLabel />}
           </button>
           <button class="btn btn-ghost" onClick={() => toggleRest(ui)}>
             {W.rest}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (unlit && s.tasks.length === 0) {
+    return (
+      <div class="card">
+        <div class="card-head">
+          <GIcon name="campfire" size={18} class="ic-fire" />
+          <h2 class="sc">С чего начнём?</h2>
+        </div>
+        <div class="btns btns-one">
+          <button class="btn btn-gold" onClick={() => ui.open({ kind: 'add', day: s.day })}>
+            <LIcon name="plus" size={16} />
+            Добавить первое дело
           </button>
         </div>
       </div>
@@ -1006,13 +1027,16 @@ function ShopHint({ ui, gain }: { ui: Ui; gain: number }) {
 
 // Действия карточки. Состояние меняется сразу, а заклинание догоняет его, пока на экране ещё прежняя сцена.
 
-export function callToFire(ui: Ui, t: Task): void {
+export function callToFire(ui: Ui, t: Task, lightCamp = false): void {
   ui.setCheer(null);
   const s = ui.store.state;
   if (s.current?.taskId === t.id) return backToWork(ui);
   const mana = Math.round(s.hero.mana);
   const prev = s.current ? s.tasks.find((x) => x.id === s.current!.taskId) : undefined;
-  const { switchCost } = ui.store.act((st, n) => start(st, n, t.id));
+  const { switchCost } = ui.store.act((st, n) => {
+    if (lightCamp) lightFire(st, n);
+    return start(st, n, t.id);
+  });
   summon(t.id, switchCost, mana);
   // Прежняя задача уходит от огня с сохранённым временем: к ней можно вернуться, и таймер продолжит.
   const left = prev && prev.id !== t.id ? ui.store.state.tasks.find((x) => x.id === prev.id) : undefined;
@@ -1055,14 +1079,14 @@ export function backToWork(ui: Ui): void {
   if (hadFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>('.card [data-pause]')?.focus());
 }
 
-function TaskRow({ s, t, n, tone, color, onClick }: { s: State; t: Task; n: number; tone: Tone; color: string | undefined; onClick: () => void }) {
+function TaskRow({ s, t, format, n, tone, color, onClick }: { s: State; t: Task; format: ClockFormat; n: number; tone: Tone; color: string | undefined; onClick: () => void }) {
   return (
     <button class="row" onClick={onClick}>
       <span {...numLook(tone, color, 'num-sm')} aria-hidden="true">
         {n}
       </span>
       <span class="row-title">{t.title}</span>
-      {isStarted(s, t) && !isUndead(t, s.day) ? <SpentMark ms={t.spentMs} /> : <TaskMeta s={s} t={t} />}
+      {isStarted(s, t) && !isUndead(t, s.day) ? <SpentMark ms={t.spentMs} /> : <TaskMeta s={s} t={t} format={format} />}
     </button>
   );
 }

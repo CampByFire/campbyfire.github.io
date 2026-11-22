@@ -4,7 +4,7 @@ import { addTask, connectGitHub, fakeGitHub, openGame, openSettings, sheet, tab 
 
 test('стёртая игра начинается заново со знакомства', async ({ page }) => {
   await openGame(page, { intro: true });
-  await page.getByRole('button', { name: 'Пропустить' }).click();
+  await page.getByRole('button', { name: 'К костру', exact: true }).click();
   await addTask(page, 'Купить хлеб');
   await tab(page, 'Летопись').click();
   await page.getByRole('button', { name: 'Записать мысль' }).click();
@@ -17,7 +17,7 @@ test('стёртая игра начинается заново со знако�
   await confirm.getByRole('button', { name: 'Стереть игру', exact: true }).click();
 
   await expect(sheet(page, 'Знакомство')).toBeVisible();
-  await page.getByRole('button', { name: 'Пропустить' }).click();
+  await page.getByRole('button', { name: 'К костру', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Купить хлеб/ })).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem('taskcraft-lager-github'))).toBeNull();
   expect(await page.evaluate(() => localStorage.getItem('taskcraft-lager-notes'))).toBeNull();
@@ -28,7 +28,7 @@ test('стёртая игра начинается заново со знако�
 test('вместе с сохранением в GitHub: без связи ничего не стирается, со связью уходят оба', async ({ page }) => {
   const gh = await fakeGitHub(page);
   await openGame(page, { intro: true });
-  await page.getByRole('button', { name: 'Пропустить' }).click();
+  await page.getByRole('button', { name: 'К костру', exact: true }).click();
   await connectGitHub(page);
   await page.getByRole('button', { name: 'Настройки', exact: true }).click();
   await page.getByRole('navigation', { name: 'Разделы настроек' }).getByRole('button', { name: 'Стереть', exact: true }).click();

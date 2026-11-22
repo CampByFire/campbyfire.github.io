@@ -152,6 +152,14 @@ export function restoreMeeting(s: State, m: Meeting): void {
 /** Минуты от полуночи в «09:05». */
 export const clockOf = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 
+/** Конец по умолчанию для события со шкалы. Время окончания хранится в пределах выбранного дня. */
+export function defaultMeetingEnd(at: string): string {
+  const start = cleanTime(at);
+  if (!start) return '';
+  const end = clockOf(Math.min(24 * 60 - 1, toMin(start) + MEETING_MIN));
+  return end > start ? end : '';
+}
+
 /**
  * Куда встанет дело, которое перетащили на шкале дня: начало на ближайший шаг DRAG_STEP_MIN,
  * и всё дело целиком остаётся в этих сутках (конец не позже 23:59).

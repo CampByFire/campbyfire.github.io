@@ -27,7 +27,7 @@ import {
   undoComplete,
   unrelease,
 } from '../src/game/state';
-import { addDays, dayKey, scheduleError, shiftAt } from '../src/game/time';
+import { addDays, dayKey, formatClock, formatTime, scheduleError, shiftAt } from '../src/game/time';
 import { assignSeats, campView } from '../src/game/view';
 import { SAVE_VERSION, Store, checkSave, type Storage } from '../src/game/store';
 
@@ -41,6 +41,15 @@ function fresh(now = at(8)) {
 }
 
 describe('время и смены', () => {
+  it('часы по умолчанию 24-часовые, полдень и полночь различаются в 12-часовом формате', () => {
+    expect(formatClock(at(17, 5))).toBe('17:05');
+    expect(formatClock(at(17, 5), '12h')).toBe('5:05 PM');
+    expect(formatTime('12:00', '12h')).toBe('12:00 PM');
+    expect(formatTime('00:00', '12h')).toBe('12:00 AM');
+    expect(formatTime('24:00', '12h')).toBe('12:00 AM');
+    expect(formatTime('09:05', '24h')).toBe('09:05');
+  });
+
   it('день начинается в 4 утра', () => {
     expect(dayKey(at(3, 59))).toBe('2026-10-22');
     expect(dayKey(at(4))).toBe('2026-10-23');
