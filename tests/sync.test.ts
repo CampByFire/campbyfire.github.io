@@ -615,6 +615,14 @@ describe('слияние версий', () => {
     expect(findTask(m, id)!.level).toBe(1);
   });
 
+  it('описание с телефона и время с компьютера сохраняются вместе', () => {
+    const { base, local, remote, id } = pair();
+    updateTask(local, id, { description: 'Открыть книгу\nПрочитать главу' });
+    updateTask(remote, id, { at: '15:00' });
+    const merged = mergeGames(base, local, remote, at(10));
+    expect(findTask(merged, id)).toMatchObject({ description: 'Открыть книгу\nПрочитать главу', at: '15:00' });
+  });
+
   it('строка «когда начну» с одного устройства и время с другого не теряются', () => {
     const { base, local, remote, id } = pair();
     local.touchedAt = at(9);

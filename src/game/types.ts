@@ -79,6 +79,7 @@ export interface Reward {
 export interface Task {
   id: string;
   title: string;
+  description?: string;
   questId: string | null;
   level: Level;
   /** Оценка в минутах. Пустая значит «по уровню». */
@@ -173,6 +174,7 @@ export type Repeat = { every: 'day' } | { every: 'week'; weekday: number } | { e
 export interface Routine {
   id: string;
   title: string;
+  description?: string;
   questId: string | null;
   level: Level;
   estimateMin: number | null;

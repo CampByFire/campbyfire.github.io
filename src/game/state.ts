@@ -437,6 +437,7 @@ export function ratingDue(s: State): boolean {
 
 export interface TaskInput {
   title: string;
+  description?: string;
   questId: string | null;
   level?: Level;
   estimateMin?: number | null;
@@ -470,6 +471,7 @@ export function addTask(s: State, now: number, input: TaskInput): string {
     spentMs: 0,
     createdAt: now,
   };
+  setDescription(t, input.description);
   if (input.period) t.period = input.period;
   if (input.cue?.trim()) t.cue = input.cue.trim();
   setWin(t, input.win ?? null);
@@ -489,13 +491,19 @@ export function updateTask(
     t.order = nextOrder(s, patch.day);
     delete t.leftDay;
   }
-  const { period, cue, win, ...rest } = patch;
+  const { period, cue, win, description, ...rest } = patch;
   Object.assign(t, rest);
+  if (description !== undefined) setDescription(t, description);
   if (cue !== undefined) setCue(t, cue);
   if (win !== undefined) setWin(t, win);
   if (period !== undefined) setPeriod(s, id, period);
   keepMain(t);
   if (t.status === 'inbox' && (t.questId || t.period)) t.status = 'open';
+}
+
+function setDescription(x: { description?: string }, description?: string): void {
+  if (description?.trim()) x.description = description;
+  else delete x.description;
 }
 
 /** План «если — то» задачи или повторяющейся: пустой убирается. */
@@ -578,6 +586,7 @@ export function planTask(s: State, id: string, day: DayKey | null): void {
 
 export interface RoutineInput {
   title: string;
+  description?: string;
   questId: string | null;
   level: Level;
   estimateMin: number | null;
@@ -603,8 +612,9 @@ export function waitingOf(s: State, routineId: string): Task | undefined {
  */
 export function addRoutine(s: State, now: number, input: RoutineInput, fromTaskId?: string): string {
   const id = nextId(s, 'r');
-  const { cue, habit, ...rest } = input;
+  const { cue, habit, description, ...rest } = input;
   const r: Routine = { id, ...rest, title: input.title.trim() || 'Без названия', repeat: { ...input.repeat }, createdAt: now };
+  setDescription(r, description);
   setCue(r, cue ?? null);
   setHabit(r, habit ?? null);
   s.routines.push(r);
@@ -622,14 +632,16 @@ export function updateRoutine(s: State, id: string, input: RoutineInput): void {
   const r = findRoutine(s, id);
   if (!r) return;
   const moved = JSON.stringify(r.repeat) !== JSON.stringify(input.repeat);
-  const { cue, habit, ...rest } = input;
+  const { cue, habit, description, ...rest } = input;
   Object.assign(r, rest, { title: input.title.trim() || r.title, repeat: { ...input.repeat } });
+  if (description !== undefined) setDescription(r, description);
   if (cue !== undefined) setCue(r, cue);
   if (habit !== undefined) setHabit(r, habit);
   else if (r.habit) setHabit(r, r.habit);
   const t = waitingOf(s, id);
   if (t) {
     Object.assign(t, { title: r.title, questId: r.questId, level: r.level, estimateMin: r.estimateMin, at: r.at });
+    setDescription(t, r.description);
     setCue(t, r.cue ?? null);
     if (t.status === 'inbox' && t.questId) t.status = 'open';
   }
@@ -698,6 +710,7 @@ export function planRoutines(s: State, only?: string): void {
       spentMs: 0,
       createdAt: Math.max(dayStart, r.createdAt),
       routineId: r.id,
+      ...(r.description ? { description: r.description } : {}),
       ...(r.cue ? { cue: r.cue } : {}),
     });
   }

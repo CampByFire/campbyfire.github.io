@@ -273,6 +273,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const quests = pickableQuests(s, from?.questId);
   const [allQuests, setAllQuests] = useState(false);
   const [title, setTitle] = useState(from?.title ?? '');
+  const [description, setDescription] = useState(from?.description ?? '');
   const [questId, setQuestId] = useState<string | null>(from ? from.questId : preset?.questId ?? null);
   const [estimate, setEstimate] = useState<number | null>(from ? estimateOf(from) : 30);
   // Уровень следует за временем. У старой задачи он остаётся прежним, пока не тронули время.
@@ -331,7 +332,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       ui.toast('Выбери хотя бы один день');
       return;
     }
-    const fields = { title: name, questId: v.questId, level: v.lvl, estimateMin: v.estimate === ESTIMATE_BY_LEVEL[v.lvl] ? null : v.estimate, at: v.at || null, cue: cue.trim() || null };
+    const fields = { title: name, description, questId: v.questId, level: v.lvl, estimateMin: v.estimate === ESTIMATE_BY_LEVEL[v.lvl] ? null : v.estimate, at: v.at || null, cue: cue.trim() || null };
     if (repeat) {
       const habit = goal === null ? null : { goal };
       const rid = ui.store.act((st, now) => {
@@ -439,6 +440,10 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
           options={estimates}
           onChange={(x) => { touch('estimate'); setEstimate(x); setLvl(levelOfEstimate(x)); }}
         />
+        <label class="field">
+          <span class="field-label">Описание</span>
+          <textarea class="input" rows={3} value={description} onInput={(e) => setDescription(e.currentTarget.value)} />
+        </label>
         <details class="duration-help">
           <summary>Спутник по длительности</summary>
           <p class="note">{CLASS_NAME[CLASS_BY_LEVEL[v.lvl]]}, уровень {v.lvl}. Длительность определяет класс и уровень спутника.</p>
