@@ -872,3 +872,12 @@ describe('лавка с двух устройств', () => {
     }
   });
 });
+
+it('иконка сферы и новое название с другого устройства сохраняются вместе', () => {
+  const base = newState(at(9));
+  const local = structuredClone(base);
+  const remote = structuredClone(base);
+  local.quests[0].icon = 'dub';
+  remote.quests[0].name = 'Сад';
+  expect(mergeGames(base, local, remote, at(10)).quests[0]).toMatchObject({ icon: 'dub', name: 'Сад' });
+});

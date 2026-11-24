@@ -36,6 +36,8 @@ export interface Quest {
   createdAt: number;
   /** Это сфера, а не проект. */
   sphere?: true;
+  /** Без поля проект берёт иконку сферы. null явно выключает иконку. */
+  icon?: import('./words').QuestIcon | null;
   /** Проект: в какой он сфере. Нет поля или null: проект сам по себе. */
   sphereId?: string | null;
   /** Проект завершён и ушёл в зал трофеев. */

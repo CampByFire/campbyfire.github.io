@@ -79,6 +79,7 @@ import { GIcon, LIcon } from './Icon';
 import { comeBack, ignite, letGo } from './magic/spells';
 import { bedtime, expectJoin, expectLetter, lairFall } from './magic/world';
 import { Chips, HabitWeekView, LevelMark, QuestDot, TaskMeta, WeekdayPicker, questName } from './parts';
+import { QuestIconPicker } from './QuestEmblem';
 import { QuestColorPicker } from './QuestColorPicker';
 import { AboutSheet, RulesSheet } from './Info';
 import { WipeSheet } from './Settings';
@@ -1273,14 +1274,15 @@ function QuestForm({ ui, questId, sphere, sphereId }: { ui: Ui; questId?: string
   const [name, setName] = useState(q?.name ?? '');
   const [kind, setKind] = useState<QuestKind>(q?.kind ?? (isSphere ? 'personal' : 'work'));
   const [home, setHome] = useState<string | null>(q ? sphereOf(s, q.id)?.id ?? null : sphereId ?? null);
+  const [icon, setIcon] = useState<Quest['icon']>(q?.icon);
   const homeSphere = home && !isSphere ? findQuest(s, home) : undefined;
   const [first] = useState<QuestColor>(() => q?.color ?? homeSphere?.color ?? PRESETS[s.quests.length % PRESETS.length]);
   // null: в поле кода сейчас не цвет, под ним уже сказано, что не так.
   const [color, setColor] = useState<QuestColor | null>(first);
   const save = () => {
     if (!name.trim() || !color) return;
-    if (q) ui.store.act((st) => updateQuest(st, q.id, { name: name.trim(), kind, color, ...(isSphere ? {} : { sphereId: home }) }));
-    else ui.store.act((st, now) => addQuest(st, now, { name, kind, color, sphere: isSphere, sphereId: isSphere ? null : home }));
+    if (q) ui.store.act((st) => updateQuest(st, q.id, { name: name.trim(), kind, color, icon, ...(isSphere ? {} : { sphereId: home }) }));
+    else ui.store.act((st, now) => addQuest(st, now, { name, kind, color, icon, sphere: isSphere, sphereId: isSphere ? null : home }));
     ui.close();
   };
   const what = isSphere ? 'Сфера' : 'Проект';
@@ -1313,6 +1315,7 @@ function QuestForm({ ui, questId, sphere, sphereId }: { ui: Ui; questId?: string
         <p class="note">Когда: как у сферы «{homeSphere.name}», {QUEST_KIND_HINT[homeSphere.kind]}.</p>
       )}
       <QuestColorPicker initial={first} onChange={setColor} />
+      <QuestIconPicker value={icon} home={homeSphere || undefined} color={questHex(color ?? first)} onChange={setIcon} />
     </Sheet>
   );
 }

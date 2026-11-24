@@ -294,11 +294,12 @@ export function kindOf(s: State, questId: string | null): QuestKind {
 export function addQuest(
   s: State,
   now: number,
-  q: { name: string; kind: QuestKind; color: QuestColor; sphere?: boolean; sphereId?: string | null },
+  q: { name: string; kind: QuestKind; color: QuestColor; sphere?: boolean; sphereId?: string | null; icon?: Quest['icon'] },
 ): string {
   const id = nextId(s, q.sphere ? 's' : 'q');
   const home = q.sphere ? undefined : findSphere(s, q.sphereId ?? null);
   const quest: Quest = { id, name: q.name.trim() || 'Без названия', kind: home?.kind ?? q.kind, color: q.color, createdAt: now };
+  if (q.icon !== undefined) quest.icon = q.icon;
   if (q.sphere) quest.sphere = true;
   else quest.sphereId = home?.id ?? null;
   // Новая сфера встаёт после остальных сфер, проект в конец.
@@ -307,7 +308,7 @@ export function addQuest(
   return id;
 }
 
-export function updateQuest(s: State, id: string, patch: Partial<Pick<Quest, 'name' | 'kind' | 'color' | 'sphereId'>>): void {
+export function updateQuest(s: State, id: string, patch: Partial<Pick<Quest, 'name' | 'kind' | 'color' | 'sphereId' | 'icon'>>): void {
   const q = findQuest(s, id);
   if (!q) return;
   if (q.sphere) delete patch.sphereId;

@@ -285,3 +285,26 @@ test('с клавиатуры: лист ловит фокус, Escape возвр
   await expect(form).toBeHidden();
   await expect(add).toBeFocused();
 });
+
+test('иконка проекта выбирается с клавиатуры и открывает задачу у костра', async ({ page }) => {
+  await openGame(page);
+  await tab(page, 'Королевство').click();
+  await page.getByRole('button', { name: 'новый проект' }).click();
+  const form = sheet(page, 'Новый проект');
+  await form.getByLabel('Название').fill('Сад');
+  await form.locator('.quest-icon-picker summary').press('Enter');
+  const oak = form.getByRole('radio', { name: 'Дуб', exact: true });
+  await oak.focus();
+  await oak.press('Space');
+  await expect(oak).toBeChecked();
+  expect(await axe(page), 'Выбор иконки проекта').toEqual([]);
+  await form.getByRole('button', { name: 'Начать проект' }).click();
+  await addTask(page, 'Посадить дерево', { quest: 'Сад' });
+  await tab(page, 'План').click();
+  await page.getByRole('button', { name: /Разжечь костёр/ }).click();
+  const badge = page.getByRole('button', { name: /1\..*у костра: Посадить дерево/ });
+  await expect(badge.locator('use')).toHaveAttribute('href', './quest-icons.svg#dub');
+  await page.screenshot({ path: test.info().outputPath('lager.png') });
+  await badge.click();
+  await expect(page.getByRole('dialog')).toContainText('Посадить дерево');
+});

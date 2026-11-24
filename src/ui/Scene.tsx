@@ -5,6 +5,8 @@ import type { CampView, Tone } from '../game/view';
 import type { Task } from '../game/types';
 import { CLASS_NAME, UNDEAD_NAME } from '../game/words';
 import { SCENE, SCENE_H, SCENE_W, assetUrl, heroKey, pct, spriteKey, type Sprite } from '../scene/scene';
+import { QuestEmblem } from './QuestEmblem';
+import type { QuestIcon } from '../game/words';
 import { LIcon } from './Icon';
 import { numLook } from './parts';
 import { pick, preloadMask, type Pickable } from './pick';
@@ -23,6 +25,7 @@ interface Figure {
   tone: Tone;
   /** Цвет знамени похода: в него красятся номер и плащ героя. */
   color?: string;
+  icon?: QuestIcon;
   extra?: preact.ComponentChildren;
   pulse?: boolean;
   zz?: boolean;
@@ -56,6 +59,7 @@ export function Scene(p: {
       n: v.numbers.get(v.ring.task.id) ?? 0,
       tone: 'current',
       color: v.colors.get(v.ring.task.id),
+      icon: v.icons.get(v.ring.task.id),
       pulse: v.ring.pose === 'work',
       extra: p.timer && v.ring.pose !== 'cheer' ? <span class="tag tag-timer" aria-hidden="true">{p.timer}</span> : null,
     });
@@ -74,6 +78,7 @@ export function Scene(p: {
       n: v.numbers.get(f.task.id) ?? 0,
       tone: f.tone,
       color: v.colors.get(f.task.id),
+      icon: v.icons.get(f.task.id),
       zz: f.pose === 'lie',
     });
   }
@@ -109,8 +114,8 @@ export function Scene(p: {
   if (fireLayer) layers.push({ key: 'fire', sprite: { ...fireLayer, lit: true }, feet: fire[1] });
   layers.sort((a, b) => a.feet - b.feet);
 
-  // Сама фигура тоже открывает задачу, как номер над ней. Фигура без номера не открывается, как и раньше.
-  const pickable: Pickable<string>[] = layers.map((l) => ({ sprite: l.sprite, target: l.f && l.f.n > 0 ? l.f.task.id : undefined }));
+  // Нажатие на фигуру открывает ту же задачу, что и её метка.
+  const pickable: Pickable<string>[] = layers.map((l) => ({ sprite: l.sprite, target: l.f && (l.f.n > 0 || l.f.icon) ? l.f.task.id : undefined }));
   const files = pickable.map((l) => l.sprite.file).join('|');
   useEffect(() => {
     for (const l of pickable) preloadMask(l.sprite.file);
@@ -372,7 +377,7 @@ function badgeLayout(figures: Figure[], unit = 1): Map<string, [number, number]>
   for (const f of figures) {
     const [x, y] = badgeAt(f);
     let at: [number, number] = [x, y];
-    if (f.n > 0) {
+    if (f.n > 0 || f.icon) {
       const free = ([cx, cy]: [number, number]) => occupied.every(([ox, oy]) => Math.abs(cx - ox) >= gap - 0.01 || Math.abs(cy - oy) >= gap - 0.01);
       const candidates: [number, number][] = [[x, y], ...occupied.flatMap(([ox]): [number, number][] => [[ox - gap, y], [ox + gap, y]])];
       const best = candidates.filter(([cx]) => cx >= edge && cx <= SCENE_W - edge).filter(free).sort((a, b) => Math.abs(a[0] - x) - Math.abs(b[0] - x))[0];
@@ -389,17 +394,18 @@ function FigureBadge({ f, at: [x, y], onTask }: { f: Figure; at: [number, number
   const look = numLook(f.tone, f.color, f.pulse ? 'is-pulse' : '');
   return (
     <div
-      class={`fig-mark${f.n > 0 ? '' : ' fig-mark-free'}${x > SCENE_W * 0.62 ? ' fig-mark-left' : ''}`}
+      class={`fig-mark${f.n > 0 || f.icon ? '' : ' fig-mark-free'}${x > SCENE_W * 0.62 ? ' fig-mark-left' : ''}`}
       style={{ left: pct(x, SCENE_W), top: pct(y, SCENE_H) }}
       data-task={f.task.id}
     >
-      {f.n > 0 && (
+      {(f.n > 0 || f.icon) && (
         <button
           class="figure-hit"
-          aria-label={`${f.n}. ${f.label}`}
+          aria-label={f.n ? `${f.n}. ${f.label}` : f.label}
           onClick={() => onTask(f.task.id)}
         >
-          <span class={look.class} style={look.style} aria-hidden="true">{f.n}</span>
+          {f.icon ? <QuestEmblem icon={f.icon} color={f.color} /> :
+            <span class={look.class} style={look.style} aria-hidden="true">{f.n}</span>}
         </button>
       )}
       {f.extra}

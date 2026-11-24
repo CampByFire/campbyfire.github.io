@@ -307,3 +307,38 @@ export function priceHint(price: number, pace: number | null, perTask: number): 
   const n = Math.round(days);
   return `В твоём темпе это примерно ${n} ${plural(n, 'день', 'дня', 'дней')} дел.`;
 }
+
+export const QUEST_ICON_NAME = {
+  dom: 'Дом',
+  serdtse: 'Сердце',
+  koshel: 'Кошель',
+  kniga: 'Книга',
+  dub: 'Дуб',
+  rukopozhatie: 'Рукопожатие',
+  nakovalnya: 'Наковальня',
+  lyutnya: 'Лютня',
+  luna: 'Луна',
+  botinok: 'Ботинок',
+  rostok: 'Росток',
+  palitra: 'Палитра',
+  maski: 'Маски',
+  chaynik: 'Чайник',
+  vesy: 'Весы',
+  vershina: 'Вершина',
+  most: 'Мост',
+  chertezh: 'Чертёж',
+  pero: 'Перо',
+  fonar: 'Фонарь',
+  parusnik: 'Парусник',
+  bashnya: 'Башня',
+  klyuch: 'Ключ',
+  kompas: 'Компас',
+  igla: 'Игла',
+  chasy: 'Песочные часы',
+  zelye: 'Зелье',
+  koleso: 'Колесо',
+  sunduk: 'Сундук',
+  venok: 'Венок',
+} as const;
+
+export type QuestIcon = keyof typeof QUEST_ICON_NAME;

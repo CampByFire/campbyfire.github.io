@@ -1,10 +1,10 @@
 // Что показывает экран дня: чистая функция «состояние → лагерь».
 import { questHex } from './color';
 import { ROAD_SPOTS, SEATS, undeadRank, type UndeadRank } from './rules';
-import { findQuest, inboxOf, isUndead, kindOf, planOf, daysOverdue, undeadOf } from './state';
+import { findQuest, sphereOf, inboxOf, isUndead, kindOf, planOf, daysOverdue, undeadOf } from './state';
 import { addDays, isMainFor, lightOf, shiftAt, type Light, type Shift } from './time';
 import type { State, Task } from './types';
-import { CLASS_BY_LEVEL, type ClassId } from './words';
+import { CLASS_BY_LEVEL, QUEST_ICON_NAME, type QuestIcon, type ClassId } from './words';
 
 export type Tone = 'today' | 'evening' | 'undead' | 'current';
 export type Pose = 'sit' | 'work' | 'cheer' | 'lie';
@@ -43,6 +43,7 @@ export interface CampView {
   numbers: Map<string, number>;
   tones: Map<string, Tone>;
   /** Цвет знамени похода у задач с номером: в него красится номер над спутником и в списках. У задачи без похода номер прежний, золотой. */
+  icons: Map<string, QuestIcon>;
   colors: Map<string, string>;
   /** Открытые задачи дня без текущей, в порядке плана. */
   main: Task[];
@@ -102,13 +103,11 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
 
   const numbers = new Map<string, number>();
   const colors = new Map<string, string>();
+  const icons = new Map<string, QuestIcon>();
   let n = 0;
   for (const t of plan) numbers.set(t.id, ++n);
   for (const t of undead) if (!numbers.has(t.id)) numbers.set(t.id, ++n);
-  for (const t of [...plan, ...undead]) {
-    const q = findQuest(s, t.questId);
-    if (q) colors.set(t.id, questHex(q.color));
-  }
+
 
   const cur = s.current ? plan.find((t) => t.id === s.current!.taskId) ?? null : null;
   const open = plan.filter((t) => t.status === 'open' && t.id !== cur?.id);
@@ -145,6 +144,13 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
   const seated = asleep
     ? s.tasks.filter((t) => t.status === 'open' && t.day === tomorrow).sort((a, b) => a.order - b.order)
     : [...main, ...later].filter((t) => !isUndead(t, s.day));
+  for (const t of [...plan, ...undead, ...(asleep ? seated : [])]) {
+    const q = findQuest(s, t.questId);
+    if (!q) continue;
+    colors.set(t.id, questHex(q.color));
+    const icon = !q.sphere && q.icon === undefined ? sphereOf(s, q.id)?.icon : q.icon;
+    if (icon && Object.prototype.hasOwnProperty.call(QUEST_ICON_NAME, icon)) icons.set(t.id, icon);
+  }
   const { seats: seatMap, extra } = assignSeats(seated);
   const seats: SeatFigure[] = [];
   for (const t of seated) {
@@ -170,6 +176,7 @@ export function campView(s: State, now: number, cheerTaskId: string | null = nul
     numbers,
     tones,
     colors,
+    icons,
     main,
     later,
     doneToday: done.length,

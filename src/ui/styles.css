@@ -3978,3 +3978,32 @@ button.trophy {
   font-size: 16px;
   text-align: left;
 }
+
+.quest-emblem {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  box-sizing: border-box;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  background: #17251f;
+  box-shadow: 0 0 0 1px #fff1d5, 0 2px 5px #0009;
+}
+.quest-emblem svg { width: 100%; height: 100%; }
+.quest-icon-picker { margin-block: 12px; }
+.quest-icon-picker summary { min-height: 44px; padding: 8px; cursor: pointer; }
+.quest-icon-picker summary .quest-emblem { vertical-align: middle; margin-left: 6px; }
+.quest-icon-picker fieldset {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
+  gap: 6px; margin: 0; padding: 4px; border: 0;
+}
+.quest-icon-picker label {
+  position: relative; display: grid; justify-items: center; align-content: center;
+  gap: 5px; padding: 5px; min-height: 54px; text-align: center;
+  border: 1px solid currentColor; border-radius: 8px; cursor: pointer;
+}
+.quest-icon-picker input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.quest-icon-picker label:has(:checked) { outline: 2px solid var(--gold); outline-offset: -3px; }
+.quest-icon-picker label:focus-within { outline: 3px solid currentColor; }

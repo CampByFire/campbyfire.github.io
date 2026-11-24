@@ -110,3 +110,20 @@ describe('свой цвет в игре', () => {
     expect(m.quests.find((x) => x.id === q)).toMatchObject({ name: 'Работа и учёба', color: '#1a237e' });
   });
 });
+
+it('у костра проект наследует знак сферы со своим цветом, может заменить или убрать знак', () => {
+  const s = newState(at(9));
+  const sphere = s.quests[0];
+  updateQuest(s, sphere.id, { icon: 'dom' });
+  const project = addQuest(s, at(9), { name: 'Балкон', kind: 'personal', color: 'blue', sphereId: sphere.id });
+  const task = addTask(s, at(9), { title: 'Рассадить цветы', questId: project, day: s.day });
+  const view = () => campView(s, at(9));
+  expect(view().icons.get(task)).toBe('dom');
+  expect(view().colors.get(task)).toBe(PRESET_HEX.blue);
+  updateQuest(s, project, { icon: 'rostok' });
+  expect(view().icons.get(task)).toBe('rostok');
+  updateQuest(s, project, { icon: null });
+  expect(view().icons.has(task)).toBe(false);
+  updateQuest(s, project, { icon: undefined });
+  expect(view().icons.get(task)).toBe('dom');
+});
