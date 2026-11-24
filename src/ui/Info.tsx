@@ -233,6 +233,7 @@ export function AboutSheet({ ui }: { ui: Ui }) {
           {link('./licenses/philosopher.txt', 'Philosopher')}, {link('./licenses/alegreya-sans.txt', 'Alegreya Sans')}).
         </li>
         <li>Интерфейс на {link('./licenses/preact.txt', 'Preact')} (Jason Miller), лицензия MIT.</li>
+        <li>Android-оболочка использует AndroidX (Android Open Source Project), {link('./licenses/android-apache-2.0.txt', 'лицензия Apache 2.0')}.</li>
       </ul>
     </Sheet>
   );

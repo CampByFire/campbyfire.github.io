@@ -34,9 +34,13 @@ jobs:
       # Что упало, видно в логе шага.
       - name: Автотесты экранов
         run: npm run e2e
+      # APK доступен по прямой ссылке и не занимает место в офлайн-кэше сайта.
+      - name: Приложение для Android
+        run: install -Dm644 android/release/lager.apk dist/android/lager.apk
       - uses: actions/upload-pages-artifact@v5
         with:
           path: dist
+          include-hidden-files: true
 
   deploy:
     needs: build

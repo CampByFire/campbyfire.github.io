@@ -14,10 +14,12 @@ import { Sync } from './sync/sync';
 import { askPersistentStorage, registerServiceWorker } from './ui/pwa';
 import { blockTouchMenu } from './ui/noselect';
 import { Root } from './ui/Root';
+import { connectAndroidTimer } from './ui/androidTimer';
 
 blockTouchMenu();
 
 const store = new Store();
+connectAndroidTimer(store);
 const sync = new Sync(store);
 const notes = new Notes(sync);
 render(<Root store={store} sync={sync} notes={notes} />, document.getElementById('app')!);

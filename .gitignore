@@ -7,3 +7,8 @@ scripts/render-camp/kaykit/
 scripts/render-camp/out/
 *.log
 .DS_Store
+android/.tools/
+android/.gradle/
+android/.signing/
+android/local.properties
+android/**/build/

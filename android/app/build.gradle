@@ -1,0 +1,33 @@
+plugins {
+    id 'com.android.application' version '8.9.2'
+}
+
+android {
+    namespace 'io.github.campbyfire.lager'
+    compileSdk 35
+    sourceSets.main.assets.srcDir('../../public/licenses')
+
+    defaultConfig {
+        applicationId 'io.github.campbyfire.lager'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+    }
+
+    if (System.getenv('LAGER_STORE_PASSWORD')) {
+        signingConfigs {
+            lager {
+                storeFile rootProject.file('.signing/lager.p12')
+                storePassword System.getenv('LAGER_STORE_PASSWORD')
+                keyAlias 'lager'
+                keyPassword System.getenv('LAGER_STORE_PASSWORD')
+            }
+        }
+        buildTypes.release.signingConfig = signingConfigs.lager
+    }
+}
+
+dependencies {
+    implementation 'androidx.browser:browser:1.8.0'
+}

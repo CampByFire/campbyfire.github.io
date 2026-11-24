@@ -1,0 +1,11 @@
+[{
+  "relation": [
+    "delegate_permission/common.handle_all_urls",
+    "delegate_permission/common.use_as_origin"
+  ],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "io.github.campbyfire.lager",
+    "sha256_cert_fingerprints": ["4D:82:CF:B9:12:79:C5:40:A9:41:A9:B1:DA:67:ED:BF:9D:8F:0D:BA:D3:88:1D:0A:70:85:1F:B4:11:6C:B3:77"]
+  }
+}]
