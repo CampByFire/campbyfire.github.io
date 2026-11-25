@@ -1,10 +1,16 @@
+import questIcons from './quest-icons.svg?raw';
 import type { Quest } from '../game/types';
 import { QUEST_ICON_NAME, type QuestIcon } from '../game/words';
+
+/** Общие символы остаются в документе при смене экранов. */
+export function QuestIconSprite() {
+  return <div class="quest-icon-sprite" aria-hidden="true" dangerouslySetInnerHTML={{ __html: questIcons }} />;
+}
 
 export function QuestEmblem({ icon, color }: { icon: QuestIcon; color?: string }) {
   return (
     <span class="quest-emblem" style={{ color }} aria-hidden="true">
-      <svg viewBox="0 0 64 64"><use href={`./quest-icons.svg#${icon}`} /></svg>
+      <svg viewBox="0 0 64 64"><use href={`#${icon}`} /></svg>
     </span>
   );
 }

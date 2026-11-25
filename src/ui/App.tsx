@@ -21,6 +21,7 @@ import { pageEnter, pageLeave } from './magic/spells';
 import { Notices } from './Notices';
 import { NotesScreen, upPlace, useNotes } from './Notes';
 import { Plan } from './Plan';
+import { QuestIconSprite } from './QuestEmblem';
 import { Realm } from './Realm';
 import { Settings, type SettingsPart } from './Settings';
 import { Shop } from './Shop';
@@ -371,6 +372,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   });
   return (
     <div class="app">
+      <QuestIconSprite />
       <main class="screen" inert={covered} ref={main}>
         {screen === 'camp' && <Camp ui={ui} />}
         {screen === 'plan' && <Plan ui={ui} />}

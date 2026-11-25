@@ -29,6 +29,8 @@ test('личные оценки сохраняются отдельно от о�
   await rate.getByRole('button', { name: 'Сохранить оценку' }).click();
   await expect(rate).toBeHidden();
   await expect(toast(page)).toHaveText('Оценка сохранена');
+  // Лист уже скрыт от диктора, но ещё закрывается. Переводим часы после его ухода.
+  await expect(page.locator('.sheet-layer')).toHaveCount(0);
   await setTime(page, at(10, 0, 30));
   await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
   await tab(page, 'Алхимия').click();
@@ -59,7 +61,7 @@ test('котелки показывают уровень, дату и выбра
   await tab(page, 'Алхимия').click();
   const cards = page.locator('.sphere-card');
   await expect(cards.first()).toHaveAccessibleName(/Работа.*сегодня.*3 из 8.*Перо/);
-  await expect(cards.nth(1).locator('use')).toHaveAttribute('href', './quest-icons.svg#rostok');
+  await expect(cards.nth(1).locator('use')).toHaveAttribute('href', '#rostok');
   await expect(cards.nth(3)).toHaveAccessibleName(/8 из 8/);
   await expect(cards.last()).toHaveAccessibleName(/Пока нет выполненных дел.*0 из 8/);
   await page.getByLabel('Справка: Алхимия').click();

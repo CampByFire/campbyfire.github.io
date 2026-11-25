@@ -3913,6 +3913,14 @@ button.trophy {
   text-align: left;
 }
 
+.quest-icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
 .quest-emblem {
   display: inline-grid;
   place-items: center;

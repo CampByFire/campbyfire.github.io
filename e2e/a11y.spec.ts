@@ -1,6 +1,6 @@
 // Доступность: проверка axe на главных экранах и листах, работа с клавиатуры.
 // Как звучит игра в VoiceOver и TalkBack, проверяется руками: docs/screen-reader-check.md.
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { expandTaskForm, addTask, axe, newFolder, newSection, openGame, openSettings, sheet, tab, write } from './helpers';
 
 test('первое дело в Лагере доступно с клавиатуры', async ({ page }) => {
@@ -286,7 +286,7 @@ test('с клавиатуры: лист ловит фокус, Escape возвр
   await expect(add).toBeFocused();
 });
 
-test('иконка проекта выбирается с клавиатуры и открывает задачу у костра', async ({ page }) => {
+test('иконка проекта выбирается с клавиатуры и сохраняется при смене вкладок', async ({ page }) => {
   await openGame(page);
   await tab(page, 'Алхимия').click();
   await page.getByRole('button', { name: 'новый проект' }).click();
@@ -304,7 +304,18 @@ test('иконка проекта выбирается с клавиатуры �
   await tab(page, 'План').click();
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   const badge = page.getByRole('button', { name: /1\..*у костра: Посадить дерево/ });
-  await expect(badge.locator('use')).toHaveAttribute('href', './quest-icons.svg#leika');
+  const renderedIcon = (icon: Locator) => icon.evaluate((el: SVGUseElement) => el.getBBox().width);
+  await expect(badge.locator('use')).toHaveAttribute('href', '#leika');
+  expect(await renderedIcon(badge.locator('use'))).toBeGreaterThan(0);
+
+  const sprite = await page.locator('.quest-icon-sprite').elementHandle();
+  await tab(page, 'Алхимия').click();
+  const brewIcon = page.locator('.sphere-card').first().locator('use');
+  await expect(brewIcon).toHaveAttribute('href', '#nakovalnya');
+  expect(await renderedIcon(brewIcon)).toBeGreaterThan(0);
+  await tab(page, 'Лагерь').click();
+  expect(await renderedIcon(badge.locator('use'))).toBeGreaterThan(0);
+  expect(await sprite!.evaluate(el => el.isConnected)).toBe(true);
   await page.screenshot({ path: test.info().outputPath('lager.png') });
   await badge.click();
   await expect(page.getByRole('dialog')).toContainText('Посадить дерево');

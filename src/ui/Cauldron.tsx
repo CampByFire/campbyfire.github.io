@@ -47,7 +47,7 @@ export function Cauldron({ color, portions, icon }: { color: string; portions: n
         <path d="M114 19q7-5 7 2l-1 3 8 9-2 3" fill="none" stroke="#c59a54" stroke-width="2.6" />
         <circle cx="130" cy="48" r="16" fill="#30271d" stroke="#d3ab68" stroke-width="2" />
         <svg x="119" y="37" width="22" height="22" viewBox="0 0 64 64">
-          <use href={`./quest-icons.svg#${icon}`} />
+          <use href={`#${icon}`} />
         </svg>
       </g>}
     </svg>
