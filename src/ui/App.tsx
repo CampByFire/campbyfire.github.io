@@ -46,7 +46,7 @@ export interface Ui {
   sync: Sync;
   notes: Notes;
   now: number;
-  go(screen: Screen): void;
+  go(screen: Exclude<Screen, 'calendar'>): void;
   /**
    * Открытое место Летописи: раздел (имя его папки), папка в нём («раздел/папка/вложенная»), ':diary' для дневника
    * или ':days' для «Последних дней»; null, когда виден список разделов.
@@ -301,7 +301,6 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
       if (sc !== screen) pageLeave(main.current);
       setScreen(sc);
       if (sc === 'notes' && screen === 'notes') setSection(null);
-      if (sc === 'calendar') setCalDay(null);
       if (sc === 'settings') setSettingsPart(null);
     },
     section: screen === 'notes' ? section : null,

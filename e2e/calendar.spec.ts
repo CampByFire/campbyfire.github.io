@@ -14,7 +14,7 @@ const tooSmall = (page: Page) =>
 
 const timeline = (page: Page) => page.getByRole('region', { name: 'По часам' });
 
-test('календарь открывается из Плана, а его вкладки работают с клавиатуры', async ({ page }, testInfo) => {
+test('из Плана календарь открывается на сегодняшнем дне по часам', async ({ page }, testInfo) => {
   await openGame(page, { time: at(9) });
   await tab(page, 'Летопись').click();
   const plan = tab(page, 'План');
@@ -25,22 +25,29 @@ test('календарь открывается из Плана, а его вк�
   const calendar = tabs.getByRole('tab', { name: 'Календарь', selected: true });
   await expect(calendar).toBeFocused();
   await expect(plan).toHaveAttribute('aria-current', 'page');
-  const month = page.getByRole('tabpanel', { name: 'Календарь' });
-  await expect(month.getByRole('heading', { name: 'Календарь', level: 1 })).toBeVisible();
+  const panel = page.getByRole('tabpanel', { name: 'Календарь' });
+  const today = panel.getByRole('heading', { name: 'Пятница, 23.10.2026', level: 1 });
+  const month = panel.getByRole('heading', { name: 'Календарь', level: 1 });
+  await expect(today).toBeVisible();
+  await expect(timeline(page)).toBeVisible();
   await expect(await tooSmall(page)).toEqual([]);
   await expectNoSideScroll(page);
-  await page.screenshot({ path: testInfo.outputPath('kalendar-v-plane.png'), animations: 'disabled' });
+  await page.screenshot({ path: testInfo.outputPath('kalendar-po-chasam.png'), animations: 'disabled' });
 
-  await month.getByRole('button', { name: 'Сегодня', exact: true }).click();
+  await panel.getByRole('button', { name: 'Октябрь', exact: true }).click();
+  await expect(month).toBeVisible();
+  await panel.getByRole('button', { name: 'Завтра', exact: true }).click();
   await expect(timeline(page)).toBeVisible();
   await expect(calendar).toBeVisible();
   await expect(plan).toHaveAttribute('aria-current', 'page');
   await page.goBack();
-  await expect(month.getByRole('heading', { name: 'Календарь', level: 1 })).toBeVisible();
+  await expect(month).toBeVisible();
 
   await calendar.press('Home');
   await expect(gather).toBeFocused();
   await expect(page.getByRole('tabpanel', { name: 'Сбор отряда' }).getByRole('heading', { name: 'Сбор отряда', level: 1 })).toBeVisible();
+  await tabs.getByRole('tab', { name: 'Календарь' }).click();
+  await expect(today).toBeVisible();
 });
 
 test('событие и задача на завтра: шкала дня, план и следующий день в лагере', async ({ page }) => {

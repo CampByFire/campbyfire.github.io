@@ -27,6 +27,11 @@ const PLAN_TABS = [
 ] as const;
 
 export function PlanScreen({ ui, screen }: { ui: Ui; screen: (typeof PLAN_TABS)[number]['screen'] }) {
+  const select = (tab: typeof screen) => {
+    if (tab === screen) return;
+    if (tab === 'calendar') openCalendar(ui, ui.store.state.day);
+    else ui.go('plan');
+  };
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     const other = screen === 'plan' ? 'calendar' : 'plan';
@@ -36,7 +41,7 @@ export function PlanScreen({ ui, screen }: { ui: Ui; screen: (typeof PLAN_TABS)[
     if (next === screen) return;
     const tabs = e.currentTarget as HTMLElement;
     tabs.querySelector<HTMLElement>(`#plan-tab-${next}`)?.focus();
-    ui.go(next);
+    select(next);
   };
 
   return (
@@ -53,7 +58,7 @@ export function PlanScreen({ ui, screen }: { ui: Ui; screen: (typeof PLAN_TABS)[
               aria-selected={screen === tab}
               tabIndex={screen === tab ? 0 : -1}
               class={`seg-btn${screen === tab ? ' is-on' : ''}`}
-              onClick={() => { if (screen !== tab) ui.go(tab); }}
+              onClick={() => select(tab)}
             >
               {label}
             </button>

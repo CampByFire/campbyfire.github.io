@@ -23,7 +23,9 @@ test('axe не находит нарушений на экранах и в ли�
   expect(await axe(page), 'Сбор отряда').toEqual([]);
   const planTabs = page.getByRole('tablist', { name: 'Вкладки плана' });
   await planTabs.getByRole('tab', { name: 'Календарь' }).click();
-  expect(await axe(page), 'Календарь в Плане').toEqual([]);
+  expect(await axe(page), 'День по часам в Календаре').toEqual([]);
+  await page.locator('.cal-dayview .page-top').getByRole('button').click();
+  expect(await axe(page), 'Сетка месяца в Календаре').toEqual([]);
   await planTabs.getByRole('tab', { name: 'Сбор отряда' }).click();
   await page.getByRole('button', { name: 'Действия: Сдать отчёт' }).click();
   expect(await axe(page), 'Действия задачи').toEqual([]);
