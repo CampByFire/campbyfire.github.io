@@ -43,6 +43,13 @@ test('axe не находит нарушений на экранах и в ли�
   await expect(day.getByRole('button', { name: /изменить длительность/ })).toBeFocused();
   await tab(page, 'Алхимия').click();
   expect(await axe(page), 'Алхимия').toEqual([]);
+  const cauldron = page.getByRole('button', { name: /^Работа.*Отвар/ });
+  await cauldron.click();
+  await sheet(page, 'Работа').getByRole('button', { name: 'Выполненная задача в эту сферу' }).click();
+  await expect(sheet(page, 'Выполненная задача').getByRole('textbox')).toBeFocused();
+  expect(await axe(page), 'Запись выполненной задачи').toEqual([]);
+  await page.keyboard.press('Escape');
+  await expect(cauldron).toBeFocused();
   await tab(page, 'Летопись').click();
   expect(await axe(page), 'Летопись').toEqual([]);
   await openSettings(page);

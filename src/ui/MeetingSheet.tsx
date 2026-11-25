@@ -2,9 +2,10 @@
 // Здесь же вопрос, когда день повторяющегося события перетащили на другое время: сдвинуть только его или всю серию.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { addMeeting, cleanTime, defaultMeetingEnd, findMeeting, meetingOccursOn, moveMeeting, moveMeetingOnce, parseMeeting, removeMeeting, restoreMeeting, restoreMeetingTime, skipMeetingDay, undoMoveOnce, unskipMeetingDay, updateMeeting } from '../game/calendar';
+import { findRoutine, setRoutineAt, setRoutineAtOn } from '../game/state';
 import { formatDue, formatTime } from '../game/time';
 import type { DayKey, MeetingRepeat, QuestColor } from '../game/types';
-import { MEETING_REPEATS, MEETING_REPEAT_NAME, dayTitle } from '../game/words';
+import { MEETING_REPEATS, MEETING_REPEAT_NAME, dayTitle, repeatName } from '../game/words';
 import type { Ui } from './App';
 import { LIcon } from './Icon';
 import { QuestColorPicker } from './QuestColorPicker';
@@ -176,21 +177,52 @@ export function MoveMeetingSheet({ ui, meetingId, day, at }: { ui: Ui; meetingId
   const m = findMeeting(s, meetingId);
   if (!m) return null;
   const when = formatTime(at, ui.clockFormat).replace(/^0/, '');
-  const date = formatDue(day, s.day, ui.dateFormat);
   const once = () => {
     const copy = ui.store.act((st, now) => moveMeetingOnce(st, now, meetingId, day, at));
     ui.close();
-    if (copy) ui.toast(`Перенесено на ${when}: ${date}`, { label: 'Вернуть', run: () => ui.store.act((st) => undoMoveOnce(st, meetingId, day, copy)) });
+    if (copy) ui.toast(`Перенесено на ${when}: ${formatDue(day, s.day, ui.dateFormat)}`, { label: 'Вернуть', run: () => ui.store.act((st) => undoMoveOnce(st, meetingId, day, copy)) });
   };
   const all = () => {
     const was = ui.store.act((st) => moveMeeting(st, meetingId, at));
     ui.close();
     if (was) ui.toast(`Вся серия теперь в ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => restoreMeetingTime(st, meetingId, was)) });
   };
+  return <MoveScopeSheet ui={ui} title="Перенести событие" name={m.title} repeat={m.repeat && MEETING_REPEAT_NAME[m.repeat].toLowerCase()} day={day} when={when} once={once} all={all} />;
+}
+
+export function MoveRoutineSheet({ ui, routineId, day, at }: { ui: Ui; routineId: string; day: DayKey; at: string }) {
+  const r = findRoutine(ui.store.state, routineId);
+  if (!r) return null;
+  const when = formatTime(at, ui.clockFormat).replace(/^0/, '');
+  const once = () => {
+    const was = r.atByDay?.[day];
+    ui.store.act((st) => setRoutineAtOn(st, routineId, day, at));
+    ui.close();
+    ui.toast(`Задача перенесена на ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => setRoutineAtOn(st, routineId, day, was)) });
+  };
+  const all = () => {
+    const previousDayTime = r.atByDay?.[day];
+    const was = ui.store.act((st) => {
+      setRoutineAtOn(st, routineId, day);
+      return setRoutineAt(st, routineId, at);
+    });
+    ui.close();
+    if (was !== undefined) ui.toast(`Вся серия теперь в ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => {
+      setRoutineAt(st, routineId, was);
+      setRoutineAtOn(st, routineId, day, previousDayTime);
+    }) });
+  };
+  return <MoveScopeSheet ui={ui} title="Перенести задачу" name={r.title} repeat={repeatName(r.repeat)} day={day} when={when} once={once} all={all} />;
+}
+
+function MoveScopeSheet({ ui, title, name, repeat, day, when, once, all }: {
+  ui: Ui; title: string; name: string; repeat?: string; day: DayKey; when: string; once: () => void; all: () => void;
+}) {
+  const date = formatDue(day, ui.store.state.day, ui.dateFormat);
   return (
-    <Sheet title="Перенести событие" onClose={ui.close}>
+    <Sheet title={title} onClose={ui.close}>
       <p class="note">
-        «{m.title}» повторяется: {m.repeat ? MEETING_REPEAT_NAME[m.repeat].toLowerCase() : ''}. Перенести на {when} только этот день или все дни серии?
+        «{name}» повторяется{repeat && `: ${repeat}`}. Перенести на {when} только этот день или все дни серии?
       </p>
       <div class="actions">
         <button class="act" onClick={once}>

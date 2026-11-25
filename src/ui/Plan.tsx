@@ -159,7 +159,8 @@ function DayPlan({ ui }: { ui: Ui }) {
   const lit = s.litDay === s.day;
 
   const planMin = open.reduce((m, t) => m + (estimateOf(t) ?? 0), 0);
-  const canMin = Math.round((s.hero.mana / MANA_DRAIN_PER_HOUR) * 60);
+  const customLimit = s.settings.planLimitMin;
+  const canMin = customLimit ?? Math.round((s.hero.mana / MANA_DRAIN_PER_HOUR) * 60);
   const tooMuch = planMin > canMin;
 
   const tails = tailsOf(s);
@@ -223,7 +224,7 @@ function DayPlan({ ui }: { ui: Ui }) {
               <span style={{ width: `${Math.min(100, (planMin / Math.max(canMin, 1)) * 100)}%` }} />
             </span>
             <span>
-              План на ~{formatDuration(planMin)}, а сил хватит на ~{formatDuration(canMin)}
+              План на ~{formatDuration(planMin)}, а сил хватит на {customLimit === undefined && '~'}{formatDuration(canMin)}
               {tooMuch && '. Многовато: кого-то стоит оставить на завтра'}
             </span>
           </div>

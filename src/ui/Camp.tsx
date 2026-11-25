@@ -22,13 +22,13 @@ import {
   toggleBreak,
   undoComplete,
 } from '../game/state';
-import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatSpent, formatTimer, formatTimerSeconds, formatTime, formatWeekdayDate, minutesOfDay, type ClockFormat, type DateFormat } from '../game/time';
+import { addDays, formatClock, formatDuration, formatMinutes, formatSpent, formatTimer, formatTimerSeconds, formatTime, minutesOfDay, parseDay, type ClockFormat, type DateFormat } from '../game/time';
 import { meetingsOn } from '../game/calendar';
 import { habitWeek, weekOf } from '../game/habits';
 import { canBuy, goalOf, shortOf, unlockedBy } from '../game/shop';
 import type { State, Task } from '../game/types';
 import { campView, type CampView, type Tone } from '../game/view';
-import { CLASS_AT, CLASS_BY_LEVEL, SHIFT_NAME, W, goldText } from '../game/words';
+import { CLASS_AT, CLASS_BY_LEVEL, SHIFT_NAME, W, WEEKDAY_NAME, goldText } from '../game/words';
 import { SCENE, SCENE_H, SCENE_W, assetUrl } from '../scene/scene';
 import type { Ui } from './App';
 import { openCalendar, tomorrowNews } from './Calendar';
@@ -518,18 +518,21 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
   const s = ui.store.state;
   const mana = Math.round(s.hero.mana);
   const lvl = heroLevel(s.hero.xp);
+  const weekday = WEEKDAY_NAME[parseDay(s.day).getDay()];
+  const clock = formatClock(now, ui.clockFormat);
+  const when = `${weekday[0].toUpperCase()}${weekday.slice(1)}, ${ui.clockFormat === '24h' ? clock.padStart(5, '0') : clock}`;
+  const shift = SHIFT_NAME[v.asleep ? 'night' : v.shift];
   return (
     <div class="topbar">
       <div class="chip chip-date">
         <GIcon name={v.light === 'night' ? 'zzz' : v.light === 'evening' ? 'sunset' : 'sun'} size={15} class="ic-sun" />
         <span class="chip-day" aria-hidden="true">
-          {formatDate(s.day, ui.dateFormat)}
+          {when}
         </span>
-        <span aria-hidden="true">{formatClock(now, ui.clockFormat)}</span>
         <span class="chip-shift" aria-hidden="true">
-          {SHIFT_NAME[v.asleep ? 'night' : v.shift]}
+          {shift}
         </span>
-        <span class="sr-only">{`${formatWeekdayDate(s.day, ui.dateFormat)}, ${formatClock(now, ui.clockFormat)}, ${SHIFT_NAME[v.asleep ? 'night' : v.shift]}`}</span>
+        <span class="sr-only">{`${when}, ${shift}`}</span>
       </div>
       <SyncBadge ui={ui} />
       <button class="camp-hit" data-magic="gold" title={W.shop} onClick={() => ui.go('shop')}>

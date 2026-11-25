@@ -82,8 +82,8 @@ test('год и вложенные задачи, листание периодо
 });
 
 test('хвосты прошлой недели разбираются в сборе отряда', async ({ page }) => {
-  // Пятница, 23 октября: неделя 19–25 октября.
-  await openGame(page, { time: at(9) });
+  // Воскресенье, 25 октября: последний день недели.
+  await openGame(page, { time: at(9, 0, 25) });
   for (const t of ['на неделю дочитать книгу', 'на неделю починить кран']) {
     const form = await phrase(page, t);
     await form.getByRole('button', { name: 'Взять в отряд' }).click();
@@ -92,9 +92,8 @@ test('хвосты прошлой недели разбираются в сбо�
   await tab(page, 'План').click();
   await expect(page.getByRole('button', { name: /остал/ })).toHaveCount(0);
 
-  // Понедельник, 26 октября. В выходные в игру не заглядывали, поэтому сначала встречает «Костёр ждал».
+  // Понедельник, 26 октября: началась новая неделя.
   await setTime(page, at(9, 0, 26));
-  await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
   const banner = page.getByRole('button', { name: /С прошлой недели остались 2 задачи: разобрать/ });
   await expect(banner).toBeVisible();
   await banner.click();

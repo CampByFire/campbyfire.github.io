@@ -113,7 +113,19 @@ export function pageLeave(main: HTMLElement | null): void {
     const ghost = fxNode('page-ghost', L.fx, { left: px(r.x), top: px(r.y), width: px(r.w), height: px(r.h) });
     if (!ghost) return;
     const copy = page.cloneNode(true) as HTMLElement;
-    for (const el of [copy, ...copy.querySelectorAll('[id]')]) el.removeAttribute('id');
+    const clips = new Map<string, string>();
+    // Отвар должен оставаться внутри котелка и в уходящей копии страницы.
+    for (const el of [copy, ...copy.querySelectorAll('[id]')]) {
+      if (el.localName === 'clipPath') {
+        const id = `page-ghost-${el.id}`;
+        clips.set(`url(#${el.id})`, `url(#${id})`);
+        el.id = id;
+      } else el.removeAttribute('id');
+    }
+    for (const el of copy.querySelectorAll('[clip-path]')) {
+      const clip = clips.get(el.getAttribute('clip-path') ?? '');
+      if (clip) el.setAttribute('clip-path', clip);
+    }
     ghost.inert = true;
     ghost.append(copy);
     // Прокрутку копия не наследует: ставим её как была, иначе список дёрнется к началу.

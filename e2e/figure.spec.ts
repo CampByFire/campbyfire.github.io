@@ -29,12 +29,14 @@ async function figurePoints(page: Page, title: string) {
         const d = (x - cx) ** 2 + (y - cy) ** 2;
         if (d < best.d) best = { x, y, d };
       }
-    // Прозрачный угол: ни сама картинка, ни соседние фигуры рядом не плотны.
+    // Оставляем вокруг угла запас в экранных пикселях для радиуса касания.
     let empty = null as null | { x: number; y: number };
+    const marginX = Math.ceil(10 * c.width / r.width);
+    const marginY = Math.ceil(10 * c.height / r.height);
     for (const [x, y] of [[2, 2], [c.width - 3, 2], [2, c.height - 3], [c.width - 3, c.height - 3]]) {
       let clear = true;
-      for (let dy = -30; dy <= 30 && clear; dy++)
-        for (let dx = -30; dx <= 30 && clear; dx++) {
+      for (let dy = -marginY; dy <= marginY && clear; dy++)
+        for (let dx = -marginX; dx <= marginX && clear; dx++) {
           const px = x + dx, py = y + dy;
           if (px >= 0 && py >= 0 && px < c.width && py < c.height && a[(py * c.width + px) * 4 + 3] > 0) clear = false;
         }
@@ -48,6 +50,7 @@ async function figurePoints(page: Page, title: string) {
 }
 
 test('нажатие на спутника открывает его задачу', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await openGame(page);
   await addTask(page, 'Сдать отчёт', { quest: 'Работа', size: '1 ч' });
   await addTask(page, 'Полить цветы', { size: '15 мин' });

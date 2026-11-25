@@ -40,6 +40,9 @@ export const SCORE_MAX = 10;
 /** Котелок вмещает восемь порций. За игровой день выпаривается одна. */
 export const BREW_CAPACITY = 8;
 export const BREW_PER_TASK = 3;
+export const BREW_DAYS_PER_PORTION = 2;
+/** В Плане можно отвести на задачи до целых суток. */
+export const PLAN_LIMIT_MAX_MIN = 24 * 60;
 /** Через сколько дней после прошлой оценки напоминать оценить сферы снова. */
 export const RATE_EVERY_DAYS: Record<Exclude<RateEvery, 'never'>, number> = { week: 7, month: 30, quarter: 91 };
 /** Первый раз напоминать оценить сферы, когда игре столько дней. */

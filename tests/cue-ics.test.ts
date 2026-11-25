@@ -1,7 +1,7 @@
 // Строка «если — то» и файл календаря.
 import { describe, expect, it } from 'vitest';
 import { buildIcs, calendarEvents, fold } from '../src/game/ics';
-import { addRoutine, addTask, findTask, newState, planRoutines, updateRoutine, updateTask, waitingOf } from '../src/game/state';
+import { addRoutine, addTask, findTask, newState, planRoutines, setRoutineAt, setRoutineAtOn, settle, updateRoutine, updateTask, waitingOf } from '../src/game/state';
 
 // Пятница, 23 октября 2026.
 const at = (h: number, m = 0, d = 23) => new Date(2026, 9, d, h, m).getTime();
@@ -66,6 +66,23 @@ describe('файл календаря', () => {
     const none = buildIcs(s, at(9), { morning: null, morningDays: 'work', url: URL });
     expect(none).not.toContain('Разжечь костёр');
     expect(calendarEvents(s, { morning: null, morningDays: 'work', url: URL })).toEqual({ morning: false, tasks: [expect.objectContaining({ at: '19:00' })], routines: 1, meetings: [] });
+  });
+
+  it('перенесённый день получает своё время в файле календаря и при наступлении даты', () => {
+    const s = game();
+    const r = s.routines[0];
+    setRoutineAtOn(s, r.id, '2026-10-26', '12:30');
+    const options = { morning: null, morningDays: 'work', url: URL } as const;
+    const text = () => buildIcs(s, at(9), options).replace(/\r\n /g, '');
+    expect(text()).toContain('EXDATE:20261026T100000');
+    expect(text()).toContain('DTSTART:20261026T123000');
+    setRoutineAt(s, r.id, null);
+    expect(text()).not.toContain('DTSTART:20261026T100000');
+    expect(text()).toContain('DTSTART:20261026T123000');
+    settle(s, at(9, 0, 26));
+    expect(waitingOf(s, r.id)?.at).toBe('12:30');
+    settle(s, at(9, 0, 27));
+    expect(waitingOf(s, r.id)?.at).toBeNull();
   });
 
   it('длинные строки переносятся по 75 байт, буквы не разрываются', () => {

@@ -120,6 +120,29 @@ test('все пять горизонтов доступны вкладками �
   await expect(tabs.getByRole('radio', { name: 'День', exact: true })).toBeChecked();
 });
 
+test('время для Плана задаётся часами и минутами, сохраняется и сбрасывается', async ({ page }) => {
+  await openGame(page);
+  await addTask(page, 'Сдать отчёт', { quest: 'Работа', size: '2 ч' });
+  await expect(page.locator('.capacity')).toContainText('а сил хватит на ~6 ч 40 мин');
+  await openSettings(page, 'Распорядок');
+  const hours = page.getByRole('spinbutton', { name: 'Часы', exact: true });
+  const minutes = page.getByRole('spinbutton', { name: 'Минуты', exact: true });
+  await hours.fill('1');
+  await minutes.fill('25');
+  await page.getByRole('button', { name: 'Сохранить время для Плана' }).click();
+  await tab(page, 'План').click();
+  await expect(page.locator('.capacity.is-over')).toContainText('План на ~2 ч, а сил хватит на 1 ч 25 мин');
+  await page.reload();
+  await openSettings(page, 'Распорядок');
+  await expect(hours).toHaveValue('1');
+  await expect(minutes).toHaveValue('25');
+  await hours.fill('');
+  await minutes.fill('');
+  await page.getByRole('button', { name: 'Сохранить время для Плана' }).click();
+  await tab(page, 'План').click();
+  await expect(page.locator('.capacity')).toContainText('а сил хватит на ~6 ч 40 мин');
+});
+
 async function plan(page: Page) {
   const now = at(9).getTime();
   const s = newState(now);

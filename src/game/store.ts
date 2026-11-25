@@ -1,5 +1,6 @@
 // Хранилище: держит State, сохраняет его в localStorage и оповещает экраны.
 import { tidyShop } from './shop';
+import { PLAN_LIMIT_MAX_MIN } from './rules';
 import { DEFAULT_SETTINGS, migrateToSpheres, newState, randomId, settle, touch } from './state';
 import { repeatOnDays } from './time';
 import type { State } from './types';
@@ -121,7 +122,11 @@ export function checkSave(raw: unknown): State | null {
   if (!Array.isArray(s.routines)) s.routines = [];
   if (!Array.isArray(s.ratings)) s.ratings = [];
   if (s.meetings !== undefined && !Array.isArray(s.meetings)) delete s.meetings;
-  if (s.settings) s.settings.rateEvery ??= DEFAULT_SETTINGS.rateEvery;
+  if (s.settings) {
+    s.settings.rateEvery ??= DEFAULT_SETTINGS.rateEvery;
+    const limit = s.settings.planLimitMin;
+    if (limit !== undefined && (!Number.isInteger(limit) || limit < 0 || limit > PLAN_LIMIT_MAX_MIN)) delete s.settings.planLimitMin;
+  }
   if (s.prizes !== undefined && !Array.isArray(s.prizes)) delete s.prizes;
   if (s.purchases !== undefined && !Array.isArray(s.purchases)) delete s.purchases;
   if (s.goalId !== undefined && typeof s.goalId !== 'string') delete s.goalId;

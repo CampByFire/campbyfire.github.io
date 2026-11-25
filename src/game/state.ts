@@ -200,7 +200,10 @@ function rollover(s: State, today: DayKey): void {
     delete s.rested;
   }
   for (const t of s.tasks) {
-    if (t.status === 'open' && t.day !== null && t.day < today) t.day = today;
+    if (t.status !== 'open' || t.day === null || t.day >= today) continue;
+    const r = findRoutine(s, t.routineId);
+    if (r && (r.atByDay?.[today] || r.atByDay?.[t.day])) t.at = routineAtOn(r, today);
+    t.day = today;
   }
   s.day = today;
   s.hero.mana = MANA_MAX;
@@ -641,7 +644,7 @@ export function updateRoutine(s: State, id: string, input: RoutineInput): void {
   else if (r.habit) setHabit(r, r.habit);
   const t = waitingOf(s, id);
   if (t) {
-    Object.assign(t, { title: r.title, questId: r.questId, level: r.level, estimateMin: r.estimateMin, at: r.at });
+    Object.assign(t, { title: r.title, questId: r.questId, level: r.level, estimateMin: r.estimateMin, at: routineAtOn(r, t.day) });
     setDescription(t, r.description);
     setCue(t, r.cue ?? null);
     if (t.status === 'inbox' && t.questId) t.status = 'open';
@@ -666,8 +669,25 @@ export function setRoutineAt(s: State, id: string, at: string | null): string | 
   const was = r.at;
   r.at = at;
   const t = waitingOf(s, id);
-  if (t) t.at = at;
+  if (t) t.at = routineAtOn(r, t.day);
   return was;
+}
+
+export function routineAtOn(r: Routine, day: DayKey | null): string | null {
+  return (day && r.atByDay?.[day]) || r.at;
+}
+
+/** Перенос одного дня. Без времени возвращает обычное время серии. */
+export function setRoutineAtOn(s: State, id: string, day: DayKey, at?: string): void {
+  const r = findRoutine(s, id);
+  if (!r) return;
+  if (at !== undefined) (r.atByDay ??= {})[day] = at;
+  else if (r.atByDay) {
+    delete r.atByDay[day];
+    if (!Object.keys(r.atByDay).length) delete r.atByDay;
+  }
+  const t = waitingOf(s, id);
+  if (t?.day === day) t.at = routineAtOn(r, day);
 }
 
 /** Больше не повторять. Ждущая задача остаётся в отряде обычной задачей. */
@@ -692,7 +712,10 @@ export function planRoutines(s: State, only?: string): void {
     if (!repeatsOn(r.repeat, s.day)) continue;
     const waiting = waitingOf(s, r.id);
     if (waiting) {
-      if (waiting.day !== s.day) planTask(s, waiting.id, s.day);
+      if (waiting.day !== s.day) {
+        if (r.atByDay?.[s.day] || (waiting.day && r.atByDay?.[waiting.day])) waiting.at = routineAtOn(r, s.day);
+        planTask(s, waiting.id, s.day);
+      }
       continue;
     }
     const id = `${r.id}@${s.day}`;
@@ -707,7 +730,7 @@ export function planRoutines(s: State, only?: string): void {
       day: s.day,
       order: nextOrder(s, s.day),
       due: null,
-      at: r.at,
+      at: routineAtOn(r, s.day),
       spentMs: 0,
       createdAt: Math.max(dayStart, r.createdAt),
       routineId: r.id,
@@ -739,10 +762,12 @@ export function tidyRoutines(s: State): void {
   const weight = (t: Task) => (s.current?.taskId === t.id ? 2 : 0) + (t.day === s.day ? 1 : 0);
   for (const t of s.tasks) {
     if (!t.routineId || (t.status !== 'open' && t.status !== 'inbox')) continue;
-    if (!findRoutine(s, t.routineId)) {
+    const r = findRoutine(s, t.routineId);
+    if (!r) {
       delete t.routineId;
       continue;
     }
+    if (t.day && r.atByDay?.[t.day]) t.at = r.atByDay[t.day];
     const k = kept.get(t.routineId);
     if (!k) {
       kept.set(t.routineId, t);

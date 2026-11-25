@@ -2,7 +2,7 @@
 // из задач (день у костра, срок, сделано в этот день) и повторяющихся задач.
 import { parsePhrase } from './phrase';
 import { DRAG_STEP_MIN, EVENT_MIN, MEETING_MIN, estimateOf } from './rules';
-import { findTask, nextId, planTask, setMain, settle, waitingOf } from './state';
+import { findTask, nextId, planTask, routineAtOn, setMain, settle, waitingOf } from './state';
 import { addDays, daysBetween, parseDay, repeatsOn } from './time';
 import type { DayKey, Meeting, MeetingRepeat, QuestColor, Routine, State, Task } from './types';
 
@@ -312,7 +312,7 @@ export function agendaOf(s: State, day: DayKey): AgendaItem[] {
       // Ждущая задача повтора уже позвана на какой-то день: она и есть этот повтор, второй раз не показываем.
       const w = waitingOf(s, r.id);
       if (w && w.day === day) continue;
-      out.push({ kind: 'routine', at: cleanTime(r.at), routine: r });
+      out.push({ kind: 'routine', at: cleanTime(routineAtOn(r, day)), routine: r });
     }
   }
   return out

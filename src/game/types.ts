@@ -181,6 +181,8 @@ export interface Routine {
   level: Level;
   estimateMin: number | null;
   at: string | null;
+  /** Время отдельных дней, перенесённых в календаре. */
+  atByDay?: Record<DayKey, string>;
   /** План «если — то», он переходит в каждую пришедшую задачу. */
   cue?: string;
   repeat: Repeat;
@@ -227,6 +229,8 @@ export interface Settings {
   bedtime: number;
   /** Как часто напоминать оценить сферы. */
   rateEvery: RateEvery;
+  /** Доступное время в Плане в минутах. Без поля План считает его по мане. */
+  planLimitMin?: number;
 }
 
 export interface DayLog {

@@ -1,7 +1,7 @@
 import { sphereBrews, type Brew } from '../game/alchemy';
 import { Cauldron } from './Cauldron';
 import { questHex } from '../game/color';
-import { BREW_CAPACITY, BREW_PER_TASK } from '../game/rules';
+import { BREW_CAPACITY, BREW_DAYS_PER_PORTION, BREW_PER_TASK } from '../game/rules';
 import { lairOf, projectsOf, ratingDue, releasedOf, spheresOf, unrelease } from '../game/state';
 import { dayKey, formatDate, formatDue } from '../game/time';
 import type { Quest, State } from '../game/types';
@@ -24,7 +24,7 @@ export function Realm({ ui }: { ui: Ui }) {
         <h1 class="page-title">{W.realm}</h1>
         <PageHelp title={W.realm}>
           Каждое выполненное дело в сфере или её проекте пополняет котелок на {BREW_PER_TASK} из {BREW_CAPACITY} порций.
-          С каждым игровым днём испаряется одна порция. Нажми на котелок, чтобы открыть проекты и заметку «Как улучшить».
+          Раз в {BREW_DAYS_PER_PORTION} игровых дня испаряется одна порция. Нажми на котелок, чтобы открыть проекты и заметку «Как улучшить».
           Кнопка «Оценить сферы» сохраняет твою личную оценку.
         </PageHelp>
       </div>

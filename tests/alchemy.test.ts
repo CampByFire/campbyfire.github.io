@@ -23,7 +23,7 @@ describe('Алхимия', () => {
     expect(sphereBrews(s).size).toBe(1);
   });
 
-  it('отвар испаряется при смене даты в полночь', () => {
+  it('в полночь второго игрового дня испаряется одна порция', () => {
     const before = new Date(2026, 9, 23, 23, 59).getTime();
     const midnight = new Date(2026, 9, 24, 0, 0).getTime();
     const s = newState(before);
@@ -32,7 +32,21 @@ describe('Алхимия', () => {
     expect(sphereBrews(s).get(sphere.id)?.portions).toBe(3);
     settle(s, midnight);
     expect(s.day).toBe('2026-10-24');
+    expect(sphereBrews(s).get(sphere.id)?.portions).toBe(3);
+    settle(s, new Date(2026, 9, 25, 0, 0).getTime());
     expect(sphereBrews(s).get(sphere.id)?.portions).toBe(2);
+  });
+
+  it('пополнение котелка не откладывает уже начавшееся испарение', () => {
+    const s = newState(now);
+    const sphere = s.quests[0];
+    const next = new Date(2026, 9, 24, 9).getTime();
+    complete(s, now, addTask(s, now, { title: 'Первое дело', questId: sphere.id }));
+    complete(s, next, addTask(s, next, { title: 'Второе дело', questId: sphere.id }));
+    expect(sphereBrews(s).get(sphere.id)?.portions).toBe(6);
+    const lastDay = s.day;
+    settle(s, new Date(2026, 9, 25, 0, 0).getTime());
+    expect(sphereBrews(s).get(sphere.id)).toEqual({ portions: 5, lastDay });
   });
 
   it('переполнение не запасается, после перерыва остаётся дата последнего дела', () => {
@@ -44,8 +58,8 @@ describe('Алхимия', () => {
     }
     expect(sphereBrews(s).get(sphere.id)?.portions).toBe(8);
     s.day = addDays(day, 2);
-    expect(sphereBrews(s).get(sphere.id)?.portions).toBe(6);
-    s.day = addDays(day, 12);
+    expect(sphereBrews(s).get(sphere.id)?.portions).toBe(7);
+    s.day = addDays(day, 16);
     expect(sphereBrews(s).get(sphere.id)).toEqual({ portions: 0, lastDay: day });
   });
 });

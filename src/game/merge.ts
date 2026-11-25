@@ -130,6 +130,15 @@ function mergeMeeting(b: Meeting, l: Meeting, r: Meeting, localWins: boolean): M
   return out;
 }
 
+/** Время отдельных дней серии сливается по датам. */
+function mergeRoutine(b: Routine | undefined, l: Routine, r: Routine, localWins: boolean): Routine {
+  const out = b ? mergeFields(b, l, r, localWins, []) : { ...(localWins ? l : r) };
+  const times = mergeFields(b?.atByDay ?? {}, l.atByDay ?? {}, r.atByDay ?? {}, localWins, []);
+  if (Object.keys(times).length) out.atByDay = times;
+  else delete out.atByDay;
+  return out;
+}
+
 const LOG_COUNTERS = ['gold', 'xp', 'done', 'workedMs', 'restMs', 'undeadSlain'];
 const EMPTY_LOG: DayLog = { gold: 0, xp: 0, done: 0, workedMs: 0, restMs: 0, undeadSlain: 0 };
 
@@ -202,7 +211,11 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
       return a && c ? withImprove(q, joinLines(localWins ? a.improve : c.improve, localWins ? c.improve : a.improve)) : q;
     });
     out.tasks = unionById(l.tasks, r.tasks, localWins);
-    out.routines = unionById(l.routines, r.routines, localWins);
+    out.routines = unionById(l.routines, r.routines, localWins).map((routine) => {
+      const here = l.routines.find(({ id }) => id === routine.id);
+      const there = r.routines.find(({ id }) => id === routine.id);
+      return here && there ? mergeRoutine(undefined, here, there, localWins) : routine;
+    });
     setMeetings(out, unionById(l.meetings ?? [], r.meetings ?? [], localWins));
     out.ratings = mergeRatings(l.ratings, r.ratings);
     out.prizes = unionById(l.prizes ?? [], r.prizes ?? [], localWins);
@@ -227,7 +240,7 @@ export function mergeGames(base: State | null, local: State, remote: State, now:
   };
   out.quests = mergeById<Quest>(b.quests, l.quests, r.quests, (x, y, z) => mergeQuest(x, y, z, localWins), localWins);
   out.tasks = mergeById<Task>(b.tasks, l.tasks, r.tasks, (x, y, z) => mergeFields(x, y, z, localWins, TASK_COUNTERS, TASK_GROUPS), localWins);
-  out.routines = mergeById<Routine>(b.routines, l.routines, r.routines, (x, y, z) => mergeFields(x, y, z, localWins, []), localWins);
+  out.routines = mergeById(b.routines, l.routines, r.routines, (x, y, z) => mergeRoutine(x, y, z, localWins), localWins);
   setMeetings(out, mergeById<Meeting>(b.meetings ?? [], l.meetings ?? [], r.meetings ?? [], (x, y, z) => mergeMeeting(x, y, z, localWins), localWins));
   out.ratings = mergeRatings(l.ratings, r.ratings);
   out.log = mergeLog(b.log, l.log, r.log, localWins);

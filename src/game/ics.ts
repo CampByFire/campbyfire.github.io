@@ -3,8 +3,8 @@
 // календарь ставит его в поясе телефона, как и показывает Лагерь.
 import { ALL_DAY_REMIND_HOURS, EVENT_MIN, MEETING_MIN, MEETING_REMIND_MIN, REMIND_BEFORE_MIN, estimateOf } from './rules';
 import { meetingsOf, nextMeetingDay } from './calendar';
-import { nextRepeat, parseDay } from './time';
-import type { DayKey, Meeting, Repeat, State, Task } from './types';
+import { nextRepeat, parseDay, repeatsOn } from './time';
+import type { DayKey, Meeting, Repeat, Routine, State, Task } from './types';
 
 export interface IcsOptions {
   /** Утренний костёр, минуты от полуночи; null: без него. */
@@ -57,6 +57,13 @@ function minutesOf(at: string): number | null {
   return m ? Number(m[1]) * 60 + Number(m[2]) : null;
 }
 
+function routineMoves(r: Routine, from: DayKey): { day: DayKey; min: number }[] {
+  return Object.entries(r.atByDay ?? {}).flatMap(([day, time]) => {
+    const min = minutesOf(time);
+    return day >= from && min !== null ? [{ day, min }] : [];
+  });
+}
+
 function rrule(r: Repeat): string {
   if (r.every === 'day') return 'FREQ=DAILY';
   if (r.every === 'week') return `FREQ=WEEKLY;BYDAY=${BYDAY[r.weekday]}`;
@@ -103,7 +110,9 @@ interface Ev {
 export function calendarEvents(s: State, o: IcsOptions): { morning: boolean; tasks: Task[]; routines: number; meetings: Meeting[] } {
   const meetings = meetingsOf(s).filter((m) => nextMeetingDay(m, s.day));
   const tasks = s.tasks.filter((t) => t.status === 'open' && t.at && t.day && t.day >= s.day && !t.routineId && minutesOf(t.at) !== null);
-  const routines = s.routines.filter((r) => r.at && minutesOf(r.at) !== null && nextRepeat(r.repeat, s.day)).length;
+  const routines = s.routines.filter((r) =>
+    (r.at && minutesOf(r.at) !== null && nextRepeat(r.repeat, s.day)) || routineMoves(r, s.day).length,
+  ).length;
   const morning = o.morning !== null && (o.morningDays === 'all' || s.settings.workDays.length > 0);
   return { morning, tasks, routines, meetings };
 }
@@ -139,16 +148,25 @@ export function buildIcs(s: State, now: number, o: IcsOptions): string {
   for (const r of s.routines) {
     const at = r.at ? minutesOf(r.at) : null;
     const first = at !== null ? nextRepeat(r.repeat, s.day) : null;
-    if (at === null || !first) continue;
-    evs.push({
-      uid: `routine-${r.id}@${s.gameId}.lager`,
-      start: local(first, at),
+    const moves = routineMoves(r, s.day);
+    const details = {
       min: r.estimateMin ?? EVENT_MIN,
       title: r.title,
       note: r.cue ? `${r.cue}\n${link}` : link,
-      rule: rrule(r.repeat),
       alarm: REMIND_BEFORE_MIN,
-    });
+    };
+    if (first && at !== null) {
+      evs.push({
+        ...details,
+        uid: `routine-${r.id}@${s.gameId}.lager`,
+        start: local(first, at),
+        rule: rrule(r.repeat),
+        except: moves.filter(({ day }) => day >= first && repeatsOn(r.repeat, day)).map(({ day }) => local(day, at)),
+      });
+    }
+    for (const { day, min } of moves) {
+      evs.push({ ...details, uid: `routine-${r.id}-${day}@${s.gameId}.lager`, start: local(day, min) });
+    }
   }
   for (const m of calendarEvents(s, o).meetings) {
     const at = m.at ? minutesOf(m.at) : null;

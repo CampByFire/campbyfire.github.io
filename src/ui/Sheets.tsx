@@ -10,6 +10,7 @@ import {
   addRoutine,
   amnesty,
   addTask,
+  complete,
   daysOverdue,
   endDay,
   findQuest,
@@ -45,6 +46,7 @@ import {
   tailsOf,
   stopRoutine,
   undeadOf,
+  undoComplete,
   unrelease,
   updateQuest,
   updateRoutine,
@@ -86,7 +88,7 @@ import { WipeSheet } from './Settings';
 import { DiarySheet, FolderSheet, MoveSheet, NoteSheet, SectionSheet, ThoughtSheet } from './NoteSheets';
 import { SyncConflictSheet, SyncSheet } from './SyncPanel';
 import { setSheetBack } from './back';
-import { MeetingSheet, MoveMeetingSheet } from './MeetingSheet';
+import { MeetingSheet, MoveMeetingSheet, MoveRoutineSheet } from './MeetingSheet';
 import { PrizeSheet } from './Shop';
 import { PlanActions } from './Plan';
 import { TimeInput } from './TimeInput';
@@ -94,6 +96,7 @@ import { TimeInput } from './TimeInput';
 export type SheetState =
   | { kind: 'planActions'; taskId: string; prev?: string; next?: string }
   | { kind: 'add'; questId?: string | null; day?: DayKey | null; period?: PeriodKey | null; main?: boolean }
+  | { kind: 'addCompleted'; questId: string }
   | { kind: 'edit'; taskId: string }
   | { kind: 'routine'; routineId: string }
   | { kind: 'task'; taskId: string }
@@ -120,6 +123,7 @@ export type SheetState =
   | { kind: 'welcome' }
   | { kind: 'meeting'; meetingId?: string; day?: DayKey; at?: string }
   | { kind: 'moveMeeting'; meetingId: string; day: DayKey; at: string }
+  | { kind: 'moveRoutine'; routineId: string; day: DayKey; at: string }
   | { kind: 'prize'; prizeId?: string };
 
 export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
@@ -128,6 +132,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <PlanActions ui={ui} {...sheet} />;
     case 'add':
       return <TaskForm ui={ui} preset={sheet} />;
+    case 'addCompleted':
+      return <CompletedTaskForm ui={ui} questId={sheet.questId} />;
     case 'edit':
       return <TaskForm ui={ui} taskId={sheet.taskId} />;
     case 'routine':
@@ -180,6 +186,8 @@ export function Sheets({ ui, sheet }: { ui: Ui; sheet: SheetState }) {
       return <PrizeSheet key={sheet.prizeId ?? '+'} ui={ui} prizeId={sheet.prizeId} />;
     case 'moveMeeting':
       return <MoveMeetingSheet ui={ui} meetingId={sheet.meetingId} day={sheet.day} at={sheet.at} />;
+    case 'moveRoutine':
+      return <MoveRoutineSheet ui={ui} routineId={sheet.routineId} day={sheet.day} at={sheet.at} />;
     case 'meeting':
       return <MeetingSheet key={sheet.meetingId ?? `${sheet.day ?? ''}${sheet.at ?? ''}`} ui={ui} meetingId={sheet.meetingId} day={sheet.day} at={sheet.at} />;
   }
@@ -281,7 +289,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const [lvl, setLvl] = useState<Level>(from?.level ?? levelForEstimate(30));
   const [day, setDay] = useState<DayKey | null>(editing ? editing.day : preset?.day !== undefined ? preset.day : s.day);
   const [due, setDue] = useState<DayKey | null>(editing?.due ?? null);
-  const [at, setAt] = useState<string>(from?.at ?? '');
+  const [at, setAt] = useState<string>((routine ?? from)?.at ?? '');
   const [cue, setCue] = useState<string>(from?.cue ?? '');
   const [period, setPeriodKey] = useState<PeriodKey | null>(editing ? editing.period ?? null : preset?.period ?? null);
   const [repeatKind, setRepeatKind] = useState<RepeatKind>(routine?.repeat.every ?? 'none');
@@ -1435,6 +1443,10 @@ function SphereSheet({ ui, q }: { ui: Ui; q: Quest }) {
           <LIcon name="plus" size={16} />
           Задача в эту сферу
         </button>
+        <button class="act" onClick={() => ui.open({ kind: 'addCompleted', questId: q.id })}>
+          <LIcon name="plus" size={16} />
+          Выполненная задача в эту сферу
+        </button>
         <button class="act" onClick={() => ui.open({ kind: 'newQuest', sphereId: q.id })}>
           <LIcon name="plus" size={16} />
           Проект в этой сфере
@@ -1455,6 +1467,37 @@ function SphereSheet({ ui, q }: { ui: Ui; q: Quest }) {
           Убрать сферу
         </button>
       </div>
+    </Sheet>
+  );
+}
+
+function CompletedTaskForm({ ui, questId }: { ui: Ui; questId: string }) {
+  const sphere = findQuest(ui.store.state, questId);
+  const [title, setTitle] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => input.current?.focus({ preventScroll: true }), []);
+  if (!sphere?.sphere) return null;
+
+  return (
+    <Sheet title="Выполненная задача" onClose={ui.close} footer={
+      <button class="btn btn-gold btn-wide" type="submit" form="completed-task" disabled={!title.trim()}>Записать выполненную задачу</button>
+    }>
+      <form id="completed-task" onSubmit={(e) => {
+        e.preventDefault();
+        if (!title.trim()) return;
+        const id = ui.store.act((st, now) => {
+          const taskId = addTask(st, now, { title, questId });
+          complete(st, now, taskId);
+          return taskId;
+        });
+        ui.close();
+        ui.toast('Задача записана как выполненная', { label: 'Вернуть', run: () => ui.store.act((st) => undoComplete(st, id)) });
+      }}>
+        <label class="field">
+          <span class="field-label">Что сделано в сфере «{sphere.name}»</span>
+          <input ref={input} class="input" value={title} onInput={(e) => setTitle(e.currentTarget.value)} maxLength={200} required />
+        </label>
+      </form>
     </Sheet>
   );
 }

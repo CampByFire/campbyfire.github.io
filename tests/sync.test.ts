@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HOUR, MINUTE } from '../src/game/rules';
-import { addQuest, addRoutine, addTask, complete, findTask, newState, pause, rateSpheres, removeQuest, setEstimate, setImprove, settle, start, updateTask } from '../src/game/state';
+import { addQuest, addRoutine, addTask, complete, findRoutine, findTask, newState, pause, rateSpheres, removeQuest, setEstimate, setImprove, setRoutineAt, setRoutineAtOn, settle, start, updateTask, waitingOf } from '../src/game/state';
 import { joinLines, mergeGames } from '../src/game/merge';
 import { addPrize, buyPrize, goalOf, prizesOf, purchasesOf, refund, removePrize, setGoal, updatePrize } from '../src/game/shop';
 import { Store, type Storage } from '../src/game/store';
@@ -10,6 +10,35 @@ import { Sync, type Prefs } from '../src/sync/sync';
 
 // Пятница, 23 октября 2026.
 const at = (h: number, m = 0, d = 23) => new Date(2026, 9, d, h, m).getTime();
+
+it('доступное время Плана сливается отдельно от распорядка и сбрасывается на обоих устройствах', () => {
+  const now = at(9);
+  const base = newState(now);
+  const local = structuredClone(base);
+  const remote = structuredClone(base);
+  local.settings.planLimitMin = 95;
+  remote.settings.workStart += 30;
+  const merged = mergeGames(base, local, remote, now);
+  expect(merged.settings).toMatchObject({ planLimitMin: 95, workStart: remote.settings.workStart });
+  const cleared = structuredClone(merged);
+  delete cleared.settings.planLimitMin;
+  expect(mergeGames(merged, cleared, merged, now).settings.planLimitMin).toBeUndefined();
+});
+
+it('переносы отдельных повторов с двух устройств и новое время всей серии сохраняются вместе', () => {
+  const now = at(9);
+  const base = newState(now);
+  const id = addRoutine(base, now, { title: 'Прогулка', questId: null, level: 1, estimateMin: null, at: '10:00', repeat: { every: 'day' } });
+  const local = structuredClone(base);
+  const remote = structuredClone(base);
+  setRoutineAtOn(local, id, base.day, '11:00');
+  setRoutineAt(remote, id, '12:00');
+  setRoutineAtOn(remote, id, '2026-10-24', '13:00');
+  remote.touchedAt = now;
+  const merged = mergeGames(base, local, remote, now);
+  expect(findRoutine(merged, id)).toMatchObject({ at: '12:00', atByDay: { [base.day]: '11:00', '2026-10-24': '13:00' } });
+  expect(waitingOf(merged, id)?.at).toBe('11:00');
+});
 
 interface FakeRepo {
   private: boolean;

@@ -130,6 +130,29 @@ test('из котелка можно открыть и сохранить зам
   await expect(toast(page)).toHaveText('Заметка убрана');
 });
 
+test('выполненное дело записывается прямо в сферу, а отвар при переходе остаётся внутри котелка', async ({ page }, testInfo) => {
+  await openGame(page);
+  await tab(page, 'Алхимия').click();
+  const card = page.getByRole('button', { name: /^Работа.*Отвар/ });
+  await card.click();
+  await sheet(page, 'Работа').getByRole('button', { name: 'Выполненная задача в эту сферу' }).click();
+  const form = sheet(page, 'Выполненная задача');
+  await form.getByRole('textbox').fill('Сдать отчёт');
+  await form.getByRole('button', { name: 'Записать выполненную задачу' }).click();
+  await expect(card).toHaveAccessibleName(/Работа.*3 из 8/);
+  await page.screenshot({ path: testInfo.outputPath('алхимия.png') });
+  const clipped = await tab(page, 'Лагерь').evaluate((button) => {
+    (button as HTMLButtonElement).click();
+    const ghost = document.querySelector('.page-ghost');
+    const liquid = ghost?.querySelector('.cauldron [clip-path]');
+    const clip = ghost?.querySelector('.cauldron clipPath');
+    return !!clip?.id && liquid?.getAttribute('clip-path') === `url(#${clip.id})`;
+  });
+  expect(clipped).toBe(true);
+  await expect(page.locator('.chip-day')).toHaveText('Пятница, 09:00');
+  await expect(page.getByRole('button', { name: /Лавка.*Золото: [1-9]/ })).toBeVisible();
+});
+
 test('проект в сфере: задачи, выполнение и возврат из зала трофеев', async ({ page }) => {
   await openGame(page);
   await tab(page, 'Алхимия').click();

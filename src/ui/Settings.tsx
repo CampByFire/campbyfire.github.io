@@ -1,7 +1,7 @@
 // Настройки: герой, распорядок, магия, сохранение в GitHub, копия в файл, справка и «Стереть всё».
 // Раньше этот раздел назывался Летописью; теперь Летопись это заметки (Notes.tsx).
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { MEETING_REMIND_MIN, REMIND_BEFORE_MIN, heroLevel } from '../game/rules';
+import { MEETING_REMIND_MIN, PLAN_LIMIT_MAX_MIN, REMIND_BEFORE_MIN, heroLevel } from '../game/rules';
 import { buildIcs, calendarEvents, type IcsOptions } from '../game/ics';
 import { isNewerSave, parseSave } from '../game/store';
 import { formatClock, formatWeekdayDate, formatMinutes, plural, scheduleError } from '../game/time';
@@ -132,6 +132,7 @@ export function Settings({ ui }: { ui: Ui }) {
         </div>
         {timeError && <p class="note note-error">{timeError}</p>}
         <WeekdayPicker label="Рабочие дни" days={s.settings.workDays} onChange={(workDays) => setSetting({ workDays })} />
+        <PlanLimit ui={ui} />
         <Chips
           label="Напоминать оценить сферы"
           value={s.settings.rateEvery}
@@ -207,6 +208,43 @@ export function Settings({ ui }: { ui: Ui }) {
         </div>
       </section>}
     </div>
+  );
+}
+
+function PlanLimit({ ui }: { ui: Ui }) {
+  const limit = ui.store.state.settings.planLimitMin;
+  const [hours, setHours] = useState('');
+  const [minutes, setMinutes] = useState('');
+  useLayoutEffect(() => {
+    setHours(limit === undefined ? '' : String(Math.floor(limit / 60)));
+    setMinutes(limit === undefined ? '' : String(limit % 60));
+  }, [limit]);
+
+  return (
+    <form onSubmit={(e) => {
+      e.preventDefault();
+      ui.store.act((st) => {
+        if (hours || minutes) st.settings.planLimitMin = Number(hours) * 60 + Number(minutes);
+        else delete st.settings.planLimitMin;
+      });
+      ui.toast(hours || minutes ? 'Время для Плана сохранено' : 'План снова считает время по мане');
+    }}>
+      <h3 class="field-label">Доступное время для Плана</h3>
+      <p class="note" id="plan-limit-hint">Чтобы считать время по мане, оставь оба поля пустыми и сохрани.</p>
+      <div class="field-row">
+        <label class="field">
+          <span class="field-label">Часы</span>
+          <input class="input" type="number" inputMode="numeric" min="0" max={PLAN_LIMIT_MAX_MIN / 60} value={hours}
+            aria-describedby="plan-limit-hint" onInput={(e) => setHours(e.currentTarget.value)} />
+        </label>
+        <label class="field">
+          <span class="field-label">Минуты</span>
+          <input class="input" type="number" inputMode="numeric" min="0" max={Number(hours) * 60 === PLAN_LIMIT_MAX_MIN ? 0 : 59} value={minutes}
+            onInput={(e) => setMinutes(e.currentTarget.value)} />
+        </label>
+      </div>
+      <button class="link-btn" type="submit">Сохранить время для Плана</button>
+    </form>
   );
 }
 

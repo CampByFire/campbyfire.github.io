@@ -3,7 +3,7 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { SLOT_MIN_SHOWN, agendaOf, canMoveAgendaDay, clockOf, dropStart, moveAgendaDay, moveMeeting, restoreMeetingTime, dayCount, meetingsOn, monthOf, monthWeeks, shiftMonth, timelineOf, type AgendaItem, type MonthKey, type Slot } from '../game/calendar';
 import { colorName, isDark, meetingTint, questHex } from '../game/color';
-import { findQuest, setRoutineAt, updateTask } from '../game/state';
+import { findQuest, findRoutine, updateTask } from '../game/state';
 import { DRAG_STEP_MIN } from '../game/rules';
 import { addDays, formatClock, formatDate, formatWeekdayDate, formatTime, minutesOfDay, parseDay, type ClockFormat, type DateFormat } from '../game/time';
 import type { DayKey, Meeting, State } from '../game/types';
@@ -328,10 +328,8 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
       }
       const was = ui.store.act((st) => moveMeeting(st, id, at));
       if (was) ui.toast(`Событие перенесено на ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => restoreMeetingTime(st, id, was)) });
-    } else if (x.kind === 'routine') {
-      const id = x.routine.id;
-      const was = ui.store.act((st) => setRoutineAt(st, id, at));
-      if (was !== undefined) ui.toast(`Повтор теперь каждый раз в ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => setRoutineAt(st, id, was)) });
+    } else if (x.kind === 'routine' || (x.kind === 'task' && findRoutine(s, x.task.routineId))) {
+      ui.open({ kind: 'moveRoutine', routineId: x.kind === 'routine' ? x.routine.id : x.task.routineId!, day, at });
     } else {
       const id = x.task.id;
       const was = x.task.at ?? null;

@@ -1,6 +1,6 @@
 // Календарь: события и задачи на дату, шкала дня по часам, что стоит на завтра, вход из плана и из лагеря.
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskForm, at, axe, expectNoSideScroll, openGame, setTime, sheet, tab, toast } from './helpers';
+import { addTask, expandTaskForm, at, axe, expectNoSideScroll, openGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Кнопки и поля меньше 44×44 на экране и в листе. Дела на шкале дня не в счёт: их высота это их длительность. */
 const tooSmall = (page: Page) =>
@@ -385,6 +385,40 @@ test('дела на шкале дня переносятся перетаски�
   for (let i = 0; i < 6; i++) await page.getByRole('button', { name: /^Позже: / }).click();
   await expect(standup).toHaveAccessibleName('10:00–11:00, Планёрка, событие · каждую неделю');
   expect(await axe(page), 'День после переноса').toEqual([]);
+});
+
+test('перетаскивание задачи предлагает перенести только выбранный день или всю серию', async ({ page }) => {
+  await openGame(page);
+  await addTask(page, 'Прогулка в 10:00', { quest: 'Здоровье', repeat: 'Каждый день' });
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  const walk = timeline(page).getByRole('button', { name: /Прогулка/ });
+  const scope = sheet(page, 'Перенести задачу');
+  await expect(walk).toHaveAccessibleName(/^10:00–/);
+  await dragMouse(page, walk, 56);
+  await expect(scope).toContainText('Перенести на 11:00 только этот день или все дни серии?');
+  expect(await axe(page), 'Перенос повторяющейся задачи').toEqual([]);
+  await scope.getByRole('button', { name: /Только этот день/ }).click();
+  await expect(walk).toHaveAccessibleName(/^11:00–/);
+
+  await page.getByRole('button', { name: /^Позже: / }).click();
+  await expect(walk).toHaveAccessibleName(/^10:00–/);
+  await dragTouch(page, walk, 56 * 2);
+  await scope.getByRole('button', { name: /Только этот день/ }).click();
+  await expect(walk).toHaveAccessibleName(/^12:00–/);
+  await walk.focus();
+  await page.keyboard.press('Alt+ArrowDown');
+  await scope.getByRole('button', { name: 'Все дни серии' }).click();
+  await expect(walk).toHaveAccessibleName(/^12:15–/);
+  await toast(page).getByRole('button', { name: 'Вернуть' }).click();
+  await expect(walk).toHaveAccessibleName(/^12:00–/);
+
+  await page.reload();
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  await expect(walk).toHaveAccessibleName(/^11:00–/);
+  await page.getByRole('button', { name: /^Позже: / }).click();
+  await expect(walk).toHaveAccessibleName(/^12:00–/);
+  await page.getByRole('button', { name: /^Позже: / }).click();
+  await expect(walk).toHaveAccessibleName(/^10:00–/);
 });
 
 test('событие переносится через правый и левый края мышью и пальцем', async ({ page }) => {
