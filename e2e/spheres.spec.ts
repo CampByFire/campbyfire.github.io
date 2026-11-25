@@ -74,6 +74,16 @@ test('котелки показывают уровень, дату и выбра
     expect(right!.x + right!.width).toBeLessThanOrEqual(width);
     await page.screenshot({ path: testInfo.outputPath(`алхимия-${width}.png`) });
   }
+  const fire = cards.first().locator('.brew-fire');
+  const bubble = cards.first().locator('.brew-bubble').first();
+  await expect(fire).toHaveCSS('animation-name', 'brew-fire');
+  await expect(bubble).toHaveCSS('animation-name', 'brew-rise');
+  await expect(cards.first().locator('.brew-steam')).toBeVisible();
+  await expect(cards.last().locator('.brew-bubble, .brew-steam')).toHaveCount(0);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(fire).toHaveCSS('animation-name', 'none');
+  await expect(bubble).toHaveCSS('animation-name', 'none');
+  await expect(fire).toBeVisible();
   await cards.nth(1).click();
   await sheet(page, 'Здоровье').getByRole('button', { name: 'Изменить сферу' }).click();
   const edit = sheet(page, 'Сфера');
