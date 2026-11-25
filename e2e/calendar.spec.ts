@@ -310,7 +310,7 @@ async function dragTouch(page: Page, ev: ReturnType<Page['locator']>, dy: number
   await cdp.detach();
 }
 
-test('дела на шкале дня переносятся перетаскиванием, пальцем и с клавиатуры', async ({ page }) => {
+test('дела на шкале дня переносятся перетаскиванием, пальцем и с клавиатуры', async ({ page }, testInfo) => {
   // Пятница, 23 октября. На завтра событие с 10:00 до 10:45.
   await openGame(page, { time: at(9) });
   await page.getByRole('button', { name: /На завтра ничего не запланировано/ }).click();
@@ -322,6 +322,9 @@ test('дела на шкале дня переносятся перетаски�
   await expect(form).toBeHidden();
   const dentist = timeline(page).getByRole('button', { name: /Стоматолог/ });
   await expect(dentist).toHaveAccessibleName('10:00–10:45, Стоматолог, событие');
+  await expect(dentist).toHaveAccessibleDescription('Чтобы поменять время, перетащи дело или нажми Alt со стрелкой вверх или вниз.');
+  await expect(page.getByText(/^Перетащи дело к краю экрана/)).toHaveCount(0);
+  await page.screenshot({ path: testInfo.outputPath('kalendar-bez-podskazki.png') });
 
   // Мышью на два часа ниже: длина та же, лист не открылся, «Вернуть» ставит обратно.
   await dragMouse(page, dentist, 2 * 56);
@@ -486,6 +489,8 @@ test('задача без времени переносится к краю эк
   await expect(form).toBeHidden();
   await page.getByRole('button', { name: 'Октябрь', exact: true }).click();
   const task = page.getByRole('button', { name: /Купить торт/ });
+  await expect(task).toHaveAccessibleDescription('');
+  await expect(page.getByText(/^Перетащи дело к краю экрана/)).toHaveCount(0);
   const later = page.getByRole('button', { name: /^25\.10\.2026, воскресенье/ });
   const source = await steadyBox(task);
   await page.mouse.move(source.x + source.width - 8, source.y + source.height / 2);

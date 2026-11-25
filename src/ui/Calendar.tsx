@@ -75,22 +75,12 @@ function dayMoveKeys(e: KeyboardEvent, ui: Ui, item: AgendaItem, from: DayKey) {
   shiftDay(ui, item, from, addDays(from, e.key === 'ArrowLeft' ? -1 : 1));
 }
 
-function dayMoveProps(ui: Ui, item: AgendaItem, day: DayKey, onPointerDown: (e: PointerEvent) => void, hint = 'cal-date-drag-hint') {
+function dayMoveProps(ui: Ui, item: AgendaItem, day: DayKey, onPointerDown: (e: PointerEvent) => void) {
   return {
     'data-calendar-item': true,
-    'aria-describedby': hint,
     onPointerDown,
     onKeyDown: (e: KeyboardEvent) => dayMoveKeys(e, ui, item, day),
   };
-}
-
-function DateDragHint() {
-  return (
-    <p class="note cal-drag-note">
-      Перетащи дело к краю экрана и отпусти. Слева предыдущий день, справа следующий. Пальцем сначала ненадолго удержи дело.
-      <span class="sr-only" id="cal-date-drag-hint"> Для переноса на соседний день нажми Alt и стрелку влево или вправо.</span>
-    </p>
-  );
 }
 
 function MonthView({ ui }: { ui: Ui }) {
@@ -247,7 +237,6 @@ function DayAgenda({ ui, day, items, held, onPointerDown }: {
           <LIcon name="chevron" size={15} />
         </button>
       </div>
-      {items.some(dayMovable) && <DateDragHint />}
       {items.length === 0 && <p class="note">{past ? 'В этот день ничего не было.' : 'Ничего не запланировано.'}</p>}
       {items.length > 0 && (
         <ul class="cal-list">
@@ -386,7 +375,6 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
         </button>
       )}
       <AddButtons ui={ui} day={day} small />
-      {items.some(dayMovable) && <DateDragHint />}
 
       {allDay.length > 0 && (
         <section class="tl-allday" aria-labelledby="tl-allday-h">
@@ -451,7 +439,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
                   }}
                 >
                   <TimelineEvent ui={ui} s={s} slot={shown} onPointerDown={movable(x.item) ? onPointerDown : undefined}
-                    dateDragProps={dayMovable(x.item) ? dayMoveProps(ui, x.item, day, onPointerDown, 'tl-drag-hint cal-date-drag-hint') : undefined}
+                    dateDragProps={dayMovable(x.item) ? dayMoveProps(ui, x.item, day, onPointerDown) : undefined}
                     onShift={(n) => moveTo(x, dropStart(x.start + n, x.end - x.start))} />
                 </li>
               );
