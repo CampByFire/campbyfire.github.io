@@ -1,10 +1,11 @@
 // Игровое время: дни, смены, освещение. Всё в местном времени устройства.
-import { DAY_STARTS_AT_HOUR, HOUR, SUMMARY_BEFORE_BED } from './rules';
+import { DAY_STARTS_AT_HOUR, HOUR, NIGHT_END_HOUR, SUMMARY_BEFORE_BED } from './rules';
 import type { DayKey, Repeat, Settings } from './types';
 
 export type Shift = 'morning' | 'work' | 'evening' | 'weekend' | 'night';
 export type Light = 'day' | 'evening' | 'night';
 export type ClockFormat = '12h' | '24h';
+export type DateFormat = 'dmy' | 'mdy';
 
 function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n);
@@ -33,11 +34,10 @@ export function daysBetween(from: DayKey, to: DayKey): number {
   return Math.round((parseDay(to).getTime() - parseDay(from).getTime()) / (24 * HOUR));
 }
 
-/** Минуты от полуночи; время после полуночи до начала дня идёт как 24:00+. */
+/** Минуты от полуночи по местному времени устройства. */
 export function minutesOfDay(ts: number): number {
   const d = new Date(ts);
-  const m = d.getHours() * 60 + d.getMinutes();
-  return d.getHours() < DAY_STARTS_AT_HOUR ? m + 24 * 60 : m;
+  return d.getHours() * 60 + d.getMinutes();
 }
 
 export function isWorkDay(day: DayKey, s: Settings): boolean {
@@ -68,11 +68,13 @@ export function repeatOnDays(days: number[]): Repeat {
   return { every: 'days', days: set };
 }
 
+function bedtimeAfterWork(s: Settings): number {
+  return s.bedtime < NIGHT_END_HOUR * 60 && s.bedtime < s.workEnd ? s.bedtime + 24 * 60 : s.bedtime;
+}
+
 /** Что не так с распорядком, если смены в нём путаются; null, если всё в порядке. */
-export function scheduleError(s: Settings, format?: ClockFormat): string | null {
-  const dayStart = DAY_STARTS_AT_HOUR * 60;
-  const bed = s.bedtime < dayStart ? s.bedtime + 24 * 60 : s.bedtime;
-  if (s.workStart < dayStart) return `Работа может начаться не раньше ${formatMinutes(dayStart, format)}: в это время начинается новый игровой день.`;
+export function scheduleError(s: Settings): string | null {
+  const bed = bedtimeAfterWork(s);
   if (s.workEnd <= s.workStart) return 'Конец работы должен быть позже начала.';
   if (bed - SUMMARY_BEFORE_BED / 60_000 < s.workEnd) return `Отбой должен быть хотя бы на ${SUMMARY_BEFORE_BED / 60_000} минут позже конца работы.`;
   return null;
@@ -80,7 +82,8 @@ export function scheduleError(s: Settings, format?: ClockFormat): string | null 
 
 export function shiftAt(ts: number, s: Settings): Shift {
   const m = minutesOfDay(ts);
-  const bed = s.bedtime < DAY_STARTS_AT_HOUR * 60 ? s.bedtime + 24 * 60 : s.bedtime;
+  const bed = bedtimeAfterWork(s);
+  if (m < Math.min(NIGHT_END_HOUR * 60, s.workStart)) return 'night';
   if (m >= bed - SUMMARY_BEFORE_BED / 60_000) return 'night';
   if (!isWorkDay(dayKey(ts), s)) return 'weekend';
   if (m < s.workStart) return 'morning';
@@ -104,11 +107,13 @@ export function isMainFor(kind: 'work' | 'personal' | 'any', shift: Shift): bool
 }
 
 const WEEKDAYS = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-const MONTHS = ['янв', 'фев', 'мар', 'апр', 'мая', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+export function formatDate(day: DayKey, format: DateFormat = 'dmy'): string {
+  const [year, month, date] = day.split('-');
+  return format === 'mdy' ? [month, date, year].join('.') : [date, month, year].join('.');
+}
 
-export function formatDate(day: DayKey): string {
-  const d = parseDay(day);
-  return `${WEEKDAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+export function formatWeekdayDate(day: DayKey, format: DateFormat): string {
+  return `${WEEKDAYS[parseDay(day).getDay()]}, ${formatDate(day, format)}`;
 }
 
 export function formatClock(ts: number, format?: ClockFormat): string {
@@ -154,20 +159,14 @@ export function formatSpent(ms: number): string {
   return formatDuration(Math.max(1, Math.round(ms / 60_000)));
 }
 
-/** «24 октября 2027 г.» */
-export function formatDayLong(day: DayKey): string {
-  return parseDay(day).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-}
-
-export function formatDue(due: DayKey, today: DayKey): string {
+export function formatDue(due: DayKey, today: DayKey, format: DateFormat = 'dmy'): string {
   const n = daysBetween(today, due);
   if (n === 0) return 'сегодня';
   if (n === 1) return 'завтра';
   if (n === -1) return 'вчера';
   if (n < 0) return `${-n} ${plural(-n, 'день', 'дня', 'дней')} назад`;
   if (n < 7) return `через ${n} ${plural(n, 'день', 'дня', 'дней')}`;
-  const d = parseDay(due);
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return formatDate(due, format);
 }
 
 export function plural(n: number, one: string, few: string, many: string): string {

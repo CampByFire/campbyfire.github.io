@@ -3,7 +3,7 @@ import type { Store } from '../game/store';
 import type { Notes } from '../notes/notes';
 import type { Sync } from '../sync/sync';
 import type { CompleteResult } from '../game/state';
-import type { ClockFormat } from '../game/time';
+import type { ClockFormat, DateFormat } from '../game/time';
 import type { DayKey } from '../game/types';
 import { W } from '../game/words';
 import { CalendarScreen } from './Calendar';
@@ -76,6 +76,8 @@ export interface Ui {
   /** Сила магии на этом устройстве. */
   motion: Motion;
   setMotion(m: Motion): void;
+  dateFormat: DateFormat;
+  setDateFormat(format: DateFormat): void;
   clockFormat: ClockFormat;
   setClockFormat(format: ClockFormat): void;
 }
@@ -124,6 +126,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   const lastFocus = useRef<FocusSpot | null>(null);
   const [day, setDay] = useState(s.day);
   const [motion, setMotionState] = useState<Motion>(() => motionOf(store.now()));
+  const [dateFormat, setDateFormat] = useState<DateFormat>(() => loadLocal(store.now()).dateFormat === 'mdy' ? 'mdy' : 'dmy');
   const [clockFormat, setClockFormat] = useState<ClockFormat>(() => loadLocal(store.now()).clockFormat === '12h' ? '12h' : '24h');
   const [shade, setShade] = useState(false);
   // Из Лагеря уходят со свёрнутой шторкой: вернёшься, и снова видна сцена.
@@ -338,6 +341,11 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
       setIntro(true);
     },
     motion,
+    dateFormat,
+    setDateFormat: (format) => {
+      updateLocal(store.now(), (local) => { local.dateFormat = format; });
+      setDateFormat(format);
+    },
     clockFormat,
     setClockFormat: (format) => {
       updateLocal(store.now(), (local) => { local.clockFormat = format; });

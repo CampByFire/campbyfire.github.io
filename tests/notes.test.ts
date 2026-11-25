@@ -675,7 +675,7 @@ describe('дневник: файл дня', () => {
     const base = '## 08:12\n\nУтро.\n';
     const local = '## 08:12\n\nУтро.\n\n## 01:10\n\nНочью с телефона.\n';
     const remote = '## 08:12\n\nУтро.\n\n## 19:00\n\nВечер с компьютера.\n';
-    expect(parseDiary(mergeDiary(base, local, remote)).map((e) => e.time)).toEqual(['08:12', '19:00', '01:10']);
+    expect(parseDiary(mergeDiary(base, local, remote)).map((e) => e.time)).toEqual(['01:10', '08:12', '19:00']);
   });
 
   it('слияние: удалённая и поправленная на одной стороне запись не возвращается', () => {
@@ -695,7 +695,7 @@ describe('дневник в Летописи', () => {
     return { c, now: () => c.t };
   };
 
-  it('записи за день ложатся в один файл; ночью до четырёх это ещё вчерашний день', () => {
+  it('записи после полуночи ложатся в файл нового дня', () => {
     const { c, now } = clock(T);
     const notes = new Notes(host(false), { storage: memory(), now, delay: 1e9 });
     notes.addDiary('Утро.');
@@ -706,8 +706,8 @@ describe('дневник в Летописи', () => {
     c.t = new Date(2026, 10, 5, 9, 0).getTime();
     notes.addDiary('Новый день.');
     expect(notes.diary().map((d) => [d.path, d.entries.map((e) => e.time)])).toEqual([
-      ['diary/2026/2026-11-05.md', ['09:00']],
-      ['diary/2026/2026-11-04.md', ['08:12', '21:40', '01:10']],
+      ['diary/2026/2026-11-05.md', ['01:10', '09:00']],
+      ['diary/2026/2026-11-04.md', ['08:12', '21:40']],
     ]);
     expect(notes.sections()).toEqual([]);
   });

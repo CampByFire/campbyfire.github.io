@@ -50,8 +50,10 @@ export const IMPROVE_MAX = 4000;
 export const SEATS = 6;
 export const ROAD_SPOTS = 3;
 
-/** Игровой день начинается в 4:00, чтобы работа после полуночи шла в тот же день. */
-export const DAY_STARTS_AT_HOUR = 4;
+/** Начало календарного дня по местному времени устройства. */
+export const DAY_STARTS_AT_HOUR = 0;
+/** Когда заканчивается ночная смена, если работа ещё не началась. */
+export const NIGHT_END_HOUR = 4;
 /** За столько до отбоя лагерь показывает итоги дня. */
 export const SUMMARY_BEFORE_BED = 30 * MINUTE;
 

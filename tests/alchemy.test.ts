@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { sphereBrews } from '../src/game/alchemy';
-import { addQuest, addTask, complete, newState, undoComplete } from '../src/game/state';
+import { addQuest, addTask, complete, newState, settle, undoComplete } from '../src/game/state';
 import { addDays } from '../src/game/time';
 
 describe('Алхимия', () => {
@@ -21,6 +21,18 @@ describe('Алхимия', () => {
     undoComplete(s, id);
     expect(sphereBrews(s).get(sphere.id)?.portions).toBe(3);
     expect(sphereBrews(s).size).toBe(1);
+  });
+
+  it('отвар испаряется при смене даты в полночь', () => {
+    const before = new Date(2026, 9, 23, 23, 59).getTime();
+    const midnight = new Date(2026, 9, 24, 0, 0).getTime();
+    const s = newState(before);
+    const sphere = s.quests[0];
+    complete(s, before, addTask(s, before, { title: 'Дело вечером', level: 1, questId: sphere.id }));
+    expect(sphereBrews(s).get(sphere.id)?.portions).toBe(3);
+    settle(s, midnight);
+    expect(s.day).toBe('2026-10-24');
+    expect(sphereBrews(s).get(sphere.id)?.portions).toBe(2);
   });
 
   it('переполнение не запасается, после перерыва остаётся дата последнего дела', () => {

@@ -58,7 +58,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
     const fields = { title: name, day: vDay, at: vAt || null, until: vUntil || null, place, color, repeat, repeatUntil: repeatUntil || null };
     if (editing) ui.store.act((st) => updateMeeting(st, editing.id, fields));
     else ui.store.act((st, now) => addMeeting(st, now, fields));
-    const when = `${formatDue(vDay, s.day)}${shownAt ? ` в ${shownAt}` : ''}${repeat ? `, ${MEETING_REPEAT_NAME[repeat].toLowerCase()}` : ''}`;
+    const when = `${formatDue(vDay, s.day, ui.dateFormat)}${shownAt ? ` в ${shownAt}` : ''}${repeat ? `, ${MEETING_REPEAT_NAME[repeat].toLowerCase()}` : ''}`;
     ui.toast(editing ? 'Событие сохранено' : `Событие в календаре: ${when}`);
     ui.close();
   };
@@ -74,7 +74,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
     if (!editing || !preset) return;
     ui.store.act((st) => skipMeetingDay(st, editing.id, preset));
     ui.close();
-    ui.toast(`Пропущено: ${formatDue(preset, s.day)}`, { label: 'Вернуть', run: () => ui.store.act((st) => unskipMeetingDay(st, editing.id, preset)) });
+    ui.toast(`Пропущено: ${formatDue(preset, s.day, ui.dateFormat)}`, { label: 'Вернуть', run: () => ui.store.act((st) => unskipMeetingDay(st, editing.id, preset)) });
   };
 
   return (
@@ -103,7 +103,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
         </label>
         {heard && (
           <p class="field-hint" id="meet-hint" aria-live="polite">
-            Понял: {dayTitle(vDay, s.day).toLowerCase()}
+            Понял: {dayTitle(vDay, s.day, ui.dateFormat).toLowerCase()}
             {shownAt && `, в ${shownAt}`}
           </p>
         )}
@@ -154,7 +154,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
           {canSkip && (
             <button class="act" onClick={skip}>
               <LIcon name="close" size={16} />
-              Пропустить только этот день: {formatDue(preset!, s.day)}
+              Пропустить только этот день: {formatDue(preset!, s.day, ui.dateFormat)}
             </button>
           )}
           <button class="act act-danger" onClick={remove}>
@@ -176,7 +176,7 @@ export function MoveMeetingSheet({ ui, meetingId, day, at }: { ui: Ui; meetingId
   const m = findMeeting(s, meetingId);
   if (!m) return null;
   const when = formatTime(at, ui.clockFormat).replace(/^0/, '');
-  const date = formatDue(day, s.day);
+  const date = formatDue(day, s.day, ui.dateFormat);
   const once = () => {
     const copy = ui.store.act((st, now) => moveMeetingOnce(st, now, meetingId, day, at));
     ui.close();

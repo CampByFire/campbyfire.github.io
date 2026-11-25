@@ -18,7 +18,7 @@ test('событие и задача на завтра: шкала дня, пл�
   // Пятница, 23 октября, 9:00. Строка про завтра в плане открывает завтрашний день по часам.
   await openGame(page, { time: at(9) });
   await page.getByRole('button', { name: /На завтра ничего не запланировано/ }).click();
-  await expect(page.getByRole('heading', { name: 'Суббота, 24 октября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Суббота, 24.10.2026', level: 1 })).toBeVisible();
   await expect(page.getByText('Завтра · ничего не запланировано')).toBeVisible();
   expect(await axe(page), 'Пустой день').toEqual([]);
   expect(await tooSmall(page), 'Пустой день').toEqual([]);
@@ -28,7 +28,7 @@ test('событие и задача на завтра: шкала дня, пл�
   await page.getByRole('button', { name: 'Событие', exact: true }).click();
   const form = sheet(page, 'Новое событие');
   await form.getByLabel('Что за событие').fill('завтра в 10 стоматолог');
-  await expect(form.locator('#meet-hint')).toHaveText('Понял: завтра, суббота, 24 октября, в 10:00');
+  await expect(form.locator('#meet-hint')).toHaveText('Понял: завтра, суббота, 24.10.2026, в 10:00');
   await expect(form.getByLabel('Конец')).toHaveValue('');
   await form.getByLabel('Конец').fill('10:45');
   await form.getByLabel('Где').fill('Ленина, 5');
@@ -71,7 +71,7 @@ test('событие и задача на завтра: шкала дня, пл�
   // К месяцу: день выбран, под сеткой его список.
   await page.getByRole('button', { name: 'Октябрь' }).click();
   await expect(page.getByRole('heading', { name: 'Календарь', level: 1 })).toBeVisible();
-  await expect(page.getByRole('button', { name: '24 октября, суббота: 2 события и 1 задача' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: '24.10.2026, суббота: 2 события и 1 задача' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('.cal-list .cal-row')).toHaveCount(3);
   await expect(page.locator('.page-sub')).toHaveText('Завтра 2 события и 1 задача, с 10:00.');
   expect(await axe(page), 'Месяц').toEqual([]);
@@ -136,16 +136,16 @@ test('серия событий: повтор до даты, цвет, проп�
 
   // В сетке месяца серия стоит на своих днях, раньше первого и после последнего её нет.
   await page.getByRole('button', { name: 'Октябрь' }).click();
-  await expect(page.getByRole('button', { name: '30 октября, пятница: 1 событие' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '16 октября, пятница: ничего' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '30.10.2026, пятница: 1 событие' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '16.10.2026, пятница: ничего' })).toBeVisible();
   await expect(page.locator('[data-day="2026-10-30"] .cal-mark-meet')).toHaveCSS('background-color', 'rgb(106, 168, 79)');
   await page.getByRole('button', { name: 'Позже: Ноябрь' }).click();
-  await expect(page.getByRole('button', { name: '13 ноября, пятница: 1 событие' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '20 ноября, пятница: ничего' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '13.11.2026, пятница: 1 событие' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '20.11.2026, пятница: ничего' })).toBeVisible();
   expect(await axe(page), 'Месяц с цветной серией').toEqual([]);
 
   // Пропуск одного дня: остальные остаются, «Вернуть» отменяет.
-  await page.getByRole('button', { name: /^6 ноября, пятница/ }).click();
+  await page.getByRole('button', { name: /^06\.11\.2026, пятница/ }).click();
   await timeline(page).getByRole('button', { name: /Планёрка/ }).click();
   const edit = sheet(page, 'Событие');
   await expect(edit.getByLabel('Первый день')).toHaveValue('2026-10-23');
@@ -163,9 +163,9 @@ test('серия событий: повтор до даты, цвет, проп�
   // Правка из другого дня меняет всю серию: свой цвет кодом, новое время.
   await page.getByRole('button', { name: /^Позже: / }).click();
   await page.getByRole('button', { name: /^Позже: / }).click();
-  await expect(page.getByRole('heading', { name: 'Воскресенье, 8 ноября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Воскресенье, 08.11.2026', level: 1 })).toBeVisible();
   for (let i = 0; i < 5; i++) await page.getByRole('button', { name: /^Позже: / }).click();
-  await expect(page.getByRole('heading', { name: 'Пятница, 13 ноября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пятница, 13.11.2026', level: 1 })).toBeVisible();
   await timeline(page).getByRole('button', { name: /Планёрка/ }).click();
   const series = sheet(page, 'Событие');
   await series.getByLabel('Начало').fill('12:00');
@@ -174,16 +174,16 @@ test('серия событий: повтор до даты, цвет, проп�
   await series.getByRole('button', { name: 'Сохранить всю серию' }).click();
   await expect(timeline(page).getByRole('button', { name: /^12:00–13:00, Планёрка/ })).toHaveCSS('border-left-color', 'rgb(43, 179, 163)');
   await page.getByRole('button', { name: /^Раньше: / }).click();
-  await expect(page.getByRole('heading', { name: 'Четверг, 12 ноября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Четверг, 12.11.2026', level: 1 })).toBeVisible();
   await expect(timeline(page).getByRole('button', { name: /Планёрка/ })).toHaveCount(0);
   for (let i = 0; i < 6; i++) await page.getByRole('button', { name: /^Раньше: / }).click();
-  await expect(page.getByRole('heading', { name: 'Пятница, 6 ноября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пятница, 06.11.2026', level: 1 })).toBeVisible();
   await expect(timeline(page).getByRole('button', { name: /Планёрка/ })).toHaveCount(0);
 
   // Обычный цвет можно вернуть, серию удалить целиком и вернуть.
   await page.getByRole('button', { name: /^Раньше: / }).click();
   for (let i = 0; i < 6; i++) await page.getByRole('button', { name: /^Раньше: / }).click();
-  await expect(page.getByRole('heading', { name: 'Пятница, 30 октября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пятница, 30.10.2026', level: 1 })).toBeVisible();
   await timeline(page).getByRole('button', { name: /^12:00–13:00, Планёрка/ }).click();
   const again = sheet(page, 'Событие');
   await again.getByRole('radiogroup', { name: 'Цвет' }).getByRole('radio', { name: 'Обычный' }).click();
@@ -201,19 +201,19 @@ test('по месяцу ходят стрелками, день листаетс
   await openGame(page, { time: at(9) });
   await page.getByRole('button', { name: /На завтра/ }).click();
   await page.getByRole('button', { name: /^Раньше: Сегодня/ }).click();
-  await expect(page.getByRole('heading', { name: 'Пятница, 23 октября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пятница, 23.10.2026', level: 1 })).toBeVisible();
   await expect(page.locator('.tl-now')).toBeVisible();
   await page.getByRole('button', { name: 'Октябрь' }).click();
 
-  const today = page.getByRole('button', { name: /^23 октября, пятница, сегодня/ });
+  const today = page.getByRole('button', { name: /^23\.10\.2026, пятница, сегодня/ });
   await expect(today).toHaveAttribute('aria-current', 'date');
   await today.focus();
   await page.keyboard.press('ArrowDown');
   await page.keyboard.press('ArrowDown');
-  await expect(page.getByRole('button', { name: /^6 ноября, пятница/ })).toBeFocused();
+  await expect(page.getByRole('button', { name: /^06\.11\.2026, пятница/ })).toBeFocused();
   await expect(page.getByRole('heading', { name: 'Ноябрь', level: 2 })).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'Пятница, 6 ноября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пятница, 06.11.2026', level: 1 })).toBeVisible();
 
   await page.getByRole('button', { name: 'Событие', exact: true }).click();
   const form = sheet(page, 'Новое событие');
@@ -221,12 +221,12 @@ test('по месяцу ходят стрелками, день листаетс
   await form.getByRole('button', { name: 'Добавить в календарь' }).click();
   await expect(page.getByRole('region', { name: 'Весь день' })).toContainText('День рождения Кати');
   await page.getByRole('button', { name: 'Ноябрь' }).click();
-  await expect(page.getByRole('button', { name: '6 ноября, пятница: 1 событие' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '06.11.2026, пятница: 1 событие' })).toBeVisible();
 
   // Месяцы листаются, а выбранный день остаётся прежним.
   await page.getByRole('button', { name: 'Позже: Декабрь' }).click();
   await expect(page.getByRole('heading', { name: 'Декабрь', level: 2 })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Пятница, 6 ноября' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Пятница, 06.11.2026' })).toBeVisible();
   await expectNoSideScroll(page);
 });
 
@@ -336,7 +336,7 @@ test('дела на шкале дня переносятся перетаски�
   await expect(standup).toHaveAccessibleName('9:00–10:00, Планёрка, событие');
   // Через неделю серия стоит как была.
   for (let i = 0; i < 7; i++) await page.getByRole('button', { name: /^Позже: / }).click();
-  await expect(page.getByRole('heading', { name: 'Суббота, 31 октября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Суббота, 31.10.2026', level: 1 })).toBeVisible();
   await expect(standup).toHaveAccessibleName('8:00–9:00, Планёрка, событие · каждую неделю');
   // А «Все дни серии» двигает и этот день, и остальные.
   await dragMouse(page, standup, 2 * 56);
@@ -375,7 +375,7 @@ test('событие переносится через правый и левы�
   await expect(calendar).not.toHaveClass(/is-over-right/);
   await page.mouse.up();
   await expect(event).toHaveAccessibleName('10:00–10:45, Стоматолог, событие');
-  await expect(page.getByRole('heading', { name: 'Суббота, 24 октября', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Суббота, 24.10.2026', level: 1 })).toBeVisible();
 
   const beforeDrop = await steadyBox(event);
   const dropY = beforeDrop.y + 12;
@@ -384,7 +384,7 @@ test('событие переносится через правый и левы�
   await page.mouse.move(right, dropY, { steps: 6 });
   await expect(calendar).toHaveClass(/is-over-right/);
   await page.mouse.up();
-  await expect(toast(page)).toContainText('Событие перенесено на 25 октября');
+  await expect(toast(page)).toContainText('Событие перенесено на 25.10.2026');
   await expect(event).toHaveCount(0);
   await later.click();
   await expect(event).toHaveAccessibleName('10:00–10:45, Стоматолог, событие');
@@ -398,7 +398,7 @@ test('событие переносится через правый и левы�
   await expect(calendar).toHaveClass(/is-over-left/);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await cdp.detach();
-  await expect(toast(page)).toContainText('Событие перенесено на 24 октября');
+  await expect(toast(page)).toContainText('Событие перенесено на 24.10.2026');
   await expect(event).toHaveCount(0);
   await toast(page).getByRole('button', { name: 'Вернуть' }).click();
   await expect(event).toHaveAccessibleName('10:00–10:45, Стоматолог, событие');
@@ -414,21 +414,21 @@ test('задача без времени переносится к краю эк
   await expect(form).toBeHidden();
   await page.getByRole('button', { name: 'Октябрь', exact: true }).click();
   const task = page.getByRole('button', { name: /Купить торт/ });
-  const later = page.getByRole('button', { name: /^25 октября, воскресенье/ });
+  const later = page.getByRole('button', { name: /^25\.10\.2026, воскресенье/ });
   const source = await steadyBox(task);
   await page.mouse.move(source.x + source.width - 8, source.y + source.height / 2);
   await page.mouse.down();
   await page.mouse.move(page.viewportSize()!.width - 2, source.y + source.height / 2, { steps: 6 });
   await expect(page.getByRole('main').locator('.page')).toHaveClass(/is-over-right/);
   await page.mouse.up();
-  await expect(toast(page)).toContainText('Задача перенесена на 25 октября');
-  await expect(later).toHaveAccessibleName('25 октября, воскресенье: 1 задача');
+  await expect(toast(page)).toContainText('Задача перенесена на 25.10.2026');
+  await expect(later).toHaveAccessibleName('25.10.2026, воскресенье: 1 задача');
   await toast(page).getByRole('button', { name: 'Вернуть' }).click();
   await expect(task).toBeVisible();
 
   await task.focus();
   await page.keyboard.press('Alt+ArrowLeft');
-  const today = page.getByRole('button', { name: /^23 октября, пятница, сегодня/ });
+  const today = page.getByRole('button', { name: /^23\.10\.2026, пятница, сегодня/ });
   await expect(today).toBeFocused();
-  await expect(today).toHaveAccessibleName('23 октября, пятница, сегодня: 1 задача');
+  await expect(today).toHaveAccessibleName('23.10.2026, пятница, сегодня: 1 задача');
 });

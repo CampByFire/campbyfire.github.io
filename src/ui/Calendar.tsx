@@ -5,9 +5,9 @@ import { SLOT_MIN_SHOWN, agendaOf, canMoveAgendaDay, clockOf, dropStart, moveAge
 import { colorName, isDark, meetingTint, questHex } from '../game/color';
 import { findQuest, setRoutineAt, updateTask } from '../game/state';
 import { DRAG_STEP_MIN } from '../game/rules';
-import { addDays, formatClock, formatDate, formatTime, minutesOfDay, parseDay, type ClockFormat } from '../game/time';
+import { addDays, formatClock, formatDate, formatWeekdayDate, formatTime, minutesOfDay, parseDay, type ClockFormat, type DateFormat } from '../game/time';
 import type { DayKey, Meeting, State } from '../game/types';
-import { MEETING_REPEAT_NAME, MONTH_NAME, MONTH_OF, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
+import { MEETING_REPEAT_NAME, MONTH_NAME, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
 import type { Ui } from './App';
 import { useCalendarDrag } from './drag';
 import { GIcon, LIcon } from './Icon';
@@ -65,8 +65,7 @@ function shiftDay(ui: Ui, item: AgendaItem, from: DayKey, to: DayKey) {
     const page = focus.closest('.page');
     (page?.querySelector<HTMLElement>(`[data-day="${to}"]`) ?? page?.querySelector<HTMLElement>('.cal-agenda h2, .tl-title'))?.focus({ preventScroll: true });
   }
-  const date = parseDay(to);
-  const when = `${date.getDate()} ${MONTH_OF[date.getMonth()]}`;
+  const when = formatDate(to, ui.dateFormat);
   ui.toast(`${item.kind === 'meeting' ? 'Событие перенесено' : 'Задача перенесена'} на ${when}`, { label: 'Вернуть', run: () => ui.store.act(undo) });
 }
 
@@ -121,7 +120,7 @@ function MonthView({ ui }: { ui: Ui }) {
       <div class="page-top">
         <span class="page-date">
           <LIcon name="calendar" size={15} class="ic-gold" />
-          {formatDate(s.day)} · {formatClock(ui.now, ui.clockFormat)}
+          {formatWeekdayDate(s.day, ui.dateFormat)} · {formatClock(ui.now, ui.clockFormat)}
         </span>
       </div>
       <h1 class="page-title">{W.calendar}</h1>
@@ -148,7 +147,7 @@ function MonthView({ ui }: { ui: Ui }) {
         </button>
       </div>
 
-      <MonthGrid s={s} month={month} day={day} onPick={setDay} onOpen={open} />
+      <MonthGrid s={s} dateFormat={ui.dateFormat} month={month} day={day} onPick={setDay} onOpen={open} />
 
       <DayAgenda ui={ui} day={day} items={items} held={drag.held?.item} onPointerDown={drag.onPointerDown} />
     </div>
@@ -160,8 +159,8 @@ function MonthView({ ui }: { ui: Ui }) {
  * Home и End к началу и концу недели, нажатие открывает день шкалой по часам. Диктор слышит дату
  * и сколько на ней событий и задач.
  */
-function MonthGrid({ s, month, day, onPick, onOpen }: {
-  s: State; month: MonthKey; day: DayKey; onPick: (d: DayKey) => void; onOpen: (d: DayKey) => void;
+function MonthGrid({ s, dateFormat, month, day, onPick, onOpen }: {
+  s: State; dateFormat: DateFormat; month: MonthKey; day: DayKey; onPick: (d: DayKey) => void; onOpen: (d: DayKey) => void;
 }) {
   const weeks = monthWeeks(month);
   const focusable = monthOf(day) === month ? day : `${month}-01`;
@@ -200,7 +199,7 @@ function MonthGrid({ s, month, day, onPick, onOpen }: {
               const c = dayCount(s, d);
               const date = parseDay(d);
               const what = agendaCount(c.meetings, c.tasks);
-              const label = `${date.getDate()} ${MONTH_OF[date.getMonth()]}, ${WEEKDAY_NAME[date.getDay()]}${d === s.day ? ', сегодня' : ''}: ${what || 'ничего'}`;
+              const label = `${formatDate(d, dateFormat)}, ${WEEKDAY_NAME[date.getDay()]}${d === s.day ? ', сегодня' : ''}: ${what || 'ничего'}`;
               const cls = ['cal-day', out && 'is-out', d === s.day && 'is-today', d === day && 'is-on', d < s.day && 'is-past'].filter(Boolean).join(' ');
               return (
                 <td key={d}>
@@ -242,7 +241,7 @@ function DayAgenda({ ui, day, items, held, onPointerDown }: {
   return (
     <section class="group cal-agenda">
       <div class="group-head">
-        <h2 class="sc" tabIndex={-1}>{dayTitle(day, s.day)}</h2>
+        <h2 class="sc" tabIndex={-1}>{dayTitle(day, s.day, ui.dateFormat)}</h2>
         <button class="link-btn" onClick={() => ui.openDay(day)}>
           по часам
           <LIcon name="chevron" size={15} />
@@ -350,7 +349,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
   const dayButton = (step: number, label: string) => {
     const target = addDays(day, step);
     return (
-      <button class="icon-btn" aria-label={`${label}: ${dayTitle(target, s.day)}`} onClick={() => go(step)}>
+      <button class="icon-btn" aria-label={`${label}: ${dayTitle(target, s.day, ui.dateFormat)}`} onClick={() => go(step)}>
         <LIcon name={step < 0 ? 'back' : 'chevron'} size={18} />
       </button>
     );
@@ -363,7 +362,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
     ui.open({ kind: 'meeting', day, at: `${String(h).padStart(2, '0')}:00` });
   };
   const what = agendaCount(c.meetings, c.tasks);
-  const rel = dayTitle(day, s.day).split(',')[0];
+  const rel = dayTitle(day, s.day, ui.dateFormat).split(',')[0];
   return (
     <div class={`page cal-dayview ${drag.edgeClass ?? ''}`} onPointerDownCapture={drag.resetClick} onClickCapture={drag.onClickCapture}>
       <div class="page-top">
@@ -375,7 +374,7 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
       <div class="period-nav tl-nav">
         {dayButton(-1, 'Раньше')}
         <div class="period-title">
-          <h1 class="tl-title" tabIndex={-1}>{dayLong(day, s.day)}</h1>
+          <h1 class="tl-title" tabIndex={-1}>{dayLong(day, s.day, ui.dateFormat)}</h1>
           <span>
             {/^(Сегодня|Завтра|Вчера)$/.test(rel) ? `${rel} · ` : ''}
             {what || 'ничего не запланировано'}
@@ -467,8 +466,8 @@ function DayView({ ui, day }: { ui: Ui; day: DayKey }) {
 }
 
 /** «Суббота, 8 ноября» без «Сегодня» и «Завтра»: они стоят строкой ниже. */
-function dayLong(day: DayKey, today: DayKey): string {
-  const t = dayTitle(day, today);
+function dayLong(day: DayKey, today: DayKey, format: DateFormat): string {
+  const t = dayTitle(day, today, format);
   return /^(Сегодня|Завтра|Вчера), /.test(t) ? t.replace(/^[^,]+, /, '').replace(/^./, (c) => c.toUpperCase()) : t;
 }
 

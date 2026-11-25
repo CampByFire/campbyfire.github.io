@@ -667,7 +667,7 @@ h2.sc {
 }
 
 @media (max-width: 379px) {
-  .chip-day {
+  .chip-shift {
     display: none;
   }
 }

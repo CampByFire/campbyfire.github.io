@@ -359,7 +359,7 @@ function TagAdd({ tags, text, onAdd }: { tags: string[]; text: string; onAdd: (t
 function when(ui: Ui, at: number): string {
   const day = dayKey(at);
   const today = dayKey(ui.now);
-  const name = day === today ? 'сегодня' : day === addDays(today, -1) ? 'вчера' : formatDate(day);
+  const name = day === today ? 'сегодня' : day === addDays(today, -1) ? 'вчера' : formatDate(day, ui.dateFormat);
   return `${name}, ${formatClock(at, ui.clockFormat)}`;
 }
 
@@ -385,7 +385,7 @@ function ArticleCard({ ui, n }: { ui: Ui; n: Note }) {
 /** «Сегодня», «Вчера» или «Вт, 2 ноя». */
 function dayName(ui: Ui, day: string): string {
   const today = dayKey(ui.now);
-  return day === today ? 'Сегодня' : day === addDays(today, -1) ? 'Вчера' : formatDate(day);
+  return day === today ? 'Сегодня' : day === addDays(today, -1) ? 'Вчера' : formatDate(day, ui.dateFormat);
 }
 
 /** Дневник: поле на сегодня, ниже дни, новые сверху. В каждом дне записи по времени. */
@@ -484,7 +484,7 @@ function DaysView({ ui }: { ui: Ui }) {
           return (
             <details key={d} class="day">
               <summary>
-                <span class="day-date">{formatDate(d)}</span>
+                <span class="day-date">{formatDate(d, ui.dateFormat)}</span>
                 <span class="meta">
                   {l.done} сделано · +{l.gold} · {formatDuration(Math.round(l.workedMs / 60_000))}
                 </span>

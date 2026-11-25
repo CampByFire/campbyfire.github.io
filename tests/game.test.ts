@@ -27,7 +27,7 @@ import {
   undoComplete,
   unrelease,
 } from '../src/game/state';
-import { addDays, dayKey, formatClock, formatTime, scheduleError, shiftAt } from '../src/game/time';
+import { addDays, dayKey, formatClock, formatDate, formatTime, minutesOfDay, scheduleError, shiftAt } from '../src/game/time';
 import { assignSeats, campView } from '../src/game/view';
 import { SAVE_VERSION, Store, checkSave, type Storage } from '../src/game/store';
 
@@ -50,9 +50,15 @@ describe('время и смены', () => {
     expect(formatTime('09:05', '24h')).toBe('09:05');
   });
 
-  it('день начинается в 4 утра', () => {
-    expect(dayKey(at(3, 59))).toBe('2026-10-22');
-    expect(dayKey(at(4))).toBe('2026-10-23');
+  it('день начинается в полночь по местному времени', () => {
+    expect(dayKey(at(23, 59, 22))).toBe('2026-10-22');
+    expect(dayKey(at(0))).toBe('2026-10-23');
+    expect(minutesOfDay(at(0, 1))).toBe(1);
+  });
+
+  it('полная дата показывает день и месяц в выбранном порядке', () => {
+    expect(formatDate('2026-10-03')).toBe('03.10.2026');
+    expect(formatDate('2026-10-03', 'mdy')).toBe('10.03.2026');
   });
 
   it('смены рабочего дня и выходного', () => {
@@ -68,10 +74,10 @@ describe('время и смены', () => {
   it('распорядок, в котором путаются смены, не принимается', () => {
     const { s } = fresh();
     expect(scheduleError(s.settings)).toBeNull();
-    expect(scheduleError({ ...s.settings, workStart: 3 * 60 })).toMatch('не раньше 4:00');
+    expect(scheduleError({ ...s.settings, workStart: 0 })).toBeNull();
     expect(scheduleError({ ...s.settings, workStart: 18 * 60, workEnd: 9 * 60 })).toMatch('позже начала');
     expect(scheduleError({ ...s.settings, workEnd: 22 * 60, bedtime: 22 * 60 + 15 })).toMatch('Отбой');
-    // Отбой после полуночи допустим: он ещё в том же игровом дне.
+    // Отбой можно назначить после полуночи.
     expect(scheduleError({ ...s.settings, bedtime: 60 })).toBeNull();
   });
 });

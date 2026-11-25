@@ -14,7 +14,6 @@
 // Текст до первого «## ЧЧ:ММ» (например, написанный руками на GitHub) тоже запись, только без времени
 // и без названия: в файле ему негде лежать.
 // День считается игровым: запись в 01:30 ночи попадает во вчерашний день, как и в игре.
-import { DAY_STARTS_AT_HOUR } from '../game/rules';
 import { dayKey } from '../game/time';
 import type { DayKey } from '../game/types';
 import { DIARY_DIR } from '../sync/github';
@@ -135,11 +134,11 @@ export function diaryText(entries: DiaryEntry[]): string {
     .replace(/^\n$/, '');
 }
 
-/** Порядок записей в дне: текст без времени первым, ночные (до начала игрового дня) последними. */
+/** Порядок записей в дне: текст без времени первым, затем записи по времени. */
 function order(e: DiaryEntry): number {
   if (!e.time) return -1;
   const [h, m] = e.time.split(':').map(Number);
-  return (h < DAY_STARTS_AT_HOUR ? h + 24 : h) * 60 + m;
+  return h * 60 + m;
 }
 
 export const sortEntries = (list: DiaryEntry[]) => list.map((e, i) => ({ e, i })).sort((a, b) => order(a.e) - order(b.e) || a.i - b.i).map((x) => x.e);

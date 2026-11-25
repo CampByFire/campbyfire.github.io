@@ -182,14 +182,14 @@ describe('покупка', () => {
     expect(goldText(s.hero.gold)).toBe('−50 золота');
   });
 
-  it('покупка после полуночи идёт в тот же игровой день', () => {
+  it('покупка после полуночи идёт в новый игровой день', () => {
     const s = fresh(500);
     const id = addPrize(s, at(9), { title: 'Чай', price: 60 })!;
-    settle(s, at(1, 30, 24));
-    expect(buyPrize(s, at(1, 30, 24), id)!.day).toBe('2026-10-23');
-    settle(s, at(9, 0, 24));
-    expect(buyPrize(s, at(9, 0, 24), id)!.day).toBe('2026-10-24');
+    expect(buyPrize(s, at(23, 59), id)!.day).toBe('2026-10-23');
+    settle(s, at(0, 0, 24));
+    expect(buyPrize(s, at(0, 0, 24), id)!.day).toBe('2026-10-24');
     expect(spentGold(s, '2026-10-23')).toBe(60);
+    expect(spentGold(s, '2026-10-24')).toBe(60);
     expect(spentGold(s)).toBe(120);
     expect(purchasesByDay(s, 30).map((d) => [d.day, d.items.length])).toEqual([
       ['2026-10-24', 1],

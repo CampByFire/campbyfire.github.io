@@ -84,6 +84,25 @@ test('формат времени меняется в Распорядке, де
   await expect(page.getByRole('button', { name: '3:00 PM–4:15 PM, Созвон, событие' })).toBeVisible();
 });
 
+test('формат даты меняется в Распорядке и помнится после перезагрузки', async ({ page }) => {
+  await openGame(page);
+  await openSettings(page, 'Распорядок');
+  const formats = page.getByRole('radiogroup', { name: 'Формат даты' });
+  const defaultDate = formats.getByRole('radio', { name: 'ДД.ММ.ГГГГ', exact: true });
+  await expect(defaultDate).toBeChecked();
+  await expect(page.locator('.page-date')).toContainText('23.10.2026');
+  await defaultDate.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(formats.getByRole('radio', { name: 'ММ.ДД.ГГГГ', exact: true })).toBeChecked();
+  await expect(page.locator('.page-date')).toContainText('10.23.2026');
+  await page.reload();
+  await tab(page, 'План').click();
+  await expect(page.locator('.page-date')).toContainText('10.23.2026');
+  await page.getByRole('button', { name: /На завтра ничего не запланировано/ }).click();
+  await expect(page.getByRole('heading', { name: 'Суббота, 10.24.2026', exact: true })).toBeVisible();
+  await expect(page.getByText('Завтра · ничего не запланировано')).toBeVisible();
+});
+
 test('все пять горизонтов доступны вкладками и с клавиатуры', async ({ page }) => {
   await openGame(page);
   const tabs = page.getByRole('radiogroup', { name: 'Что собирать' });

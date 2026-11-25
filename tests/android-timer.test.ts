@@ -30,7 +30,7 @@ it('шторка учитывает паузу, продолжение и зав
 });
 
 it('фоновый секундомер ограничен началом игрового дня и сроком забытой задачи', () => {
-  const { state, now } = working(3, 55);
+  const { state, now } = working(23, 55);
   expect(androidTimer(state).endsAt).toBe(now + 5 * MINUTE);
   const daytime = working();
   settle(daytime.state, daytime.now + FORGOTTEN_AFTER + MINUTE);

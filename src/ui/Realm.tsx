@@ -3,7 +3,7 @@ import { Cauldron } from './Cauldron';
 import { questHex } from '../game/color';
 import { BREW_CAPACITY, BREW_PER_TASK } from '../game/rules';
 import { lairOf, projectsOf, ratingDue, releasedOf, spheresOf, unrelease } from '../game/state';
-import { formatDue } from '../game/time';
+import { dayKey, formatDate, formatDue } from '../game/time';
 import type { Quest, State } from '../game/types';
 import { QUEST_ICON_NAME, W, brewIcon } from '../game/words';
 import type { Ui } from './App';
@@ -69,7 +69,7 @@ export function Realm({ ui }: { ui: Ui }) {
           <button key={q.id} class="trophy" data-quest={q.id} onClick={() => ui.open({ kind: 'quest', questId: q.id })}>
             <GIcon name="kingdom" size={20} class="ic-gold" />
             <span class="row-title">{q.name}</span>
-            <span class="meta">{new Date(q.wonAt!).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+            <span class="meta">{formatDate(dayKey(q.wonAt!), ui.dateFormat)}</span>
           </button>
         ))}
       </section>
@@ -116,7 +116,7 @@ function SphereCard({ ui, q, brew }: { ui: Ui; q: Quest; brew?: Brew }) {
     <button class="quest-card sphere-card" data-sphere={q.id} onClick={() => ui.open({ kind: 'quest', questId: q.id })}>
       <Cauldron color={questHex(q.color)} portions={portions} icon={icon} />
       <span class="quest-card-name">{q.name}</span>
-      <span class="quest-card-sub">{brew ? `Последнее дело — ${formatDue(brew.lastDay, ui.store.state.day)}` : 'Пока нет выполненных дел'}</span>
+      <span class="quest-card-sub">{brew ? `Последнее дело — ${formatDue(brew.lastDay, ui.store.state.day, ui.dateFormat)}` : 'Пока нет выполненных дел'}</span>
       <span class="sr-only">Отвар: {portions} из {BREW_CAPACITY}.{icon && ` Медальон: ${QUEST_ICON_NAME[icon]}.`}</span>
     </button>
   );

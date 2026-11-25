@@ -86,13 +86,13 @@ describe('привычки', () => {
     expect(habitBonusHolder(s, r, '2026-W46')!.doneDay).toBe('2026-11-10');
   });
 
-  it('дело после полуночи в воскресенье идёт в старую неделю', () => {
+  it('дело после полуночи в понедельник идёт в новую неделю', () => {
     const s = newState(at(8, 0, 8));
     const r = addRoutine(s, at(8, 0, 8), habit('Зарядка', { every: 'day' }, 1));
     settle(s, at(1, 0, 9));
     complete(s, at(1, 0, 9), waitingOf(s, r)!.id);
-    expect(weekOf(s.day)).toBe('2026-W45');
-    expect(habitBonusHolder(s, r, '2026-W45')).toBeDefined();
+    expect(weekOf(s.day)).toBe('2026-W46');
+    expect(habitBonusHolder(s, r, '2026-W46')).toBeDefined();
   });
 
   it('«Вернуть» забирает бонус, и он приходит снова, когда цель снова достигнута', () => {

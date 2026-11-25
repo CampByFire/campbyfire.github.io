@@ -18,7 +18,7 @@ export type QuestColor = QuestPreset | `#${string}`;
 /** inbox: письмо у вестника, ещё не разобрано; open: спутник в отряде. */
 export type TaskStatus = 'inbox' | 'open' | 'done' | 'released';
 
-/** Игровой день в виде YYYY-MM-DD. День начинается в 4:00, а не в полночь. */
+/** Игровой день в виде YYYY-MM-DD. День начинается в полночь. */
 export type DayKey = string;
 
 /**

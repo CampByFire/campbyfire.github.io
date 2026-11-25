@@ -22,7 +22,7 @@ import {
   toggleBreak,
   undoComplete,
 } from '../game/state';
-import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatSpent, formatTimer, formatTimerSeconds, formatTime, minutesOfDay, type ClockFormat } from '../game/time';
+import { addDays, formatClock, formatDate, formatDuration, formatMinutes, formatSpent, formatTimer, formatTimerSeconds, formatTime, formatWeekdayDate, minutesOfDay, type ClockFormat, type DateFormat } from '../game/time';
 import { meetingsOn } from '../game/calendar';
 import { habitWeek, weekOf } from '../game/habits';
 import { canBuy, goalOf, shortOf, unlockedBy } from '../game/shop';
@@ -411,6 +411,7 @@ export function Camp({ ui }: { ui: Ui }) {
                   s={s}
                   t={t}
                   format={ui.clockFormat}
+                  dateFormat={ui.dateFormat}
                   n={v.numbers.get(t.id) ?? 0}
                   tone={v.tones.get(t.id) ?? 'today'}
                   color={v.colors.get(t.id)}
@@ -522,13 +523,13 @@ function TopBar({ ui, v }: { ui: Ui; v: CampView }) {
       <div class="chip chip-date">
         <GIcon name={v.light === 'night' ? 'zzz' : v.light === 'evening' ? 'sunset' : 'sun'} size={15} class="ic-sun" />
         <span class="chip-day" aria-hidden="true">
-          {formatDate(s.day).split(',')[0]}
+          {formatDate(s.day, ui.dateFormat)}
         </span>
         <span aria-hidden="true">{formatClock(now, ui.clockFormat)}</span>
         <span class="chip-shift" aria-hidden="true">
           {SHIFT_NAME[v.asleep ? 'night' : v.shift]}
         </span>
-        <span class="sr-only">{`${formatDate(s.day)}, ${formatClock(now, ui.clockFormat)}, ${SHIFT_NAME[v.asleep ? 'night' : v.shift]}`}</span>
+        <span class="sr-only">{`${formatWeekdayDate(s.day, ui.dateFormat)}, ${formatClock(now, ui.clockFormat)}, ${SHIFT_NAME[v.asleep ? 'night' : v.shift]}`}</span>
       </div>
       <SyncBadge ui={ui} />
       <button class="camp-hit" data-magic="gold" title={W.shop} onClick={() => ui.go('shop')}>
@@ -844,7 +845,7 @@ function MainCard({ ui, v, timer, seconds }: { ui: Ui; v: CampView; timer: strin
             {v.numbers.get(next.id)}
           </span>
           <span class="next-title">{next.title}</span>
-          {isStarted(s, next) ? <SpentMark ms={next.spentMs} /> : <TaskMeta s={s} t={next} format={ui.clockFormat} />}
+          {isStarted(s, next) ? <SpentMark ms={next.spentMs} /> : <TaskMeta s={s} t={next} format={ui.clockFormat} dateFormat={ui.dateFormat} />}
         </div>
         {next.cue && !isStarted(s, next) && <Cue text={next.cue} />}
         <SecondWind ui={ui} />
@@ -1079,14 +1080,14 @@ export function backToWork(ui: Ui): void {
   if (hadFocus) requestAnimationFrame(() => document.querySelector<HTMLElement>('.card [data-pause]')?.focus());
 }
 
-function TaskRow({ s, t, format, n, tone, color, onClick }: { s: State; t: Task; format: ClockFormat; n: number; tone: Tone; color: string | undefined; onClick: () => void }) {
+function TaskRow({ s, t, format, dateFormat, n, tone, color, onClick }: { s: State; t: Task; format: ClockFormat; dateFormat: DateFormat; n: number; tone: Tone; color: string | undefined; onClick: () => void }) {
   return (
     <button class="row" onClick={onClick}>
       <span {...numLook(tone, color, 'num-sm')} aria-hidden="true">
         {n}
       </span>
       <span class="row-title">{t.title}</span>
-      {isStarted(s, t) && !isUndead(t, s.day) ? <SpentMark ms={t.spentMs} /> : <TaskMeta s={s} t={t} format={format} />}
+      {isStarted(s, t) && !isUndead(t, s.day) ? <SpentMark ms={t.spentMs} /> : <TaskMeta s={s} t={t} format={format} dateFormat={dateFormat} />}
     </button>
   );
 }

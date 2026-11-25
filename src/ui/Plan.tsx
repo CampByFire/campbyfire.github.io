@@ -4,7 +4,7 @@ import { mainOf, weekOf } from '../game/habits';
 import { useRef, useState } from 'preact/hooks';
 import { PERIOD_KINDS, periodKind, periodOf, shiftPeriod, type PeriodKey, type PeriodKind } from '../game/period';
 import { backlogOf, findQuest, inboxOf, isUndead, kindOf as kindOfQuest, leftoversOf, lightFire, nestedTasks, periodTasks, planOf, planTask, quickGather, swapInPlan, tailsOf, waitingOf } from '../game/state';
-import { addDays, formatClock, formatDate, formatDuration, formatTime, isMainFor, plural, shiftAt } from '../game/time';
+import { addDays, formatClock, formatWeekdayDate, formatDuration, formatTime, isMainFor, plural, shiftAt } from '../game/time';
 import { meetingsOn } from '../game/calendar';
 import type { State, Task } from '../game/types';
 import { PERIOD_KIND_NAME, W, periodName, periodShort, repeatName, weekRange } from '../game/words';
@@ -35,7 +35,7 @@ export function Plan({ ui }: { ui: Ui }) {
       <div class="page-top">
         <span class="page-date">
           <GIcon name="sunrise" size={15} class="ic-sun" />
-          {formatDate(s.day)} · {formatClock(ui.now, ui.clockFormat)}
+          {formatWeekdayDate(s.day, ui.dateFormat)} · {formatClock(ui.now, ui.clockFormat)}
         </span>
       </div>
       <h1 class="page-title">{W.plan}</h1>
@@ -585,7 +585,7 @@ function PlanRows({ ui, s, tasks }: { ui: Ui; s: State; tasks: Task[] }) {
       <button class="prow-main" onClick={() => ui.open({ kind: 'task', taskId: t.id })}>
         <QuestDot q={findQuest(s, t.questId)} />
         <span class="row-title">{t.title}</span>
-        <TaskMeta s={s} t={t} format={ui.clockFormat} estimate />
+        <TaskMeta s={s} t={t} format={ui.clockFormat} dateFormat={ui.dateFormat} estimate />
       </button>
       <button class="icon-btn plan-actions" aria-label={`Действия: ${t.title}`} onClick={() => ui.open({ kind: 'planActions', taskId: t.id, prev: tasks[i - 1]?.id, next: tasks[i + 1]?.id })}>
         <span aria-hidden="true">⋯</span>
@@ -619,7 +619,7 @@ function AddRow({ ui, s, t, inPeriod = false }: { ui: Ui; s: State; t: Task; inP
     <div class="prow">
       <button class="prow-main" onClick={() => ui.open({ kind: 'task', taskId: t.id })}>
         <span class="row-title">{t.title}</span>
-        <TaskMeta s={s} t={t} format={ui.clockFormat} period={!inPeriod} />
+        <TaskMeta s={s} t={t} format={ui.clockFormat} dateFormat={ui.dateFormat} period={!inPeriod} />
       </button>
       {today ? (
         <span class="prow-today">

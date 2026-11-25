@@ -4,9 +4,9 @@ import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { MEETING_REMIND_MIN, REMIND_BEFORE_MIN, heroLevel } from '../game/rules';
 import { buildIcs, calendarEvents, type IcsOptions } from '../game/ics';
 import { isNewerSave, parseSave } from '../game/store';
-import { formatClock, formatDate, formatMinutes, plural, scheduleError } from '../game/time';
+import { formatClock, formatWeekdayDate, formatMinutes, plural, scheduleError } from '../game/time';
 import type { RateEvery, Settings as Schedule } from '../game/types';
-import type { ClockFormat } from '../game/time';
+import type { ClockFormat, DateFormat } from '../game/time';
 import { RATE_EVERY_NAME, W } from '../game/words';
 import { GitHubError } from '../sync/github';
 import { BUILD, VERSION } from '../version';
@@ -26,6 +26,10 @@ const SETTINGS_PARTS = ['Распорядок', 'Напоминания', 'Со�
 const CLOCK_FORMATS: { value: ClockFormat; label: string }[] = [
   { value: '24h', label: '24 часа' },
   { value: '12h', label: '12 часов (AM/PM)' },
+];
+const DATE_FORMATS: { value: DateFormat; label: string }[] = [
+  { value: 'dmy', label: 'ДД.ММ.ГГГГ' },
+  { value: 'mdy', label: 'ММ.ДД.ГГГГ' },
 ];
 export type SettingsPart = typeof SETTINGS_PARTS[number];
 
@@ -50,7 +54,7 @@ export function Settings({ ui }: { ui: Ui }) {
   const [timeError, setTimeError] = useState<string | null>(null);
   // Время, при котором смены путаются, не сохраняется: поле возвращается к прежнему.
   const setTime = (patch: Partial<Schedule>) => {
-    const error = scheduleError({ ...s.settings, ...patch }, ui.clockFormat);
+    const error = scheduleError({ ...s.settings, ...patch });
     setTimeError(error);
     if (!error) setSetting(patch);
   };
@@ -74,7 +78,7 @@ export function Settings({ ui }: { ui: Ui }) {
       <div class="page-top">
         <span class="page-date">
           <LIcon name="gear" size={15} class="ic-gold" />
-          {formatDate(s.day)} · {formatClock(ui.now, ui.clockFormat)}
+          {formatWeekdayDate(s.day, ui.dateFormat)} · {formatClock(ui.now, ui.clockFormat)}
         </span>
       </div>
       {part && <button class="link-btn" onClick={() => ui.openSettings(null)}><LIcon name="back" size={16} />Настройки</button>}
@@ -120,6 +124,7 @@ export function Settings({ ui }: { ui: Ui }) {
           <h2 class="sc">Распорядок</h2>
         </div>
         <Chips label="Формат времени" value={ui.clockFormat} options={CLOCK_FORMATS} onChange={ui.setClockFormat} />
+        <Chips label="Формат даты" value={ui.dateFormat} options={DATE_FORMATS} onChange={ui.setDateFormat} />
         <div class="field-row">
           <TimeField label="Работа с" format={ui.clockFormat} value={s.settings.workStart} onChange={(v) => setTime({ workStart: v })} />
           <TimeField label="до" format={ui.clockFormat} value={s.settings.workEnd} onChange={(v) => setTime({ workEnd: v })} />

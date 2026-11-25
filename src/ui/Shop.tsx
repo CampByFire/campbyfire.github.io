@@ -22,7 +22,7 @@ import {
   timesBought,
   updatePrize,
 } from '../game/shop';
-import { formatClock, formatDate, formatDue, plural } from '../game/time';
+import { formatClock, formatWeekdayDate, formatDue, plural } from '../game/time';
 import type { Prize, Purchase } from '../game/types';
 import { PRIZE_IDEA_NAME, PRIZE_TIER_NAME, W, goldText, priceHint } from '../game/words';
 import type { Ui } from './App';
@@ -79,7 +79,7 @@ export function Shop({ ui }: { ui: Ui }) {
       <div class="page-top">
         <span class="page-date">
           <GIcon name="coins" size={15} class="ic-gold" />
-          {formatDate(s.day)} · {formatClock(ui.now, ui.clockFormat)}
+          {formatWeekdayDate(s.day, ui.dateFormat)} · {formatClock(ui.now, ui.clockFormat)}
         </span>
       </div>
       <div class="page-heading">
@@ -200,9 +200,9 @@ export function Shop({ ui }: { ui: Ui }) {
         </div>
         {total === 0 && <p class="note">Пока ничего. Первая покупка появится здесь.</p>}
         {purchasesByDay(s, PURCHASES_SHOWN).map((d) => (
-          <div key={d.day} class="bought-day" role="group" aria-label={cap(formatDue(d.day, s.day))}>
+          <div key={d.day} class="bought-day" role="group" aria-label={cap(formatDue(d.day, s.day, ui.dateFormat))}>
             <div class="field-label" aria-hidden="true">
-              {cap(formatDue(d.day, s.day))}
+              {cap(formatDue(d.day, s.day, ui.dateFormat))}
             </div>
             {d.items.map((b) => (
               <BoughtRow key={b.id} ui={ui} b={b} fresh={d.day === s.day} />

@@ -1,6 +1,6 @@
 // Что помнит само устройство, а не игра: подсказки, знакомство, когда делали копию, сила магии.
 // В сохранение и в GitHub это не попадает.
-import type { ClockFormat } from '../game/time';
+import type { ClockFormat, DateFormat } from '../game/time';
 import type { Motion } from './magic/mode';
 
 const KEY = 'taskcraft-lager-device';
@@ -18,6 +18,8 @@ export interface Local {
   magic?: Motion;
   /** Формат времени на этом устройстве. По умолчанию 24 часа. */
   clockFormat?: ClockFormat;
+  /** Порядок дня и месяца в датах на этом устройстве. */
+  dateFormat?: DateFormat;
   /** Нежить, которая уже вставала на дороге у этого устройства: второй раз она из земли не поднимается. */
   risen?: string[];
   /** Раздел Летописи, куда последний раз записали мысль: туда же пойдёт следующая. */

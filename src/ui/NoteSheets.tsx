@@ -235,7 +235,7 @@ export function DiarySheet({ ui, path, entry }: { ui: Ui; path: string; entry: D
       }
     >
       <p class="note">
-        {day ? formatDate(day) : ''}
+        {day ? formatDate(day, ui.dateFormat) : ''}
         {entry.time ? `, ${formatTime(entry.time, ui.clockFormat).replace(/^0/, '')}` : ''}
       </p>
       {entry.time && (

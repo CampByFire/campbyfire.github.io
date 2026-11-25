@@ -52,7 +52,7 @@ import {
   waitingOf,
   winQuest,
 } from '../game/state';
-import { addDays, formatDue, formatDuration, formatSpent, formatTime, nextRepeat, parseDay, plural, repeatOnDays, type ClockFormat } from '../game/time';
+import { addDays, dayKey, formatDate, formatDue, formatDuration, formatSpent, formatTime, nextRepeat, parseDay, plural, repeatOnDays, type ClockFormat, type DateFormat } from '../game/time';
 import type { DayKey, Level, Quest, QuestColor, QuestKind, Repeat, State, Task } from '../game/types';
 import type { DiaryEntry } from '../notes/diary';
 import { brewIcon,
@@ -380,7 +380,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
       ui.close();
       return;
     }
-    const where = v.period && !v.day ? ` · ${periodName(v.period, s.day).toLowerCase()}` : v.day && v.day > s.day ? ` · ${formatDue(v.day, s.day)}` : '';
+    const where = v.period && !v.day ? ` · ${periodName(v.period, s.day).toLowerCase()}` : v.day && v.day > s.day ? ` · ${formatDue(v.day, s.day, ui.dateFormat)}` : '';
     ui.toast(willBeLetter ? 'Письмо у вестника: разберёшь в сборе отряда' : `${CLASS_NAME[CLASS_BY_LEVEL[v.lvl]]} в отряде${where}`);
     if (willBeLetter) expectLetter(letters);
     ui.close();
@@ -419,7 +419,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
             aria-describedby={parsed ? 'phrase-hint' : undefined}
           />
         </label>
-        {parsed && <PhraseHint s={s} parsed={parsed} raw={title} format={ui.clockFormat} />}
+        {parsed && <PhraseHint s={s} parsed={parsed} raw={title} format={ui.clockFormat} dateFormat={ui.dateFormat} />}
       </form>
       <Chips
         label={W.quest}
@@ -493,7 +493,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
               { value: s.day, label: 'Сегодня' },
               { value: tomorrow, label: 'Завтра' },
               { value: null, label: 'Потом' },
-              ...(v.day && v.day !== s.day && v.day !== tomorrow ? [{ value: v.day, label: formatDue(v.day, s.day) }] : []),
+              ...(v.day && v.day !== s.day && v.day !== tomorrow ? [{ value: v.day, label: formatDue(v.day, s.day, ui.dateFormat) }] : []),
             ]}
             onChange={(x) => { touch('day'); setDay(x); }}
           />
@@ -619,7 +619,7 @@ const FOUND_NAME: Record<Parsed['found'][number]['kind'], string> = {
 };
 
 /** Под полем: что игра узнала во фразе и каким выйдет название. */
-function PhraseHint({ s, parsed, raw, format }: { s: State; parsed: Parsed; raw: string; format: ClockFormat }) {
+function PhraseHint({ s, parsed, raw, format, dateFormat }: { s: State; parsed: Parsed; raw: string; format: ClockFormat; dateFormat: DateFormat }) {
   const changed = parsed.title !== raw.trim();
   if (!parsed.found.length && !changed) {
     return (
@@ -629,8 +629,8 @@ function PhraseHint({ s, parsed, raw, format }: { s: State; parsed: Parsed; raw:
     );
   }
   const value = (k: Parsed['found'][number]['kind']): string => {
-    if (k === 'day') return formatDue(parsed.day!, s.day);
-    if (k === 'due') return formatDue(parsed.due!, s.day);
+    if (k === 'day') return formatDue(parsed.day!, s.day, dateFormat);
+    if (k === 'due') return formatDue(parsed.due!, s.day, dateFormat);
     if (k === 'at') return formatTime(parsed.at!, format);
     if (k === 'estimate') return parsed.estimate === null || parsed.estimate === undefined ? 'дни' : formatDuration(parsed.estimate);
     if (k === 'period') return periodName(parsed.period!, s.day).toLowerCase();
@@ -696,7 +696,7 @@ function TaskSheet({ ui, taskId }: { ui: Ui; taskId: string }) {
         </div>
         <div class="task-facts">
           {spent > 0 && <span>{done ? 'Потрачено' : 'У огня уже'} {formatSpent(spent)}</span>}
-          {t.due && <span class={undead ? 'meta-undead' : ''}>Срок: {formatDue(t.due, s.day)}</span>}
+          {t.due && <span class={undead ? 'meta-undead' : ''}>Срок: {formatDue(t.due, s.day, ui.dateFormat)}</span>}
           {t.at && <span>В {formatTime(t.at, ui.clockFormat)}</span>}
           {t.period && <span>Горизонт: {periodName(t.period, s.day).toLowerCase()}</span>}
           {t.cue && <span class="fact-cue">{t.cue}</span>}
@@ -1244,7 +1244,7 @@ function SummarySheet({ ui }: { ui: Ui }) {
             <label key={t.id} class="check-row">
               <input type="checkbox" checked={keep.has(t.id)} onChange={() => toggle(t.id)} />
               <span class="row-title">{t.title}</span>
-              <TaskMeta s={s} t={t} format={ui.clockFormat} />
+              <TaskMeta s={s} t={t} format={ui.clockFormat} dateFormat={ui.dateFormat} />
             </label>
           ))}
           <p class="note">Без галочки задача вернётся в отряд и будет ждать следующего сбора.</p>
@@ -1344,7 +1344,7 @@ function QuestSheet({ ui, questId }: { ui: Ui; questId: string }) {
         <QuestDot q={q} />
         {where} · {done} сделано · {open.length} в отряде
       </div>
-      {q.wonAt && <p class="note">Выполнен {new Date(q.wonAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}, знамя в зале трофеев.</p>}
+      {q.wonAt && <p class="note">Выполнен {formatDate(dayKey(q.wonAt), ui.dateFormat)}, знамя в зале трофеев.</p>}
       {lair.max > 0 && (
         <div class="lair lair-progress">
           <span>
@@ -1468,7 +1468,7 @@ function TaskList({ ui, s, tasks }: { ui: Ui; s: State; tasks: Task[] }) {
             {LEVEL_ROMAN[t.level]}
           </span>
           <span class="row-title">{t.title}</span>
-          <TaskMeta s={s} t={t} format={ui.clockFormat} />
+          <TaskMeta s={s} t={t} format={ui.clockFormat} dateFormat={ui.dateFormat} />
         </button>
       ))}
     </div>

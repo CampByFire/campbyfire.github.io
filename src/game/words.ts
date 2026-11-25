@@ -1,7 +1,7 @@
 // Все слова мира в одном месте: экраны берут названия только отсюда.
 import { periodEnd, periodKind, periodOf, periodStart, shiftPeriod, type PeriodKey, type PeriodKind } from './period';
 import type { PrizeIdea, PrizeTier, UndeadRank } from './rules';
-import { parseDay, plural, type Shift } from './time';
+import { formatDate, parseDay, plural, type DateFormat, type Shift } from './time';
 import type { Level, MeetingRepeat, QuestKind, QuestPreset, RateEvery, Repeat } from './types';
 
 export type ClassId = 'rogue' | 'barbarian' | 'mage' | 'knight';
@@ -121,11 +121,10 @@ export const PERIOD_KIND_NAME: Record<PeriodKind, string> = {
 /** Дни недели полностью, 0 воскресенье. */
 export const WEEKDAY_NAME = ['воскресенье', 'понедельник', 'вторник', 'среда', 'четверг', 'пятница', 'суббота'];
 
-/** «Сегодня, суббота, 7 ноября», «Завтра, воскресенье, 8 ноября», «Вторник, 10 ноября», «Пятница, 1 января 2027». */
-export function dayTitle(day: string, today: string): string {
+/** Дата дня с названием дня недели и относительной подписью. */
+export function dayTitle(day: string, today: string, format: DateFormat): string {
   const d = parseDay(day);
-  const year = d.getFullYear() === parseDay(today).getFullYear() ? '' : ` ${d.getFullYear()}`;
-  const date = `${d.getDate()} ${MONTH_OF[d.getMonth()]}${year}`;
+  const date = formatDate(day, format);
   const wd = WEEKDAY_NAME[d.getDay()];
   const n = Math.round((d.getTime() - parseDay(today).getTime()) / 86_400_000);
   if (n === 0) return `Сегодня, ${wd}, ${date}`;
