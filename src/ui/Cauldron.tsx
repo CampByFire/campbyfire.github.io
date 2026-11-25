@@ -8,10 +8,14 @@ export function Cauldron({ color, portions, icon }: { color: string; portions: n
   const level = 94 - 63 * portions / BREW_CAPACITY;
   const glass = 'M40 26 L108 26 125 51 128 70 119 88 104 99 45 99 30 88 21 68 24 51Z';
   return (
-    <svg class="cauldron" viewBox="0 -14 164 126" aria-hidden="true">
+    <svg class="cauldron" viewBox="0 -14 164 133" aria-hidden="true">
       <defs><clipPath id={clip}><path d={glass} /></clipPath></defs>
-      <ellipse class="brew-glow" cx="75" cy="105" rx="25" ry="5" fill="#f08c31" opacity=".28" />
-      <path fill="#a34d29" d="M55 107l6-5 7 2 6-4 8 2 7 1 6 4z" />
+      <ellipse class="brew-glow" cx="75" cy="112" rx="23" ry="5" fill="#f08c31" opacity=".28" />
+      <path fill="#a34d29" d="M55 114l6-5 7 2 6-4 8 2 7 1 6 4z" />
+      <g class="brew-fire">
+        <path fill="#f78b35" d="M61 111q-3-4 3-8 0 3 4 5-1-4 3-7l4-2q0 5 5 7 2-1 2-3 7 4 6 8z" />
+        <path fill="#ffd169" d="M69 111q-2-3 2-5 0 2 2 2 2-2 2-4 5 3 5 7z" />
+      </g>
       <path fill="#676056" d="M40 93h12l-5 12H35z M99 93h12l6 12h-13z" />
       <path d={glass} fill="#564f47" stroke="#82786a" stroke-width="2" />
       <g clip-path={`url(#${clip})`}>
@@ -33,10 +37,6 @@ export function Cauldron({ color, portions, icon }: { color: string; portions: n
         </g>}
         <path d="M40 27l6 3-13 27 2 28-12-17 1-17z" fill="#fff" opacity=".20" />
         <path d="M106 29l18 23 3 18-9 18-15 11 11-28z" fill="#120f0c" opacity=".24" />
-      </g>
-      <g class="brew-fire">
-        <path fill="#f78b35" d="M61 104q-5-6 2-12 0 5 4 6-2-5 3-9l5-6q-1 7 5 12 2-2 2-5 9 7 6 14z" />
-        <path fill="#ffd169" d="M69 104q-3-4 2-8 0 3 2 3 2-3 2-7 7 6 5 12z" />
       </g>
       <path fill="#51493f" d="M30 18l13-8h61l15 8-3 12-13 5H44l-12-6z" />
       <path fill="#81796e" d="M30 18l13-8h61l15 8-14 8H43z" />
