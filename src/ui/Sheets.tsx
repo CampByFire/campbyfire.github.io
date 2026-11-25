@@ -55,7 +55,7 @@ import {
 import { addDays, formatDue, formatDuration, formatSpent, formatTime, nextRepeat, parseDay, plural, repeatOnDays, type ClockFormat } from '../game/time';
 import type { DayKey, Level, Quest, QuestColor, QuestKind, Repeat, State, Task } from '../game/types';
 import type { DiaryEntry } from '../notes/diary';
-import {
+import { brewIcon,
   CLASS_BY_LEVEL,
   CLASS_NAME,
   IN_WEEKDAY,
@@ -1051,7 +1051,7 @@ function WelcomeSheet({ ui }: { ui: Ui }) {
   );
 }
 
-/** Отпустить задачу; несколько секунд её можно вернуть одной кнопкой, потом из Королевства. */
+/** Отпустить задачу; несколько секунд её можно вернуть одной кнопкой, потом из Алхимии. */
 function releaseWithUndo(ui: Ui, id: string, text: string): void {
   const xp = ui.store.act((st, now) => release(st, now, id));
   letGo(id);
@@ -1315,7 +1315,7 @@ function QuestForm({ ui, questId, sphere, sphereId }: { ui: Ui; questId?: string
         <p class="note">Когда: как у сферы «{homeSphere.name}», {QUEST_KIND_HINT[homeSphere.kind]}.</p>
       )}
       <QuestColorPicker initial={first} onChange={setColor} />
-      <QuestIconPicker value={icon} home={homeSphere || undefined} color={questHex(color ?? first)} onChange={setIcon} />
+      <QuestIconPicker defaultBrewIcon={isSphere ? brewIcon(q?.id) : undefined} value={icon} home={homeSphere || undefined} color={questHex(color ?? first)} onChange={setIcon} />
     </Sheet>
   );
 }
@@ -1479,7 +1479,7 @@ function TaskList({ ui, s, tasks }: { ui: Ui; s: State; tasks: Task[] }) {
 
 /**
  * Заметка «Как улучшить» у сферы: свободный текст, что сделать, чтобы сфера стала лучше.
- * Открывается нажатием на сферу в колесе баланса. Закрыть лист значит сохранить: набранное не теряется.
+ * Открывается из карточки сферы. Закрыть лист значит сохранить: набранное не теряется.
  */
 function ImproveSheet({ ui, questId }: { ui: Ui; questId: string }) {
   const s = ui.store.state;

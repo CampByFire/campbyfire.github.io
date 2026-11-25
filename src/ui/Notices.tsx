@@ -87,7 +87,7 @@ export function Notices({ ui, covered }: { ui: Ui; covered: boolean }) {
     }
     if (ratingDue(store.state) && !quiet('rate')) {
       return {
-        text: 'Пора оценить сферы жизни: колесо баланса покажет, где всё хорошо, а где проседает.',
+        text: 'Пора оценить сферы жизни. Насколько ты сейчас доволен каждой из них?',
         action: {
           label: 'Оценить',
           run: () => {

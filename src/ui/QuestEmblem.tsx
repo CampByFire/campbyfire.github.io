@@ -9,16 +9,19 @@ export function QuestEmblem({ icon, color }: { icon: QuestIcon; color?: string }
   );
 }
 
-export function QuestIconPicker({ value, home, color, onChange }: {
+export function QuestIconPicker({ value, home, defaultBrewIcon, color, onChange }: {
   value: Quest['icon'];
   home?: Quest;
+  defaultBrewIcon?: QuestIcon;
   color: string;
   onChange: (icon: Quest['icon']) => void;
 }) {
   const inherit = !!home && value === undefined;
-  const icon = inherit ? home.icon : value;
-  const name = inherit ? 'Как у сферы' : (icon && QUEST_ICON_NAME[icon]) || 'Без иконки';
+  const defaultBrew = defaultBrewIcon && value === undefined;
+  const icon = inherit ? home.icon : defaultBrew ? defaultBrewIcon : value;
+  const name = defaultBrew ? 'Медальон котелка' : inherit ? 'Как у сферы' : (icon && QUEST_ICON_NAME[icon]) || 'Без иконки';
   const options: { value: Quest['icon']; label: string; icon?: QuestIcon | null }[] = [
+    ...(defaultBrewIcon ? [{ value: undefined, label: 'Медальон котелка', icon: defaultBrewIcon }] : []),
     { value: null, label: 'Без иконки' },
     ...(home ? [{ value: undefined, label: 'Как у сферы', icon: home.icon }] : []),
     ...Object.entries(QUEST_ICON_NAME).map(([key, label]) => ({ value: key as QuestIcon, label, icon: key as QuestIcon })),
@@ -30,7 +33,7 @@ export function QuestIconPicker({ value, home, color, onChange }: {
         <legend class="sr-only">Иконка сферы или проекта</legend>
         {options.map((opt) => (
           <label key={String(opt.value)}>
-            <input type="radio" name="quest-icon" checked={opt.value === (home ? value : value ?? null)}
+            <input type="radio" name="quest-icon" checked={opt.value === (home || defaultBrewIcon ? value : value ?? null)}
               onChange={() => onChange(opt.value)} />
             {opt.icon && <QuestEmblem icon={opt.icon} color={color} />}
             {opt.label}

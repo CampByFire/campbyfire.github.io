@@ -1,10 +1,11 @@
-// Королевство: колесо баланса, сферы с их проектами, зал трофеев и отпущенные задачи.
+import { sphereBrews, type Brew } from '../game/alchemy';
+import { Cauldron } from './Cauldron';
 import { questHex } from '../game/color';
-import { SCORE_MAX, SPHERE_BUILDING_SCORE } from '../game/rules';
-import { lairOf, lastRating, projectsOf, ratingDue, releasedOf, spheresOf, unrelease } from '../game/state';
+import { BREW_CAPACITY, BREW_PER_TASK } from '../game/rules';
+import { lairOf, projectsOf, ratingDue, releasedOf, spheresOf, unrelease } from '../game/state';
 import { formatDue } from '../game/time';
-import type { Quest, Rating, State } from '../game/types';
-import { SPHERE_KIND_NAME, W } from '../game/words';
+import type { Quest, State } from '../game/types';
+import { QUEST_ICON_NAME, W, brewIcon } from '../game/words';
 import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
 import { QuestDot } from './parts';
@@ -16,41 +17,17 @@ export function Realm({ ui }: { ui: Ui }) {
   const loose = projectsOf(s, null);
   const won = s.quests.filter((q) => !q.sphere && q.wonAt).sort((a, b) => (b.wonAt ?? 0) - (a.wonAt ?? 0));
   const released = releasedOf(s).slice(0, 30);
-  const last = lastRating(s);
-  const prev = last ? lastRating(s, last.id) : undefined;
-  const due = ratingDue(s);
-  const buildingsOnWheel = spheres.length <= MAX_WHEEL_BUILDINGS;
+  const brews = sphereBrews(s);
   return (
     <div class="page">
       <div class="page-heading">
         <h1 class="page-title">{W.realm}</h1>
         <PageHelp title={W.realm}>
-          Колесо баланса — карта твоего Королевства. Каждый сектор показывает одну сферу жизни, например работу, здоровье или отдых.
-          Оцени, насколько ты доволен каждой сферой. Чем выше оценка, тем дальше сектор тянется от центра и тем крупнее здание — от хижины до замка.
-          Внутри сфер можно вести проекты. Нажми на сектор, чтобы записать, что хочешь улучшить.
+          Каждое выполненное дело в сфере или её проекте пополняет котелок на {BREW_PER_TASK} из {BREW_CAPACITY} порций.
+          С каждым игровым днём испаряется одна порция. Нажми на котелок, чтобы открыть проекты и заметку «Как улучшить».
+          Кнопка «Оценить сферы» сохраняет твою личную оценку.
         </PageHelp>
       </div>
-
-      <section class="group">
-        <div class="group-head">
-          <h2 class="sc">{W.wheel}</h2>
-        </div>
-        {due && (
-          <p class="note wheel-due">
-            {last ? `Пора оценить сферы: прошлая оценка ${formatDue(last.id, s.day).toLowerCase()}.` : 'Оцени сферы, чтобы увидеть своё колесо баланса.'}
-          </p>
-        )}
-        {spheres.length > 0 && <Wheel spheres={spheres} last={last} prev={prev} buildingsOnWheel={buildingsOnWheel} onPick={(id) => ui.open({ kind: 'improve', questId: id })} />}
-        {last && <p class="note">Оценка {formatDue(last.id, s.day).toLowerCase()}{prev ? `, бледный контур: прошлая, ${formatDue(prev.id, s.day).toLowerCase()}` : ''}.</p>}
-        {spheres.length > 0 ? (
-          <button class={`btn ${due || !last ? 'btn-gold' : 'btn-ghost'} btn-wide`} onClick={() => ui.open({ kind: 'rate' })}>
-            {W.rate}
-          </button>
-        ) : (
-          <p class="note">Сфер нет. Добавь первую ниже: например, «Работа» или «Здоровье».</p>
-        )}
-      </section>
-
       <section class="group">
         <div class="group-head">
           <h2 class="sc">{W.spheres}</h2>
@@ -59,16 +36,13 @@ export function Realm({ ui }: { ui: Ui }) {
             новая сфера
           </button>
         </div>
-        <ul class={buildingsOnWheel ? 'wheel-legend' : 'wheel-legend wheel-legend-buildings'}>
-          {spheres.map((q) => (
-            <li key={q.id} class="sphere">
-              <SphereCard ui={ui} s={s} q={q} score={last?.scores[q.id]} previous={prev?.scores[q.id]} />
-              {projectsOf(s, q.id).map((p) => (
-                <ProjectCard key={p.id} ui={ui} s={s} q={p} />
-              ))}
-            </li>
-          ))}
-        </ul>
+        {spheres.length > 0 ? <>
+          <ul class="brew-grid">
+            {spheres.map(q => <li key={q.id}><SphereCard ui={ui} q={q} brew={brews.get(q.id)} /></li>)}
+          </ul>
+          {ratingDue(s) && <p class="note">Пора оценить сферы.</p>}
+          <button class="btn btn-gold btn-wide" onClick={() => ui.open({ kind: 'rate' })}>{W.rate}</button>
+        </> : <p class="note">Добавь первую сферу, чтобы появился котелок.</p>}
         {loose.length > 0 && (
           <div class="sphere">
             <div class="quest-name">
@@ -131,47 +105,19 @@ export function Realm({ ui }: { ui: Ui }) {
   );
 }
 
-/** Первая непустая строка заметки: в списке под колесом видно только её. */
-function firstLine(text: string): string {
-  return text.split('\n').find((x) => x.trim())?.trim() ?? '';
-}
-
 function openIn(s: State, questId: string): number {
   return s.tasks.filter((t) => t.questId === questId && t.status === 'open').length;
 }
 
-function buildingForScore(score: number) {
-  if (score >= SCORE_MAX) return 'castle';
-  if (score >= SPHERE_BUILDING_SCORE.tower) return 'tower';
-  if (score >= SPHERE_BUILDING_SCORE.house) return 'house';
-  return 'hut';
-}
-
-function SphereBuilding({ building, size }: { building: ReturnType<typeof buildingForScore>; size: number }) {
-  return building === 'castle'
-    ? <GIcon name="kingdom" size={size} />
-    : <LIcon name={building} size={size} stroke={1.6} />;
-}
-
-function SphereCard({ ui, s, q, score, previous }: { ui: Ui; s: State; q: Quest; score: number | undefined; previous: number | undefined }) {
-  const open = openIn(s, q.id);
-  const delta = score !== undefined && previous !== undefined ? score - previous : 0;
-  const building = score === undefined ? undefined : buildingForScore(score);
+function SphereCard({ ui, q, brew }: { ui: Ui; q: Quest; brew?: Brew }) {
+  const icon = q.icon === undefined ? brewIcon(q.id) : q.icon;
+  const portions = brew?.portions ?? 0;
   return (
     <button class="quest-card sphere-card" data-sphere={q.id} onClick={() => ui.open({ kind: 'quest', questId: q.id })}>
-      <span class="quest-card-top">
-        <QuestDot q={q} />
-        <span class="quest-card-name">{q.name}</span>
-        {building && <span class="sphere-building-list" data-building={building} aria-hidden="true"><SphereBuilding building={building} size={18} /></span>}
-        <span class="wheel-score">
-          {score === undefined ? 'нет оценки' : `${score} из ${SCORE_MAX}`}
-          {delta !== 0 && <span class={delta > 0 ? 'wheel-up' : 'wheel-down'}>{delta > 0 ? ` +${delta}` : ` −${-delta}`}</span>}
-        </span>
-      </span>
-      <span class="quest-card-sub">
-        {SPHERE_KIND_NAME[q.kind]} · {open} в отряде
-      </span>
-      {q.improve && <span class="wheel-improve">{firstLine(q.improve)}</span>}
+      <Cauldron color={questHex(q.color)} portions={portions} icon={icon} />
+      <span class="quest-card-name">{q.name}</span>
+      <span class="quest-card-sub">{brew ? `Последнее дело — ${formatDue(brew.lastDay, ui.store.state.day)}` : 'Пока нет выполненных дел'}</span>
+      <span class="sr-only">Отвар: {portions} из {BREW_CAPACITY}.{icon && ` Медальон: ${QUEST_ICON_NAME[icon]}.`}</span>
     </button>
   );
 }
@@ -196,111 +142,5 @@ function ProjectCard({ ui, s, q }: { ui: Ui; s: State; q: Quest }) {
         </span>
       )}
     </button>
-  );
-}
-
-const SIZE = 292;
-const R = 104;
-/** Если сфер больше, значки лучше читаются в списке. */
-const MAX_WHEEL_BUILDINGS = 12;
-const RIM_LABEL_RADIUS = R + 20;
-/** На сколько подпись с оценкой отстоит от края сектора. */
-const VALUE_GAP = 11;
-
-/** Оценка на колесе: целая без дробной части, дробная с одним знаком. */
-const scoreText = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1).replace('.', ','));
-
-/**
- * Колесо баланса: у каждой сферы свой сектор, чем выше оценка, тем дальше он от центра.
- * Внутри сектора по дуге на каждую единицу оценки, край сектора замыкает счёт: у шестёрки ровно 6 полос.
- * Дальше до обода шкала продолжается дугами потише, чтобы было видно, сколько осталось до 10.
- * Прошлая оценка видна бледным контуром. Диктору колесо не нужно: те же баллы стоят списком под ним.
- * Нажатие на сектор открывает заметку «Как улучшить», строка в списке открывает саму сферу.
- */
-function Wheel({ spheres, last, prev, buildingsOnWheel, onPick }: {
-  spheres: Quest[];
-  last: Rating | undefined;
-  prev: Rating | undefined;
-  buildingsOnWheel: boolean;
-  onPick: (id: string) => void;
-}) {
-  const c = SIZE / 2;
-  const n = spheres.length;
-  const step = (2 * Math.PI) / n;
-  const point = (a: number, r: number) => `${(c + r * Math.sin(a)).toFixed(2)} ${(c - r * Math.cos(a)).toFixed(2)}`;
-  const arc = (i: number, r: number) => {
-    if (n === 1) return `M ${point(0, r)} A ${r} ${r} 0 1 1 ${point(Math.PI, r)} A ${r} ${r} 0 1 1 ${point(0, r)}`;
-    return `M ${point(i * step, r)} A ${r} ${r} 0 0 1 ${point((i + 1) * step, r)}`;
-  };
-  const sector = (i: number, r: number) => (n === 1 ? `${arc(i, r)} Z` : `M ${c} ${c} L ${arc(i, r).slice(2)} Z`);
-  const radius = (v: number | undefined) => (v === undefined ? 0 : (R * v) / SCORE_MAX);
-  /** Целые единицы шкалы внутри обода: на них лежат дуги-деления. */
-  const units = Array.from({ length: SCORE_MAX - 1 }, (_, k) => k + 1);
-  return (
-    <div class="wheel" aria-hidden="true">
-      <svg viewBox={`0 0 ${SIZE} ${SIZE}`} width={SIZE} height={SIZE}>
-        <circle cx={c} cy={c} r={R} class="wheel-ring" />
-        {spheres.map((q, i) => {
-          const v = last?.scores[q.id] ?? 0;
-          return (
-            <g key={`e-${q.id}`} class="wheel-ticks-empty">
-              {units
-                .filter((k) => k > v)
-                .map((k) => (
-                  <path key={k} d={arc(i, radius(k))} />
-                ))}
-            </g>
-          );
-        })}
-        {spheres.map((_, i) => (
-          <line key={i} x1={c} y1={c} x2={point(i * step, R).split(' ')[0]} y2={point(i * step, R).split(' ')[1]} class="wheel-ring" />
-        ))}
-        {spheres.map((q, i) => {
-          const r = radius(last?.scores[q.id]);
-          return r > 0 ? <path key={q.id} d={sector(i, r)} fill={questHex(q.color)} class="wheel-sector" /> : null;
-        })}
-        {spheres.map((q, i) => {
-          const v = last?.scores[q.id];
-          if (v === undefined) return null;
-          return (
-            <g key={`t-${q.id}`} class="wheel-ticks">
-              {units
-                .filter((k) => k < v)
-                .map((k) => (
-                  <path key={k} d={arc(i, radius(k))} />
-                ))}
-            </g>
-          );
-        })}
-        {prev &&
-          spheres.map((q, i) => {
-            const r = radius(prev.scores[q.id]);
-            return r > 0 ? <path key={`p-${q.id}`} d={sector(i, r)} class="wheel-prev" /> : null;
-          })}
-        {spheres.map((q, i) => {
-          const v = last?.scores[q.id];
-          if (v === undefined) return null;
-          const angle = (i + 0.5) * step;
-          const [x, y] = point(angle, radius(v) + VALUE_GAP).split(' ');
-          if (!buildingsOnWheel) return <text key={`v-${q.id}`} x={x} y={y} class="wheel-value">{scoreText(v)}</text>;
-          const [rimX, rimY] = point(angle, RIM_LABEL_RADIUS).split(' ');
-          const building = buildingForScore(v);
-          return (
-            <g key={`v-${q.id}`} class="wheel-building-mark" style={{
-              '--wheel-rim-position': `translate(${rimX}px, ${rimY}px)`,
-              '--wheel-value-position': `translate(${x}px, ${y}px)`,
-            }}>
-              <g class="wheel-building" data-building={building} transform="translate(-11 -17)">
-                <SphereBuilding building={building} size={22} />
-              </g>
-              <text class="wheel-value">{scoreText(v)}</text>
-            </g>
-          );
-        })}
-        {spheres.map((q, i) => (
-          <path key={`h-${q.id}`} d={sector(i, R)} class="wheel-hit" onClick={() => onPick(q.id)} />
-        ))}
-      </svg>
-    </div>
   );
 }

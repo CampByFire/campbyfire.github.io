@@ -2829,139 +2829,42 @@ h3.field-label {
   color: var(--red-text);
 }
 
-/* ---------- Королевство: колесо баланса и сферы ---------- */
-
-.wheel {
-  display: flex;
-  justify-content: center;
-  margin: 6px 0 4px;
+/* Алхимия: одна карточка на сферу. */
+.brew-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  margin: 12px 0 16px;
+  list-style: none;
 }
-
-.wheel > svg {
-  max-width: 100%;
+.brew-grid .sphere-card {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 12px;
+  gap: 5px;
+  overflow-wrap: anywhere;
+}
+.cauldron {
+  align-self: center;
+  width: min(100%, 164px);
   height: auto;
 }
-
-.wheel-ring {
-  fill: none;
-  stroke: rgba(255, 236, 200, 0.12);
-  stroke-width: 1;
+[data-motion='full'] .cauldron .brew-bubble {
+  animation: brew-rise 2.8s ease-out infinite;
 }
-
-.wheel-sector {
-  fill-opacity: 0.78;
-  stroke: var(--bg);
-  stroke-width: 1.5;
+[data-motion='full'] .cauldron .brew-bubble:last-child { animation-delay: -1.4s; }
+@keyframes brew-rise {
+  from { opacity: 0; transform: translateY(5px); }
+  35% { opacity: .85; }
+  to { opacity: 0; transform: translateY(-4px); }
 }
-
-.wheel-ticks {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.2);
-  stroke-width: 0.75;
-}
-
-.wheel-ticks-empty {
-  fill: none;
-  stroke: rgba(255, 236, 200, 0.1);
-  stroke-width: 0.75;
-}
-
-.wheel-prev {
-  fill: none;
-  stroke: rgba(255, 236, 200, 0.55);
-  stroke-width: 1.5;
-  stroke-dasharray: 4 3;
-}
-
-.wheel-value {
-  font-family: var(--font-display);
-  font-size: 14px;
-  font-weight: 700;
-  text-anchor: middle;
-  dominant-baseline: central;
-  fill: var(--text-hi);
-  stroke: var(--bg);
-  stroke-width: 3px;
-  paint-order: stroke;
-}
-
-.wheel-building-mark {
-  transform: var(--wheel-rim-position);
-  pointer-events: none;
-}
-
-.wheel-building-mark .wheel-value {
-  transform: translateY(13px);
-}
-
-.wheel-building,
-.sphere-building-list {
-  color: var(--gold-hi);
-}
-
-.sphere-building-list {
-  display: none;
-  flex: none;
-}
-
-.wheel-legend-buildings .sphere-building-list {
-  display: inline-flex;
-}
-
-@media (max-width: 374px) {
-  .wheel-building-mark {
-    transform: var(--wheel-value-position);
-  }
-
-  .wheel-building-mark .wheel-value {
-    transform: none;
-  }
-
-  .wheel-building {
-    display: none;
-  }
-
-  .sphere-building-list {
-    display: inline-flex;
-  }
-}
-
-.wheel-legend {
-  list-style: none;
-  margin: 4px 0 6px;
-  padding: 0;
-}
-
-.wheel-legend li {
-  min-width: 0;
-}
-
-.wheel-score {
-  font-variant-numeric: tabular-nums;
-  color: var(--text-hi);
-}
-
-/* Первая строка заметки в едином списке сфер. */
-.wheel-improve {
-  font-size: 14px;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Невидимые секторы поверх колеса: нажатие на сферу открывает её заметку. */
-.wheel-hit {
-  fill: transparent;
-  cursor: pointer;
-}
-
-@media (hover: hover) {
-  .wheel-hit:hover {
-    fill: rgba(255, 236, 200, 0.06);
-  }
-}
-
+.brew-grid .quest-card-name { flex: none; max-width: 100%; white-space: normal; }
+.brew-grid .quest-card-sub { margin: 0; }
 /* Заметка «Как улучшить» в листе сферы. */
 .row.improve-row {
   height: auto;
@@ -2983,18 +2886,6 @@ h3.field-label {
   padding: 10px 12px;
   line-height: 1.6;
   resize: vertical;
-}
-
-.wheel-up {
-  color: var(--green-text);
-}
-
-.wheel-down {
-  color: var(--red-text);
-}
-
-.wheel-due {
-  color: var(--gold-hi);
 }
 
 .sphere {

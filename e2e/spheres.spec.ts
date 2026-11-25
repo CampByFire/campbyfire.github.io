@@ -1,6 +1,6 @@
-// Королевство: сферы как в колесе баланса, их оценка, проекты в сферах и напоминание оценить сферы.
+// Алхимия: сферы как в колесе баланса, их оценка, проекты в сферах и напоминание оценить сферы.
 import { expect, test, type Page } from '@playwright/test';
-import { addQuest, addTask as addGameTask, newState, rateSpheres, spheresOf } from '../src/game/state';
+import { addQuest, addTask as addGameTask, complete, newState, spheresOf } from '../src/game/state';
 import { addTask, at, axe, openGame, openSettings, seedGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Кнопки и поля в открытом листе, которые меньше 44×44. */
@@ -13,16 +13,10 @@ const tooSmall = (page: Page) =>
       .map(({ el, box }) => `${el.getAttribute('aria-label') ?? el.textContent ?? el.className}: ${Math.round(box.width)}×${Math.round(box.height)}`),
   );
 
-test('оценка сфер рисует колесо, а вторая оценка показывает, что изменилось', async ({ page }, testInfo) => {
+test('личные оценки сохраняются отдельно от отвара', async ({ page }) => {
   await openGame(page);
-  await tab(page, 'Королевство').click();
-  await expect(page.getByRole('heading', { name: 'Колесо баланса' })).toBeVisible();
-  await expect(page.locator('.wheel-legend li')).toHaveCount(8);
-  await expect(page.locator('.wheel-legend')).toContainText('нет оценки');
-  await page.screenshot({ path: testInfo.outputPath('korolevstvo.png') });
-  // Без оценки вся шкала пустая: 9 тихих дуг, десятая единица это обод.
-  await expect(page.locator('.wheel-ticks-empty').first().locator('path')).toHaveCount(9);
-
+  await tab(page, 'Алхимия').click();
+  await expect(page.locator('.sphere-card')).toHaveCount(8);
   await page.getByRole('button', { name: 'Оценить сферы' }).click();
   const rate = sheet(page, 'Оценить сферы');
   expect(await axe(page), 'Оценить сферы').toEqual([]);
@@ -35,21 +29,9 @@ test('оценка сфер рисует колесо, а вторая оцен�
   await rate.getByRole('button', { name: 'Сохранить оценку' }).click();
   await expect(rate).toBeHidden();
   await expect(toast(page)).toHaveText('Оценка сохранена');
-  await expect(page.locator('.wheel-legend li').first()).toContainText('8 из 10');
-  await expect(page.locator('.wheel-sector')).toHaveCount(8);
-  // У оценки 8 внутри сектора 7 дуг, восьмую полосу замыкает его край, а рядом стоит сама цифра.
-  await expect(page.locator('.wheel-ticks').first().locator('path')).toHaveCount(7);
-  await expect(page.locator('.wheel-ticks-empty').first().locator('path')).toHaveCount(1);
-  await expect(page.locator('.wheel-value')).toHaveCount(8);
-  await expect(page.locator('.wheel-value').first()).toHaveText('8');
-  expect(await axe(page), 'Королевство с колесом').toEqual([]);
-
-  // Через неделю оценка ниже: в легенде видно, на сколько, а на колесе бледный контур прошлой.
-  // Новый день открывается сбором отряда, в Королевство переходим сами. Неделю в игру не заглядывали,
-  // поэтому сначала встречает «Костёр ждал».
   await setTime(page, at(10, 0, 30));
   await sheet(page, 'Костёр ждал').getByRole('button', { name: 'Собрать отряд' }).click();
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
   await page.getByRole('button', { name: 'Оценить сферы' }).click();
   const again = sheet(page, 'Оценить сферы');
   await expect(again.getByText('в прошлый раз 8')).toBeVisible();
@@ -57,49 +39,54 @@ test('оценка сфер рисует колесо, а вторая оцен�
   await w2.focus();
   await page.keyboard.press('ArrowLeft');
   await again.getByRole('button', { name: 'Сохранить оценку' }).click();
-  await expect(page.locator('.wheel-legend li').first()).toContainText('7 из 10 −1');
-  await expect(page.locator('.wheel-prev')).toHaveCount(8);
+  await page.locator('.sphere-card').first().click();
+  await expect(sheet(page, 'Работа')).toContainText('оценка 7 из 10');
 });
 
-test('строения показывают оценку сферы и на узком экране переходят в строки', async ({ page }) => {
+test('котелки показывают уровень, дату и выбранный медальон на телефоне и компьютере', async ({ page }, testInfo) => {
   const time = at(9);
   const state = newState(time.getTime());
-  const scores = [1, 3, 4, 6, 7, 9, 10];
   const spheres = spheresOf(state);
-  rateSpheres(state, time.getTime(), Object.fromEntries(scores.map((score, i) => [spheres[i].id, score])));
+  spheres[0].icon = 'pero';
+  [1, 2, 1, 3].forEach((count, i) => {
+    for (let n = 0; n < count; n++) {
+      const id = addGameTask(state, time.getTime(), { title: 'Дело', questId: spheres[i].id, level: 1 });
+      complete(state, time.getTime(), id);
+    }
+  });
   await seedGame(page, state);
   await openGame(page, { time });
-  await tab(page, 'Королевство').click();
-
-  await page.getByLabel('Справка: Королевство').click();
-  await expect(page.getByText(/Колесо баланса — карта твоего Королевства/)).toBeVisible();
-  await page.getByLabel('Справка: Королевство').click();
-
-  const buildings = ['hut', 'hut', 'house', 'house', 'tower', 'tower', 'castle'];
-  const wheelBuildings = page.locator('.wheel-building:visible');
-  const rowBuildings = page.locator('.sphere-building-list:visible');
-  await expect(wheelBuildings).toHaveCount(buildings.length);
-  await expect(rowBuildings).toHaveCount(0);
-  for (const [i, building] of buildings.entries()) {
-    await expect(wheelBuildings.nth(i)).toHaveAttribute('data-building', building);
-    await expect(page.locator('.wheel-value').nth(i)).toHaveText(String(scores[i]));
+  await tab(page, 'Алхимия').click();
+  const cards = page.locator('.sphere-card');
+  await expect(cards.first()).toHaveAccessibleName(/Работа.*сегодня.*3 из 8.*Перо/);
+  await expect(cards.nth(1).locator('use')).toHaveAttribute('href', './quest-icons.svg#rostok');
+  await expect(cards.nth(3)).toHaveAccessibleName(/8 из 8/);
+  await expect(cards.last()).toHaveAccessibleName(/Пока нет выполненных дел.*0 из 8/);
+  await page.getByLabel('Справка: Алхимия').click();
+  await expect(page.getByText(/Каждое выполненное дело/)).toBeVisible();
+  await page.getByLabel('Справка: Алхимия').click();
+  expect(await axe(page)).toEqual([]);
+  for (const [width, height] of [[390, 844], [360, 640], [1280, 800]]) {
+    await page.setViewportSize({ width, height });
+    const left = await cards.first().boundingBox();
+    const right = await cards.nth(1).boundingBox();
+    expect(left!.y).toBe(right!.y);
+    expect(right!.x + right!.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: testInfo.outputPath(`алхимия-${width}.png`) });
   }
-  const unrated = page.locator('.sphere-card').last();
-  await expect(unrated).toContainText('нет оценки');
-  await expect(unrated.locator('[data-building]')).toHaveCount(0);
-
-  await page.setViewportSize({ width: 360, height: 640 });
-  await expect(wheelBuildings).toHaveCount(0);
-  await expect(rowBuildings).toHaveCount(buildings.length);
-  for (const [i, building] of buildings.entries()) {
-    await expect(rowBuildings.nth(i)).toHaveAttribute('data-building', building);
-  }
-  await expect(page.locator('.wheel-value')).toHaveCount(scores.length);
+  await cards.nth(1).click();
+  await sheet(page, 'Здоровье').getByRole('button', { name: 'Изменить сферу' }).click();
+  const edit = sheet(page, 'Сфера');
+  await edit.locator('.quest-icon-picker summary').click();
+  await expect(edit.getByRole('radio', { name: 'Медальон котелка' })).toBeChecked();
+  await edit.getByRole('radio', { name: 'Без иконки' }).click();
+  await edit.getByRole('button', { name: 'Сохранить' }).click();
+  await expect(cards.nth(1).locator('use')).toHaveCount(0);
 });
 
-test('нажатие на сферу в колесе открывает заметку «Как улучшить», она сохраняется и видна под колесом', async ({ page }) => {
+test('из котелка можно открыть и сохранить заметку «Как улучшить»', async ({ page }) => {
   await openGame(page);
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
   const row = page.locator('.sphere-card').filter({ hasText: 'Здоровье' });
   await expect(page.locator('.sphere-card')).toHaveCount(8);
   await expect(page.getByText('Как улучшить?', { exact: true })).toHaveCount(0);
@@ -114,28 +101,10 @@ test('нажатие на сферу в колесе открывает заме
   await note.getByRole('button', { name: 'Сохранить' }).click();
   await expect(toast(page)).toHaveText('Заметка сохранена');
   await expect(note).toBeHidden();
-  // Под колесом видна первая строка, фокус вернулся на строку сферы.
-  await expect(row).toContainText('Ложиться до полуночи');
-  await expect(row).not.toContainText('Гулять после обеда');
   await expect(row).toBeFocused();
-  expect(await axe(page), 'Королевство с заметкой').toEqual([]);
-
-  // Сектор колеса тоже открывает заметку. Закрыть лист без кнопки значит сохранить.
-  const sectors = page.locator('.wheel-hit');
-  await expect(sectors).toHaveCount(8);
-  const work = page.locator('.sphere-card').first();
-  await expect(work).toContainText('Работа');
-  await sectors.first().click();
-  const workNote = sheet(page, 'Работа');
-  await workNote.getByLabel('Что сделать, чтобы эта сфера стала лучше').fill('Меньше созвонов');
-  await page.keyboard.press('Escape');
-  await expect(workNote).toBeHidden();
-  await expect(work).toContainText('Меньше созвонов');
-
-  // После перезагрузки заметка на месте, и в листе сферы тоже.
+  expect(await axe(page), 'Алхимия с заметкой').toEqual([]);
   await page.reload();
-  await tab(page, 'Королевство').click();
-  await expect(row).toContainText('Ложиться до полуночи');
+  await tab(page, 'Алхимия').click();
   await page.locator('.sphere-card').filter({ hasText: 'Здоровье' }).click();
   const health = sheet(page, 'Здоровье');
   await expect(health.locator('.improve-row')).toContainText('Гулять после обеда');
@@ -151,7 +120,7 @@ test('нажатие на сферу в колесе открывает заме
 
 test('проект в сфере: задачи, выполнение и возврат из зала трофеев', async ({ page }) => {
   await openGame(page);
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
   await page.locator('.sphere-card').filter({ hasText: 'Здоровье' }).click();
   const health = sheet(page, 'Здоровье');
   await expect(health).toContainText('личная сфера');
@@ -167,8 +136,9 @@ test('проект в сфере: задачи, выполнение и возв
 
   await addTask(page, 'Пробежать 10 км', { quest: 'Марафон', size: '1 ч' });
   await addTask(page, 'Купить кроссовки', { quest: 'Марафон', size: '30 мин' });
-  await tab(page, 'Королевство').click();
-  const card = page.locator('.project-card').filter({ hasText: 'Марафон' });
+  await tab(page, 'Алхимия').click();
+  await page.locator('.sphere-card').filter({ hasText: 'Здоровье' }).click();
+  const card = health.getByRole('button', { name: /Марафон/ });
   await expect(card).toContainText('2 в отряде');
   await card.click();
   const project = sheet(page, 'Марафон');
@@ -184,7 +154,9 @@ test('проект в сфере: задачи, выполнение и возв
   await expect(toast(page)).toContainText('Проект выполнен');
   const trophy = page.locator('.trophy').filter({ hasText: 'Марафон' });
   await expect(trophy).toBeVisible();
-  await expect(page.locator('.sphere-card').filter({ hasText: 'Здоровье' })).toContainText('2 в отряде');
+  await page.locator('.sphere-card').filter({ hasText: 'Здоровье' }).click();
+  await expect(health).toContainText('2 в отряде');
+  await page.keyboard.press('Escape');
 
   await trophy.click();
   await sheet(page, 'Марафон').getByRole('button', { name: 'Вернуть в работу' }).click();
@@ -229,8 +201,9 @@ test('длинный проект не сдвигает экран: под ни�
   s.litDay = s.day;
   await seedGame(page, s);
   await openGame(page);
-  await tab(page, 'Королевство').click();
-  await page.locator('.project-card', { hasText: 'Большой проект' }).click();
+  await tab(page, 'Алхимия').click();
+  await page.locator('.sphere-card').first().click();
+  await sheet(page, 'Работа').getByRole('button', { name: /Большой проект/ }).click();
   await expect(sheet(page, 'Большой проект')).toBeVisible();
   // Фокус уходит в лист, пока тот ещё выезжает снизу: приложение не должно проскроллиться вслед за ним.
   await page.evaluate(() => Promise.all(document.querySelector('.modal')!.getAnimations().map((a) => a.finished)));

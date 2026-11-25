@@ -389,7 +389,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
             <LIcon name="plus" size={22} stroke={2.6} />
           </span>
         </button>
-        <TabButton icon="kingdom" label={W.realm} active={screen === 'realm'} onClick={() => ui.go('realm')} />
+        <TabButton icon="kotel" label={W.realm} active={screen === 'realm'} onClick={() => ui.go('realm')} />
         <TabButton icon="scroll" label={W.chronicle} active={screen === 'notes'} onClick={() => ui.go('notes')} />
       </nav>
       {sheet && (
@@ -424,10 +424,10 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
 }
 
 // Четыре раздела и «+» ровно посередине. Настройки открываются шестерёнкой в верхней полосе Лагеря.
-function TabButton(p: { icon: 'campfire' | 'sunrise' | 'kingdom' | 'scroll'; label: string; active: boolean; onClick: () => void }) {
+function TabButton(p: { icon: 'campfire' | 'sunrise' | 'kotel' | 'scroll'; label: string; active: boolean; onClick: () => void }) {
   return (
     <button class={`tab${p.active ? ' is-active' : ''}`} aria-current={p.active ? 'page' : undefined} onClick={p.onClick}>
-      <GIcon name={p.icon} size={24} />
+      {p.icon === 'kotel' ? <svg aria-hidden="true" viewBox="0 0 64 64" width="24" height="24"><use href="./quest-icons.svg#kotel" /></svg> : <GIcon name={p.icon} size={24} />}
       {p.label}
     </button>
   );

@@ -35,8 +35,8 @@ test('axe не находит нарушений на экранах и в ли�
   expect(await axe(page), 'Сколько займёт').toEqual([]);
   await page.keyboard.press('Escape');
   await expect(day.getByRole('button', { name: /изменить длительность/ })).toBeFocused();
-  await tab(page, 'Королевство').click();
-  expect(await axe(page), 'Королевство').toEqual([]);
+  await tab(page, 'Алхимия').click();
+  expect(await axe(page), 'Алхимия').toEqual([]);
   await tab(page, 'Летопись').click();
   expect(await axe(page), 'Летопись').toEqual([]);
   await openSettings(page);
@@ -288,7 +288,7 @@ test('с клавиатуры: лист ловит фокус, Escape возвр
 
 test('иконка проекта выбирается с клавиатуры и открывает задачу у костра', async ({ page }) => {
   await openGame(page);
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
   await page.getByRole('button', { name: 'новый проект' }).click();
   const form = sheet(page, 'Новый проект');
   await form.getByLabel('Название').fill('Сад');

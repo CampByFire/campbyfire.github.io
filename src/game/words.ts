@@ -220,7 +220,7 @@ export const W = {
   appName: 'Лагерь',
   camp: 'Лагерь',
   plan: 'Сбор отряда',
-  realm: 'Королевство',
+  realm: 'Алхимия',
   chronicle: 'Летопись',
   settings: 'Настройки',
   shop: 'Лавка',
@@ -253,7 +253,6 @@ export const W = {
   quests: 'Проекты',
   spheres: 'Сферы',
   noSphere: 'Без сферы',
-  wheel: 'Колесо баланса',
   rate: 'Оценить сферы',
   improve: 'Как улучшить',
   undead: 'Нежить на дороге',
@@ -362,3 +361,12 @@ export const QUEST_ICON_NAME = {
 } as const;
 
 export type QuestIcon = keyof typeof QUEST_ICON_NAME;
+
+const sphereSymbols: Partial<Record<string, QuestIcon>> = {
+  'sphere-work': 'nakovalnya', 'sphere-health': 'rostok', 'sphere-home': 'klyuch', 'sphere-money': 'koshel',
+  'sphere-family': 'serdtse', 'sphere-friends': 'rukopozhatie', 'sphere-growth': 'kniga', 'sphere-rest': 'luna',
+};
+
+export function brewIcon(sphereId?: string): QuestIcon {
+  return (sphereId && sphereSymbols[sphereId]) || 'kotel';
+}

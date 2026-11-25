@@ -8,7 +8,7 @@ const fill = (el: Locator) => el.evaluate((e) => getComputedStyle(e).backgroundC
 
 test('свой цвет проекта: кодом и ползунком, и он помнится', async ({ page }) => {
   await openGame(page);
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
   await page.getByRole('button', { name: 'новый проект' }).click();
   const form = sheet(page, 'Новый проект');
   await form.getByLabel('Название').fill('Сертификат');
@@ -51,12 +51,14 @@ test('свой цвет проекта: кодом и ползунком, и о�
   await form.getByRole('button', { name: 'Начать проект' }).click();
   await expect(form).toBeHidden();
 
+  await page.locator('.sphere-card').first().click();
   const card = page.getByRole('button', { name: /^Сертификат/ });
   expect(await fill(card.locator('.qdot'))).toBe(rgb('#1d776d'));
 
   // После перезагрузки проект открывается со своим цветом.
   await page.reload();
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
+  await page.locator('.sphere-card').first().click();
   await page.getByRole('button', { name: /^Сертификат/ }).click();
   await sheet(page, 'Сертификат').getByRole('button', { name: 'Изменить проект' }).click();
   const edit = sheet(page, 'Проект');
@@ -72,7 +74,7 @@ test('свой цвет проекта: кодом и ползунком, и о�
 
 test('номера над спутниками у костра в цвете их проекта', async ({ page }) => {
   await openGame(page);
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
   await page.getByRole('button', { name: 'новый проект' }).click();
   const form = sheet(page, 'Новый проект');
   await form.getByLabel('Название').fill('Сертификат');

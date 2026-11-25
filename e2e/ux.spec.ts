@@ -24,7 +24,7 @@ test('настройки открываются отдельно, Назад в�
 
 test('пояснения разделов доступны по вопросительному знаку', async ({ page }) => {
   await openGame(page);
-  for (const name of ['Королевство', 'Летопись']) {
+  for (const name of ['Алхимия', 'Летопись']) {
     await tab(page, name).click();
     const help = page.locator('.screen .page-heading .page-help');
     await expect(help).not.toHaveAttribute('open');

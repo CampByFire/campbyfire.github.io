@@ -58,7 +58,7 @@ test('«Назад» с любого раздела возвращает в Ла
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   await inCamp(page);
 
-  for (const name of ['План', 'Королевство', 'Летопись']) {
+  for (const name of ['План', 'Алхимия', 'Летопись']) {
     await tab(page, name).click();
     await expect(tab(page, name)).toHaveAttribute('aria-current', 'page');
     await page.goBack();
@@ -72,7 +72,7 @@ test('«Назад» с любого раздела возвращает в Ла
 
   // Несколько разделов подряд: всё равно одно «Назад» до Лагеря, второе выходит.
   await tab(page, 'План').click();
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
   await tab(page, 'Летопись').click();
   await page.goBack();
   await inCamp(page);

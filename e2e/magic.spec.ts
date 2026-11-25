@@ -212,7 +212,7 @@ test('день от разжигания до отбоя: заклинания �
 test('проект выполнен: знамя улетает в зал трофеев, и трофей там виден', async ({ page }) => {
   const errors = watchErrors(page);
   await openGame(page);
-  await tab(page, 'Королевство').click();
+  await tab(page, 'Алхимия').click();
   await page.getByRole('button', { name: 'новый проект' }).click();
   const form = sheet(page, 'Новый проект');
   await form.getByLabel('Название').fill('Сертификат');
@@ -224,8 +224,9 @@ test('проект выполнен: знамя улетает в зал тро�
   const day = page.getByRole('region', { name: 'Задачи дня' });
   await day.getByRole('button', { name: 'Позвать к огню' }).click();
   await day.getByRole('button', { name: 'Готово' }).click();
-  await tab(page, 'Королевство').click();
-  await page.locator('.quest-card').filter({ hasText: 'Сертификат' }).click();
+  await tab(page, 'Алхимия').click();
+  await page.locator('.sphere-card').first().click();
+  await sheet(page, 'Работа').getByRole('button', { name: /Сертификат/ }).click();
   await expect(sheet(page, 'Сертификат')).toContainText('Сделано 1 из 1');
   await page.getByRole('button', { name: 'Проект выполнен' }).click();
   await expect(toast(page)).toContainText('Проект выполнен');
