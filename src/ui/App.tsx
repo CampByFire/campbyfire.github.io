@@ -427,7 +427,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
 function TabButton(p: { icon: 'campfire' | 'sunrise' | 'kotel' | 'scroll'; label: string; active: boolean; onClick: () => void }) {
   return (
     <button class={`tab${p.active ? ' is-active' : ''}`} aria-current={p.active ? 'page' : undefined} onClick={p.onClick}>
-      {p.icon === 'kotel' ? <svg aria-hidden="true" viewBox="0 0 64 64" width="24" height="24"><use href="./quest-icons.svg#kotel" /></svg> : <GIcon name={p.icon} size={24} />}
+      <GIcon name={p.icon} size={24} />
       {p.label}
     </button>
   );

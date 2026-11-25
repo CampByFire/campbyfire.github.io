@@ -90,3 +90,17 @@ test('«Назад» с любого раздела возвращает в Ла
   await page.goBack();
   await expect(page).toHaveURL('about:blank');
 });
+
+test('котелок в меню виден до и после выбора Алхимии без файла медальонов', async ({ page }, testInfo) => {
+  await page.route('**/quest-icons.svg', route => route.abort());
+  await openGame(page);
+  const alchemy = tab(page, 'Алхимия');
+  const shape = alchemy.locator('svg path');
+  await expect(shape).toBeVisible();
+  const idle = await shape.evaluate(el => getComputedStyle(el).fill);
+  await alchemy.click();
+  await expect(alchemy).toHaveAttribute('aria-current', 'page');
+  await expect(shape).toBeVisible();
+  await expect(shape).not.toHaveCSS('fill', idle);
+  await page.screenshot({ path: testInfo.outputPath('alhimiya-menu.png'), animations: 'disabled' });
+});
