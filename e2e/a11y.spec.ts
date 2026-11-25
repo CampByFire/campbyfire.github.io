@@ -21,6 +21,10 @@ test('axe не находит нарушений на экранах и в ли�
   await addTask(page, 'Сдать отчёт', { quest: 'Работа', size: '1 ч' });
   await addTask(page, 'Зарядка', { size: '15 мин', repeat: 'Каждый день' });
   expect(await axe(page), 'Сбор отряда').toEqual([]);
+  const planTabs = page.getByRole('tablist', { name: 'Вкладки плана' });
+  await planTabs.getByRole('tab', { name: 'Календарь' }).click();
+  expect(await axe(page), 'Календарь в Плане').toEqual([]);
+  await planTabs.getByRole('tab', { name: 'Сбор отряда' }).click();
   await page.getByRole('button', { name: 'Действия: Сдать отчёт' }).click();
   expect(await axe(page), 'Действия задачи').toEqual([]);
   await page.keyboard.press('Escape');

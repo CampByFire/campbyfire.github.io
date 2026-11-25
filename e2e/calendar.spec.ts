@@ -14,10 +14,40 @@ const tooSmall = (page: Page) =>
 
 const timeline = (page: Page) => page.getByRole('region', { name: 'По часам' });
 
+test('календарь открывается из Плана, а его вкладки работают с клавиатуры', async ({ page }, testInfo) => {
+  await openGame(page, { time: at(9) });
+  await tab(page, 'Летопись').click();
+  const plan = tab(page, 'План');
+  await plan.click();
+  const tabs = page.getByRole('tablist', { name: 'Вкладки плана' });
+  const gather = tabs.getByRole('tab', { name: 'Сбор отряда', selected: true });
+  await gather.press('ArrowRight');
+  const calendar = tabs.getByRole('tab', { name: 'Календарь', selected: true });
+  await expect(calendar).toBeFocused();
+  await expect(plan).toHaveAttribute('aria-current', 'page');
+  const month = page.getByRole('tabpanel', { name: 'Календарь' });
+  await expect(month.getByRole('heading', { name: 'Календарь', level: 1 })).toBeVisible();
+  await expect(await tooSmall(page)).toEqual([]);
+  await expectNoSideScroll(page);
+  await page.screenshot({ path: testInfo.outputPath('kalendar-v-plane.png'), animations: 'disabled' });
+
+  await month.getByRole('button', { name: 'Сегодня', exact: true }).click();
+  await expect(timeline(page)).toBeVisible();
+  await expect(calendar).toBeVisible();
+  await expect(plan).toHaveAttribute('aria-current', 'page');
+  await page.goBack();
+  await expect(month.getByRole('heading', { name: 'Календарь', level: 1 })).toBeVisible();
+
+  await calendar.press('Home');
+  await expect(gather).toBeFocused();
+  await expect(page.getByRole('tabpanel', { name: 'Сбор отряда' }).getByRole('heading', { name: 'Сбор отряда', level: 1 })).toBeVisible();
+});
+
 test('событие и задача на завтра: шкала дня, план и следующий день в лагере', async ({ page }) => {
   // Пятница, 23 октября, 9:00. Строка про завтра в плане открывает завтрашний день по часам.
   await openGame(page, { time: at(9) });
   await page.getByRole('button', { name: /На завтра ничего не запланировано/ }).click();
+  await expect(tab(page, 'План')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByRole('heading', { name: 'Суббота, 24.10.2026', level: 1 })).toBeVisible();
   await expect(page.getByText('Завтра · ничего не запланировано')).toBeVisible();
   expect(await axe(page), 'Пустой день').toEqual([]);
@@ -89,6 +119,7 @@ test('событие и задача на завтра: шкала дня, пл�
   await expect(page.locator('section').filter({ has: page.getByRole('heading', { name: 'К костру сегодня' }) })).toContainText('Купить торт');
   await tab(page, 'Лагерь').click();
   await page.getByRole('button', { name: 'Календарь: сегодня в 10:00 Стоматолог' }).click();
+  await expect(tab(page, 'План')).toHaveAttribute('aria-current', 'page');
   await expect(page.getByText('Сегодня · 2 события и 1 задача')).toBeVisible();
 
   // Событие можно поправить и удалить, а удалённую вернуть.

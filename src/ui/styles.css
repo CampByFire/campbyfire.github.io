@@ -2666,6 +2666,33 @@ h3.field-label {
 /* «Уменьшить движение» в системе включает Спокойную магию, а не выключает всё: см. magic/magic.css. */
 
 /* ---------- горизонты: вкладки сбора отряда ---------- */
+.plan-screen,
+.plan-panel:not([hidden]) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.plan-switch {
+  flex: none;
+  padding: calc(10px + env(safe-area-inset-top)) 16px 6px;
+  background: var(--sheet);
+}
+
+.seg.plan-tabs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 0;
+}
+
+.plan-tabs .seg-btn {
+  white-space: normal;
+}
+
+.plan-panel > .page {
+  padding-top: 10px;
+}
+
 .seg {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

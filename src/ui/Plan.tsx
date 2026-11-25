@@ -9,7 +9,7 @@ import { meetingsOn } from '../game/calendar';
 import type { State, Task } from '../game/types';
 import { PERIOD_KIND_NAME, W, periodName, periodShort, repeatName, weekRange } from '../game/words';
 import type { Ui } from './App';
-import { AgendaRow, openCalendar, tomorrowNews } from './Calendar';
+import { AgendaRow, CalendarScreen, openCalendar, tomorrowNews } from './Calendar';
 import { GIcon, LIcon } from './Icon';
 import { ignite } from './magic/spells';
 import { HabitWeekView, QuestDot, TaskMeta } from './parts';
@@ -21,7 +21,55 @@ type View = 'day' | PeriodKind;
 /** Какая вкладка была открыта: возвращаясь в сбор отряда, игрок видит ту же. */
 let lastView: View = 'day';
 
-export function Plan({ ui }: { ui: Ui }) {
+const PLAN_TABS = [
+  { screen: 'plan', label: W.plan },
+  { screen: 'calendar', label: W.calendar },
+] as const;
+
+export function PlanScreen({ ui, screen }: { ui: Ui; screen: (typeof PLAN_TABS)[number]['screen'] }) {
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    const other = screen === 'plan' ? 'calendar' : 'plan';
+    const next = { ArrowLeft: other, ArrowRight: other, Home: 'plan', End: 'calendar' }[e.key] as typeof screen | undefined;
+    if (!next) return;
+    e.preventDefault();
+    if (next === screen) return;
+    const tabs = e.currentTarget as HTMLElement;
+    tabs.querySelector<HTMLElement>(`#plan-tab-${next}`)?.focus();
+    ui.go(next);
+  };
+
+  return (
+    <div class="plan-screen">
+      <div class="plan-switch">
+        <div class="seg plan-tabs" role="tablist" aria-label="Вкладки плана" onKeyDown={onKeyDown}>
+          {PLAN_TABS.map(({ screen: tab, label }) => (
+            <button
+              key={tab}
+              type="button"
+              role="tab"
+              id={`plan-tab-${tab}`}
+              aria-controls={`plan-panel-${tab}`}
+              aria-selected={screen === tab}
+              tabIndex={screen === tab ? 0 : -1}
+              class={`seg-btn${screen === tab ? ' is-on' : ''}`}
+              onClick={() => { if (screen !== tab) ui.go(tab); }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {PLAN_TABS.map(({ screen: tab }) => (
+        <div key={tab} class="plan-panel" role="tabpanel" id={`plan-panel-${tab}`} aria-labelledby={`plan-tab-${tab}`} hidden={screen !== tab}>
+          {screen === tab && (tab === 'plan' ? <Plan ui={ui} /> : <CalendarScreen ui={ui} />)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Plan({ ui }: { ui: Ui }) {
   const s = ui.store.state;
   const [view, setView] = useState<View>(lastView);
   const pick = (v: View) => {

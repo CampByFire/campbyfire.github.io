@@ -6,7 +6,6 @@ import type { CompleteResult } from '../game/state';
 import type { ClockFormat, DateFormat } from '../game/time';
 import type { DayKey } from '../game/types';
 import { W } from '../game/words';
-import { CalendarScreen } from './Calendar';
 import { Camp } from './Camp';
 import { sheetBack, useBackButton } from './back';
 import { isLost, restoreFocus, spotOf, type FocusSpot } from './focus';
@@ -20,7 +19,7 @@ import { onSystemReduced, resolveMotion, systemReduced, type Motion } from './ma
 import { pageEnter, pageLeave } from './magic/spells';
 import { Notices } from './Notices';
 import { NotesScreen, upPlace, useNotes } from './Notes';
-import { Plan } from './Plan';
+import { PlanScreen } from './Plan';
 import { QuestIconSprite } from './QuestEmblem';
 import { Realm } from './Realm';
 import { Settings, type SettingsPart } from './Settings';
@@ -383,17 +382,16 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
       <QuestIconSprite />
       <main class="screen" inert={covered} ref={main}>
         {screen === 'camp' && <Camp ui={ui} />}
-        {screen === 'plan' && <Plan ui={ui} />}
+        {(screen === 'plan' || screen === 'calendar') && <PlanScreen ui={ui} screen={screen} />}
         {screen === 'realm' && <Realm ui={ui} />}
         {screen === 'notes' && <NotesScreen ui={ui} />}
         {screen === 'settings' && <Settings ui={ui} />}
-        {screen === 'calendar' && <CalendarScreen ui={ui} />}
         {screen === 'shop' && <Shop ui={ui} />}
       </main>
       <Notices ui={ui} covered={covered} />
       <nav class="tabbar" aria-label="Разделы" inert={covered}>
         <TabButton icon="campfire" label={W.camp} active={screen === 'camp'} onClick={() => ui.go('camp')} />
-        <TabButton icon="sunrise" label="План" active={screen === 'plan'} onClick={() => ui.go('plan')} />
+        <TabButton icon="sunrise" label="План" active={screen === 'plan' || screen === 'calendar'} onClick={() => ui.go('plan')} />
         <button class="tab-add" aria-label="Добавить задачу" onClick={() => ui.open({ kind: 'add' })}>
           <span>
             <LIcon name="plus" size={22} stroke={2.6} />
