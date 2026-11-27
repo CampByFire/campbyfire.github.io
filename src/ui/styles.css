@@ -3134,16 +3134,6 @@ h3.field-label {
   paint-order: stroke;
 }
 
-.wheel-building-mark {
-  transform: var(--wheel-rim-position);
-  pointer-events: none;
-}
-
-.wheel-building-mark .wheel-value { transform: translateY(13px); }
-.wheel-building, .wheel-building-list { color: var(--gold-hi); }
-.wheel-building-list { display: none; flex: none; }
-.wheel-scores-buildings .wheel-building-list { display: inline-flex; }
-
 .wheel-hit {
   fill: transparent;
   cursor: pointer;
@@ -3177,13 +3167,6 @@ h3.field-label {
   color: var(--text-hi);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-@media (max-width: 374px) {
-  .wheel-building-mark { transform: var(--wheel-value-position); }
-  .wheel-building-mark .wheel-value { transform: none; }
-  .wheel-building { display: none; }
-  .wheel-building-list { display: inline-flex; }
 }
 
 /* Заметка «Как улучшить» в листе сферы. */

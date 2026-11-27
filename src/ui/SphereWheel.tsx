@@ -1,17 +1,13 @@
 import { questHex } from '../game/color';
-import { SCORE_MAX, SPHERE_BUILDING_SCORE } from '../game/rules';
+import { SCORE_MAX } from '../game/rules';
 import type { Quest, Rating } from '../game/types';
 import { W } from '../game/words';
-import { GIcon, LIcon } from './Icon';
 import { QuestDot } from './parts';
 
 const SIZE = 292;
 const CENTER = SIZE / 2;
 const RADIUS = 104;
-const RIM = RADIUS + 20;
-const VALUE_GAP = 11;
-/** Если сфер больше, здания читаются в списке под колесом. */
-const MAX_WHEEL_BUILDINGS = 12;
+const LABEL_RADIUS = RADIUS + 20;
 const TICKS = Array.from({ length: SCORE_MAX - 1 }, (_, i) => i + 1);
 
 interface WheelProps {
@@ -19,17 +15,6 @@ interface WheelProps {
   last: Rating | undefined;
   previous: Rating | undefined;
   onPick: (id: string) => void;
-}
-
-function buildingForScore(score: number) {
-  if (score >= SCORE_MAX) return 'castle';
-  if (score >= SPHERE_BUILDING_SCORE.tower) return 'tower';
-  if (score >= SPHERE_BUILDING_SCORE.house) return 'house';
-  return 'hut';
-}
-
-function Building({ name, size }: { name: ReturnType<typeof buildingForScore>; size: number }) {
-  return name === 'castle' ? <GIcon name="kingdom" size={size} /> : <LIcon name={name} size={size} stroke={1.6} />;
 }
 
 const radiusOf = (score: number) => RADIUS * score / SCORE_MAX;
@@ -40,7 +25,6 @@ const scoreText = (score: number) => Number.isInteger(score) ? String(score) : s
 export function SphereWheel({ spheres, last, previous, onPick }: WheelProps) {
   const count = spheres.length;
   const step = 2 * Math.PI / count;
-  const buildings = count <= MAX_WHEEL_BUILDINGS;
   const arc = (i: number, radius: number) => {
     const start = point(i * step, radius).join(' ');
     const end = point((i + 1) * step, radius).join(' ');
@@ -81,22 +65,8 @@ export function SphereWheel({ spheres, last, previous, onPick }: WheelProps) {
         {spheres.map((q, i) => {
           const score = last?.scores[q.id];
           if (score === undefined) return null;
-          const angle = (i + 0.5) * step;
-          const [x, y] = point(angle, radiusOf(score) + VALUE_GAP);
-          if (!buildings) return <text key={`value-${q.id}`} x={x} y={y} class="wheel-value">{scoreText(score)}</text>;
-          const [rimX, rimY] = point(angle, RIM);
-          const building = buildingForScore(score);
-          return (
-            <g key={`value-${q.id}`} class="wheel-building-mark" style={{
-              '--wheel-rim-position': `translate(${rimX}px, ${rimY}px)`,
-              '--wheel-value-position': `translate(${x}px, ${y}px)`,
-            }}>
-              <g class="wheel-building" data-building={building} transform="translate(-11 -17)">
-                <Building name={building} size={22} />
-              </g>
-              <text class="wheel-value">{scoreText(score)}</text>
-            </g>
-          );
+          const [x, y] = point((i + 0.5) * step, LABEL_RADIUS);
+          return <text key={`value-${q.id}`} x={x} y={y} class="wheel-value">{scoreText(score)}</text>;
         })}
         {spheres.map((q, i) => (
           <path key={`hit-${q.id}`} d={sector(i, RADIUS)} class="wheel-hit" onClick={() => onPick(q.id)} />
@@ -109,7 +79,7 @@ export function SphereWheel({ spheres, last, previous, onPick }: WheelProps) {
 /** Те же оценки и переход к заметкам для клавиатуры и экранного диктора. */
 export function SphereScores({ spheres, last, previous, onPick }: WheelProps) {
   return (
-    <ul class={`wheel-scores${spheres.length > MAX_WHEEL_BUILDINGS ? ' wheel-scores-buildings' : ''}`} aria-label="Оценки сфер">
+    <ul class="wheel-scores" aria-label="Оценки сфер">
       {spheres.map((q) => {
         const score = last?.scores[q.id];
         const before = previous?.scores[q.id];
@@ -118,7 +88,6 @@ export function SphereScores({ spheres, last, previous, onPick }: WheelProps) {
             <button class="row wheel-score-row" data-wheel-score={q.id} onClick={() => onPick(q.id)}>
               <QuestDot q={q} />
               <span class="row-title">{q.name}</span>
-              {score !== undefined && <span class="wheel-building-list" aria-hidden="true"><Building name={buildingForScore(score)} size={18} /></span>}
               <span class="wheel-score">{score === undefined ? 'нет оценки' : `${scoreText(score)} из ${SCORE_MAX}`}{before !== undefined && <span class="meta">, раньше {scoreText(before)}</span>}</span>
               <span class="sr-only">. {W.improve}</span>
             </button>

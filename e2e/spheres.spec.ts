@@ -66,9 +66,7 @@ test('колесо под котелками показывает обе оце�
   const svg = wheel.locator('.wheel > svg');
   await expect(svg.locator('.wheel-value')).toHaveText(scores.map(String));
   await expect(svg.locator('.wheel-prev')).toHaveCount(spheres.length);
-  for (const kind of ['hut', 'house', 'tower', 'castle']) {
-    await expect(svg.locator(`[data-building="${kind}"]`).first()).toBeVisible();
-  }
+  await expect(wheel.locator('svg')).toHaveCount(1);
   expect((await wheel.boundingBox())!.y).toBeGreaterThan((await page.locator('.sphere-card').last().boundingBox())!.y);
   expect(await axe(page), 'Колесо баланса с оценками').toEqual([]);
 
