@@ -95,6 +95,8 @@ function needIntro(store: Store): boolean {
 const CHEER_MS = 6_000;
 /** Столько лист уезжает вниз после закрытия, потом его нет. */
 const SHEET_OUT_MS = 200;
+/** Минимальная ширина, на которой помещаются поляна и список задач рядом. */
+const WIDE_WINDOW = '(min-width: 620px)';
 
 /** Сила магии: выбранная в Настройках или по настройке системы «Уменьшить движение». */
 const motionOf = (now: number) => resolveMotion(loadLocal(now).magic, systemReduced());
@@ -128,10 +130,18 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   const [dateFormat, setDateFormat] = useState<DateFormat>(() => loadLocal(store.now()).dateFormat === 'mdy' ? 'mdy' : 'dmy');
   const [clockFormat, setClockFormat] = useState<ClockFormat>(() => loadLocal(store.now()).clockFormat === '12h' ? '12h' : '24h');
   const [shade, setShade] = useState(false);
-  // Из Лагеря уходят со свёрнутой шторкой: вернёшься, и снова видна сцена.
+  const [wide, setWide] = useState(() => window.matchMedia(WIDE_WINDOW).matches);
+  useLayoutEffect(() => {
+    const media = window.matchMedia(WIDE_WINDOW);
+    const update = () => setWide(media.matches);
+    media.addEventListener('change', update);
+    update();
+    return () => media.removeEventListener('change', update);
+  }, []);
+  // Шторка нужна только в узком Лагере и сворачивается при уходе с него.
   useEffect(() => {
-    if (screen !== 'camp') setShade(false);
-  }, [screen]);
+    if (screen !== 'camp' || wide) setShade(false);
+  }, [screen, wide]);
   const main = useRef<HTMLElement>(null);
   const shownScreen = useRef(screen);
 
@@ -366,7 +376,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
   // «Назад» на телефоне закрывает знакомство или лист, сворачивает шторку задач дня, из папки Летописи ведёт в папку выше, из раздела к списку разделов,
   // из шкалы дня в Календаре к месяцу, с других разделов в Лагерь, и только из Лагеря без открытых листов выходит из приложения.
   const inSection = (screen === 'notes' && section !== null) || (screen === 'calendar' && calDay !== null) || (screen === 'settings' && settingsPart !== null);
-  const shadeUp = screen === 'camp' && shade;
+  const shadeUp = screen === 'camp' && shade && !wide;
   useBackButton((covered ? 1 : 0) + (screen !== 'camp' ? 1 : 0) + (inSection ? 1 : 0) + (shadeUp ? 1 : 0), () => {
     if (intro) closeIntro();
     else if (sheetShown.current) (sheetBack() ?? closeSheet)();
@@ -377,10 +387,10 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
     else if (screen !== 'camp') ui.go('camp');
   });
   return (
-    <div class="app">
+    <div class={`app${wide ? ' is-wide' : ''}`}>
       <QuestIconSprite />
-      <main class="screen" inert={covered} ref={main}>
-        {screen === 'camp' && <Camp ui={ui} />}
+      <main class="screen" data-screen={screen} inert={covered} ref={main}>
+        {screen === 'camp' && <Camp ui={ui} side={wide} />}
         {(screen === 'plan' || screen === 'calendar') && <PlanScreen ui={ui} screen={screen} />}
         {screen === 'realm' && <Realm ui={ui} />}
         {screen === 'notes' && <NotesScreen ui={ui} />}
@@ -410,7 +420,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
           Вместе с сообщением он прочтёт и кнопку «Вернуть», если она есть. */}
       <div role="status">
         {toast && (
-          <div ref={toastBox} class={`toast${toast.action ? ' toast-act' : ''}`} key={toast.id}>
+          <div ref={toastBox} class={`toast${toast.action ? ' toast-act' : ''}${wide && screen === 'camp' && !covered ? ' toast-side' : ''}`} key={toast.id}>
             {toast.text}
             {toast.action && (
               <button

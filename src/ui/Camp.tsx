@@ -42,7 +42,7 @@ import { Scene } from './Scene';
 import { dragHeight, snapUp } from './shade';
 import { syncTrouble } from './SyncPanel';
 
-export function Camp({ ui }: { ui: Ui }) {
+export function Camp({ ui, side }: { ui: Ui; side: boolean }) {
   const { store, now } = ui;
   const s = store.state;
   const v = campView(s, now, ui.cheer?.taskId ?? null);
@@ -61,17 +61,18 @@ export function Camp({ ui }: { ui: Ui }) {
 
   // Шторка: свёрнутая стоит под сценой, как раньше; развёрнутая поднимается поверх сцены со всеми задачами дня.
   // ui.shade говорит, куда она едет; up держит развёрнутый вид, пока она уезжает вниз; drag, пока её тянут.
-  const [up, setUp] = useState(ui.shade);
+  const [up, setUp] = useState(ui.shade && !side);
   const [drag, setDrag] = useState(false);
   const [showDone, setShowDone] = useState(false);
   const [mini, setMini] = useState(false);
-  const isUp = ui.shade || up || drag;
+  const isUp = !side && (ui.shade || up || drag);
+  const showAll = side || isUp;
   /** Высота свёрнутой шторки: на её место встаёт пустое место, пока она развёрнута, и сцена не прыгает. */
   const lowH = useRef(0);
   const wasUp = useRef(false);
 
   useLayoutEffect(() => {
-    if (isUp) return;
+    if (side || isUp) return;
     const sh = sheetRef.current?.getBoundingClientRect().height ?? 0;
     const rh = rowsRef.current?.getBoundingClientRect().height ?? 0;
     lowH.current = sh;
@@ -122,9 +123,9 @@ export function Camp({ ui }: { ui: Ui }) {
   const list = nextInCard ? v.main.slice(1) : v.main;
   const cut = list.length > fit ? list.slice(0, fit - 1) : list;
   const hidden = list.length - cut.length;
-  const shown = isUp ? list : cut;
+  const shown = showAll ? list : cut;
   // Тянуть есть что, если в свёрнутой шторке не все задачи дня или за день уже что-то сделано.
-  const canOpen = !v.asleep && (hidden > 0 || v.doneToday > 0);
+  const canOpen = !side && !v.asleep && (hidden > 0 || v.doneToday > 0);
 
   /** Выше шторка не поднимается: над ней остаётся верхняя полоса с датой, золотом и маной. */
   const highMax = () => {
@@ -150,11 +151,16 @@ export function Camp({ ui }: { ui: Ui }) {
 
   // Развернуть нечего (отбой, все дела видны и ничего не сделано): шторка сворачивается сама.
   useEffect(() => {
-    if (!canOpen && ui.shade) ui.setShade(false);
-  }, [canOpen, ui.shade]);
+    if (!side && !canOpen && ui.shade) ui.setShade(false);
+  }, [side, canOpen, ui.shade]);
 
   // Свёрнутую шторку ещё показываем развёрнутой, пока она уезжает вниз.
   useEffect(() => {
+    if (side) {
+      setDrag(false);
+      setUp(false);
+      return;
+    }
     if (ui.shade) {
       setUp(true);
       return;
@@ -168,18 +174,20 @@ export function Camp({ ui }: { ui: Ui }) {
       ui.motion === 'off' ? 0 : SHADE_MS,
     );
     return () => window.clearTimeout(id);
-  }, [ui.shade, up, drag, ui.motion]);
+  }, [side, ui.shade, up, drag, ui.motion]);
 
   // Высоту развёрнутой шторки ставим сами: от свёрнутой к нужной, и CSS её плавно ведёт.
   useLayoutEffect(() => {
     const el = sheetRef.current;
     const was = wasUp.current;
     wasUp.current = isUp;
-    if (!el || drag) return;
+    if (!el || (drag && !side)) return;
     if (!isUp) {
       el.style.height = '';
-      // Фокус был на строке, которой в свёрнутой шторке нет: он встаёт на ручку.
-      if (was && (document.activeElement === document.body || !document.activeElement)) handleRef.current?.focus();
+      // Если кнопка исчезла при сворачивании, фокус остаётся в задачах дня.
+      if (was && (document.activeElement === document.body || !document.activeElement)) {
+        (side ? el : handleRef.current)?.focus({ preventScroll: true });
+      }
       return;
     }
     if (!was) {
@@ -191,11 +199,11 @@ export function Camp({ ui }: { ui: Ui }) {
 
   // Сделанные задачи раскрылись внизу: подвинуть список, чтобы их было видно.
   useEffect(() => {
-    if (showDone && ui.shade) doneRef.current?.scrollIntoView({ block: 'nearest', behavior: ui.motion === 'full' ? 'smooth' : 'auto' });
-  }, [showDone, ui.shade]);
+    if (showDone && (side || ui.shade)) doneRef.current?.scrollIntoView({ block: 'nearest', behavior: ui.motion === 'full' ? 'smooth' : 'auto' });
+  }, [showDone, side, ui.shade]);
 
   const toggleDone = () => {
-    if (!ui.shade) {
+    if (!side && !ui.shade) {
       setShowDone(true);
       setShade(true);
     } else setShowDone((d) => !d);
@@ -268,7 +276,7 @@ export function Camp({ ui }: { ui: Ui }) {
 
   useEffect(() => {
     const el = sheetRef.current;
-    if (!el) return;
+    if (!el || side) return;
     const start = (e: TouchEvent) => {
       if (e.touches.length === 1) dragStart(e.touches[0].clientX, e.touches[0].clientY, e.target);
       else grab.current = null;
@@ -281,12 +289,14 @@ export function Camp({ ui }: { ui: Ui }) {
     el.addEventListener('touchend', dragEnd);
     el.addEventListener('touchcancel', dragEnd);
     return () => {
+      grab.current = null;
+      dragged.current = false;
       el.removeEventListener('touchstart', start);
       el.removeEventListener('touchmove', move);
       el.removeEventListener('touchend', dragEnd);
       el.removeEventListener('touchcancel', dragEnd);
     };
-  }, []);
+  }, [side]);
 
   const handleDown = (e: PointerEvent) => {
     if (e.pointerType === 'touch' || e.button !== 0) return;
@@ -301,13 +311,13 @@ export function Camp({ ui }: { ui: Ui }) {
   };
 
   const bg = SCENE.backgrounds[v.light] ?? SCENE.backgrounds.day;
-  const wide = narrow ? SCENE.wide : undefined;
+  const wide = side || narrow ? SCENE.wide : undefined;
   const wideBg = wide?.backgrounds[v.light] ?? wide?.backgrounds.day;
-  const box = sceneBox(wrap.w, wrap.h, wideBg ? wide?.size : undefined);
+  const box = sceneBox(wrap.w, wrap.h, wideBg ? wide?.size : undefined, side);
   const backdrop = box.backdrop;
 
   return (
-    <div class={`camp${compact ? ' is-compact' : ''}`} ref={rootRef}>
+    <div class={`camp${compact ? ' is-compact' : ''}${side ? ' is-split' : ''}`} ref={rootRef}>
       <h1 class="sr-only">{W.camp}</h1>
       {/* Картинки поляны не ловят пальца, а меню по долгому нажатию в сцене не открывается совсем. */}
       <div class={`scene-wrap${backdrop ? ' has-backdrop' : ''}`} ref={wrapRef} inert={isUp} onContextMenu={(e) => e.preventDefault()}>
@@ -352,9 +362,10 @@ export function Camp({ ui }: { ui: Ui }) {
       {isUp && <div class="sheet-space" style={{ height: `${Math.max(0, lowH.current - SHEET_OVERLAP)}px` }} />}
       {isUp && <div class={`shade-dim${ui.shade ? ' is-on' : ''}`} aria-hidden="true" onClick={() => ui.setShade(false)} />}
       <section
-        class={`sheet${isUp ? ' is-up' : ''}${drag ? ' is-dragging' : ''}`}
+        class={`sheet${isUp ? ' is-up' : ''}${!side && drag ? ' is-dragging' : ''}`}
         ref={sheetRef}
         aria-label="Задачи дня"
+        tabIndex={side ? 0 : undefined}
         onClickCapture={(e) => {
           if (!dragged.current) return;
           dragged.current = false;
@@ -362,7 +373,7 @@ export function Camp({ ui }: { ui: Ui }) {
           e.stopPropagation();
         }}
       >
-        {canOpen ? (
+        {canOpen && (
           <button
             class="sheet-grip"
             ref={handleRef}
@@ -377,16 +388,19 @@ export function Camp({ ui }: { ui: Ui }) {
           >
             <span class="sheet-handle" />
           </button>
-        ) : (
+        )}
+        {!side && !canOpen && (
           <div class="sheet-grip" aria-hidden="true">
             <span class="sheet-handle" />
           </div>
         )}
         <div class="sheet-body" id="day-tasks" ref={bodyRef}>
-          <button class="link-btn camp-fold" aria-expanded={!mini || isUp} onClick={() => { setMini(isUp || !mini); if (isUp) setShade(false); }}>
-            {mini && !isUp ? 'Показать задачи дня' : 'Свернуть до текущей задачи'}
-          </button>
-          <div hidden={mini && !isUp}>
+          {!side && (
+            <button class="link-btn camp-fold" aria-expanded={!mini || isUp} onClick={() => { setMini(isUp || !mini); if (isUp) setShade(false); }}>
+              {mini && !isUp ? 'Показать задачи дня' : 'Свернуть до текущей задачи'}
+            </button>
+          )}
+          <div hidden={mini && !showAll}>
           {v.summaryDue && (
             <button class="banner" onClick={() => ui.open({ kind: 'summary' })}>
               <GIcon name="zzz" size={16} />
@@ -398,12 +412,12 @@ export function Camp({ ui }: { ui: Ui }) {
           </div>
           <MainCard ui={ui} v={v} timer={timer} seconds={current ? formatTimerSeconds(spent) : ''} />
 
-          <div hidden={mini && !isUp}>
+          <div hidden={mini && !showAll}>
           {!v.asleep && (list.length > 0 || v.doneToday > 0) && (
             <div class="list-head">
               <h2 class="sc">{W.moreToday}</h2>
               {v.doneToday > 0 && (
-                <button class="list-done" aria-expanded={isUp && showDone} aria-controls="day-done" onClick={toggleDone}>
+                <button class="list-done" aria-expanded={showAll && showDone} aria-controls="day-done" onClick={toggleDone}>
                   <GIcon name="check" size={13} />
                   {v.doneToday} сделано
                 </button>
@@ -425,7 +439,7 @@ export function Camp({ ui }: { ui: Ui }) {
                   onClick={() => ui.open({ kind: 'task', taskId: t.id })}
                 />
               ))}
-            {!v.asleep && !isUp && hidden > 0 && (
+            {!v.asleep && !showAll && hidden > 0 && (
               <button class="row row-more" aria-controls="day-tasks" aria-expanded={false} onClick={() => setShade(true)}>
                 <span class="row-title">Ещё {hidden} в плане дня</span>
                 <LIcon name="chevron" size={16} />
@@ -447,7 +461,7 @@ export function Camp({ ui }: { ui: Ui }) {
               <LIcon name="chevron" size={16} />
             </button>
           )}
-          {isUp && showDone && v.done.length > 0 && (
+          {showAll && showDone && v.done.length > 0 && (
             <div id="day-done" class="done-rows" ref={doneRef}>
               <h3 class="sr-only">Сделано сегодня</h3>
               {v.done.map((t) => (
@@ -495,19 +509,19 @@ const COMPACT_SCALE = 0.8;
 const MIN_SCALE = 0.62;
 
 /**
- * Картинка сцены покрывает место над листом (h; нижние SHEET_OVERLAP из них под краем листа). Если
- * нужная часть не помещается между верхней полосой и листом, весь кадр уменьшается.
- * На телефоне края заполняет широкий фон, снятый с той же точки и в том же масштабе.
+ * Картинка заполняет область сцены. Если фигуры не помещаются между верхней полосой и нижним
+ * краем, кадр уменьшается. Свободное место заполняет широкий фон, снятый с той же точки.
  */
-function sceneBox(w: number, h: number, wide?: [number, number]) {
+function sceneBox(w: number, h: number, wide: [number, number] | undefined, side: boolean) {
   if (!w || !h) return { style: { width: '100%', aspectRatio: `${SCENE_W} / ${SCENE_H}` }, gaps: false };
   // Между этими линиями экрана должна встать нужная часть картинки.
   const from = TOPBAR_H + BADGE_H;
   const to = h - SHEET_OVERLAP;
-  const cover = Math.max(w / SCENE_W, h / SCENE_H);
+  const cover = Math.max(w / SCENE_W, h / (side && wide ? wide[1] : SCENE_H));
   const fit = (to - from) / (CONTENT.bottom - CONTENT.top);
   const wideCover = wide ? Math.max(w / wide[0], h / wide[1]) : 0;
-  const k = Math.max(w / SCENE_W * MIN_SCALE, Math.min(cover, fit), wideCover);
+  const min = side && wide ? wideCover : w / SCENE_W * MIN_SCALE;
+  const k = Math.max(min, Math.min(cover, fit), wideCover);
   const boxW = SCENE_W * k;
   const boxH = SCENE_H * k;
   const want = (from + to) / 2 - ((CONTENT.top + CONTENT.bottom) / 2) * k;

@@ -6,6 +6,7 @@ import camp from '../src/scene/camp.json' with { type: 'json' };
 import { addTask, at, expectNoSideScroll, openGame, seedGame, setTime, sheet, tab, toast } from './helpers';
 
 test('лист сворачивается до карточки и освобождает место лагерю', async ({ page }) => {
+  if (page.viewportSize()!.width >= 620) await page.setViewportSize({ width: 480, height: 800 });
   await openGame(page);
   for (const title of ['Первое дело', 'Второе дело', 'Третье дело']) await addTask(page, title);
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();

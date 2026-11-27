@@ -35,7 +35,7 @@ export default defineConfig({
   projects: [
     { name: 'phone', use: phone(390, 844) },
     { name: 'small-phone', use: phone(360, 640), testMatch: 'day.spec.ts' },
-    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } }, testMatch: ['day.spec.ts', 'folders.spec.ts', 'shop.spec.ts'] },
+    { name: 'desktop', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } }, testMatch: ['day.spec.ts', 'folders.spec.ts', 'responsive.spec.ts', 'shop.spec.ts'] },
     { name: 'calm', use: { ...phone(390, 844), reducedMotion: 'reduce' }, testMatch: ['day.spec.ts', 'magic.spec.ts', 'shop.spec.ts'] },
   ],
   webServer: {
