@@ -1,7 +1,7 @@
 // Компактные разделы, порядок плана и сообщения над нижним действием.
 import { expect, test, type Page } from '@playwright/test';
 import { newState, addTask as addGameTask } from '../src/game/state';
-import { addTask, at, axe, chooseTime, expandTaskForm, expectTime, openGame, openSettings, seedGame, sheet, tab, toast } from './helpers';
+import { addTask, at, axe, expandTaskForm, expectNoSideScroll, openGame, openSettings, seedGame, sheet, tab, timeText, toast } from './helpers';
 
 test('настройки открываются отдельно, Назад возвращает фокус в список', async ({ page }) => {
   await openGame(page);
@@ -62,7 +62,8 @@ test('формат времени меняется в Распорядке, де
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   await clock24.click();
-  await expectTime(workEnd, 'до', '18:15');
+  await expect(workEnd.getByRole('combobox', { name: 'до, часы' })).toHaveValue('18');
+  await expect(workEndMinutes).toHaveValue('15');
   await clock12.click();
   expect(await axe(page), '12-часовой распорядок').toEqual([]);
 
@@ -75,19 +76,26 @@ test('формат времени меняется в Распорядке, де
   await page.locator('.tl').click({ position: { x: 200, y: 15 * 56 + 20 } });
   const form = sheet(page, 'Новое событие');
   await form.getByLabel('Что за событие').fill('Созвон');
-  await expect(form.getByRole('combobox', { name: 'Начало, часы' })).toHaveValue('3');
-  await expect(form.getByRole('combobox', { name: 'Начало, половина дня' })).toHaveValue('PM');
-  await expect(form.getByRole('combobox', { name: 'Конец, часы' })).toHaveValue('4');
-  await form.getByRole('combobox', { name: 'Конец, минуты' }).selectOption('15');
+  await expect(timeText(form, 'Начало')).toHaveValue('3:00 PM');
+  await expect(timeText(form, 'Конец')).toHaveValue('4:00 PM');
+  await timeText(form, 'Начало').fill('03:00 pm');
+  await form.getByRole('button', { name: 'Открыть циферблат: Конец' }).click();
+  await expect(timeText(form, 'Начало')).toHaveValue('3:00 PM');
+  const dial = form.getByRole('group', { name: 'Циферблат: Конец' });
+  await expect(dial.getByRole('group', { name: 'Выбрать час' }).getByRole('button')).toHaveCount(12);
+  await expect(dial.getByRole('radio', { name: 'PM' })).toBeChecked();
+  await dial.getByRole('button', { name: 'Час 4', exact: true }).click();
+  await dial.getByRole('button', { name: 'Минуты 15' }).click();
+  await dial.getByRole('button', { name: 'Применить' }).click();
   expect(await axe(page), 'Событие с 12-часовым временем').toEqual([]);
   await form.getByRole('button', { name: 'Добавить в календарь' }).click();
   await expect(page.getByRole('button', { name: '3:00 PM–4:15 PM, Созвон, событие' })).toBeVisible();
 });
 
 test.describe('Браузер с 12-часовой локалью', () => {
-  test.use({ locale: 'en-US' });
+  test.use({ locale: 'en-US', viewport: { width: 360, height: 640 } });
 
-  test('в формате 24 часа время событий и задач выбирается без AM/PM', async ({ page }) => {
+  test('в формате 24 часа события и задачи принимают время с циферблата и ручной ввод', async ({ page }, testInfo) => {
     await openGame(page);
     await openSettings(page, 'Распорядок');
     const formats = page.getByRole('radiogroup', { name: 'Формат времени' });
@@ -99,28 +107,53 @@ test.describe('Браузер с 12-часовой локалью', () => {
     await page.getByRole('button', { name: 'Событие', exact: true }).click();
     const meeting = sheet(page, 'Новое событие');
     await meeting.getByLabel('Что за событие').fill('Поездка');
-    for (const label of ['Начало', 'Конец']) {
-      const time = meeting.getByRole('group', { name: label, exact: true });
-      await expect(time.getByRole('combobox')).toHaveCount(2);
-      await expect(time.getByRole('option', { name: '00', exact: true }).first()).toBeAttached();
-    }
-    await chooseTime(meeting, 'Начало', '00:15');
-    await chooseTime(meeting, 'Конец', '23:59');
-    await expectTime(meeting, 'Начало', '00:15');
-    await expectTime(meeting, 'Конец', '23:59');
+    await expect(timeText(meeting, 'Конец')).toBeDisabled();
+    const startButton = meeting.getByRole('button', { name: 'Открыть циферблат: Начало' });
+    await startButton.click();
+    const dial = meeting.getByRole('group', { name: 'Циферблат: Начало' });
+    const hours = dial.getByRole('group', { name: 'Выбрать час' });
+    await expect(hours.getByRole('button')).toHaveCount(24);
+    await expect(dial.getByRole('radiogroup', { name: 'Половина дня' })).toHaveCount(0);
+    await expect(hours.getByRole('button', { name: 'Час 00' })).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(hours.getByRole('button', { name: 'Час 01' })).toBeFocused();
+    await expectNoSideScroll(page);
+    expect(await axe(page), 'Двухкольцевой циферблат').toEqual([]);
+    await hours.screenshot({ path: testInfo.outputPath('tsiferblat-24.png'), animations: 'disabled' });
+    await hours.getByRole('button', { name: 'Час 17' }).click();
+    await dial.getByRole('button', { name: 'Минуты 30' }).click();
+    await dial.getByRole('button', { name: 'На минуту больше' }).click();
+    await expect(timeText(meeting, 'Начало')).toHaveValue('');
+    await dial.getByRole('button', { name: 'Применить' }).click();
+    await expect(startButton).toBeFocused();
+    await expect(startButton).toBeInViewport();
+    await expect(timeText(meeting, 'Начало')).toHaveValue('17:31');
+    await timeText(meeting, 'Конец').fill('2359');
     await meeting.getByRole('button', { name: 'Добавить в календарь' }).click();
-    await expect(page.getByRole('button', { name: '0:15–23:59, Поездка, событие' })).toBeAttached();
+    await expect(page.getByRole('button', { name: '17:31–23:59, Поездка, событие' })).toBeAttached();
 
     await tab(page, 'Добавить задачу').click();
     const task = sheet(page, 'Новая задача');
     await expandTaskForm(task);
     await task.getByLabel('Что сделать').fill('Проверить маршрут');
     await task.getByRole('radio', { name: 'сфера Работа', exact: true }).click();
-    const taskTime = task.getByRole('group', { name: 'Во сколько', exact: true });
-    await expect(taskTime.getByRole('combobox')).toHaveCount(2);
-    await chooseTime(task, 'Во сколько', '23:45');
-    await expectTime(task, 'Во сколько', '23:45');
-    await task.getByRole('button', { name: 'Взять в отряд' }).click();
+    const taskTime = timeText(task, 'Во сколько');
+    const saveTask = task.getByRole('button', { name: 'Взять в отряд' });
+    await taskTime.fill('24:00');
+    await expect(taskTime).toHaveAttribute('aria-invalid', 'true');
+    await saveTask.click();
+    await expect(task).toBeVisible();
+    await taskTime.fill('23:45');
+    const taskDialButton = task.getByRole('button', { name: 'Открыть циферблат: Во сколько' });
+    await taskDialButton.click();
+    const taskDial = task.getByRole('group', { name: 'Циферблат: Во сколько' });
+    await taskDial.getByRole('button', { name: 'Час 15' }).click();
+    await page.keyboard.press('Escape');
+    await expect(taskDial).toBeHidden();
+    await expect(taskDialButton).toBeFocused();
+    await expect(taskDialButton).toBeInViewport();
+    await expect(taskTime).toHaveValue('23:45');
+    await saveTask.click();
     await expect(task).toBeHidden();
     const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('taskcraft-lager-v1')!).tasks[0]);
     expect(saved).toMatchObject({ title: 'Проверить маршрут', at: '23:45' });

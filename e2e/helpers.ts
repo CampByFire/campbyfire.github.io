@@ -43,30 +43,7 @@ export const toast = (page: Page): Locator => page.locator('.toast');
 /** Открытый лист (окно поверх экрана) с этим заголовком. */
 export const sheet = (page: Page, name: string): Locator => page.getByRole('dialog', { name });
 
-function timeParts(scope: Locator, label: string) {
-  return {
-    hours: scope.getByRole('combobox', { name: `${label}, часы`, exact: true }),
-    minutes: scope.getByRole('combobox', { name: `${label}, минуты`, exact: true }),
-  };
-}
-
-/** Выбрать часы и минуты в 24-часовом поле. */
-export async function chooseTime(scope: Locator, label: string, time: string) {
-  const { hours, minutes } = timeParts(scope, label);
-  const [h, m] = time.split(':');
-  await hours.focus();
-  await hours.selectOption(h);
-  await minutes.focus();
-  await minutes.selectOption(m);
-}
-
-export async function expectTime(scope: Locator, label: string, time: string) {
-  const { hours, minutes } = timeParts(scope, label);
-  const [h, m] = time.split(':');
-  await expect(hours).toHaveValue(h);
-  if (h) await expect(minutes).toHaveValue(m);
-  else await expect(minutes).toBeDisabled();
-}
+export const timeText = (scope: Locator, name: string): Locator => scope.getByRole('textbox', { name, exact: true });
 
 /** Развернуть дополнительные поля и полный выбор сфер для сценариев подробной формы. */
 export async function expandTaskForm(form: Locator) {

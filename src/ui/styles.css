@@ -2002,7 +2002,8 @@ h3.field-label {
   flex: 1;
 }
 
-.date-field {
+.date-field,
+.time-entry-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px;
   gap: 8px;
@@ -2022,7 +2023,7 @@ h3.field-label {
   grid-column: 1 / -1;
 }
 
-.field-row:has(.time-12, .time-24) {
+.field-row:has(.time-12, .time-24, .time-entry) {
   flex-wrap: wrap;
 }
 .field-row:has(.time-12) .field {
@@ -2038,6 +2039,108 @@ h3.field-label {
 }
 .time-12 .time-parts {
   grid-template-columns: repeat(2, minmax(44px, 1fr)) minmax(58px, 1.2fr);
+}
+.field-row > .time-entry {
+  min-width: min(100%, 134px);
+}
+.field-row > .time-entry-open {
+  flex-basis: 100%;
+}
+.time-entry-controls .input {
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.time-entry-controls .icon-btn {
+  align-self: center;
+}
+.time-dial {
+  margin-top: 10px;
+}
+.time-dial-heading,
+.time-dial-adjust,
+.time-dial-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.time-dial-heading output {
+  color: var(--gold);
+  font-family: var(--font-sc);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.time-dial-heading .chips {
+  justify-content: center;
+}
+.time-dial > .field {
+  text-align: center;
+}
+.time-dial > .field .chips {
+  justify-content: center;
+}
+.time-dial-face {
+  position: relative;
+  width: min(100%, 316px);
+  aspect-ratio: 1;
+  margin: 10px auto;
+  border-radius: 50%;
+  background: #21170f;
+}
+.time-dial-face::before,
+.time-dial-double::after {
+  content: '';
+  position: absolute;
+  inset: 7%;
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.time-dial-double::after {
+  inset: 22%;
+}
+.time-dial-hand {
+  position: absolute;
+  bottom: 50%;
+  left: calc(50% - 1px);
+  width: 2px;
+  background: var(--gold);
+  transform-origin: bottom;
+  pointer-events: none;
+  z-index: 1;
+}
+.time-dial-hand::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--gold);
+}
+.time-dial-mark {
+  position: absolute;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  background: var(--sheet);
+  color: var(--text-hi);
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  font-family: var(--font-sc);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  z-index: 2;
+}
+.time-dial-mark[aria-pressed='true'] {
+  background: var(--gold);
+  color: #20160b;
+}
+.time-dial-mark:focus-visible {
+  z-index: 3;
 }
 .input {
   width: 100%;

@@ -282,7 +282,7 @@ export function App({ store, sync, notes }: { store: Store; sync: Sync; notes: N
 
   useEffect(() => {
     if (!toast) return;
-    const id = window.setTimeout(() => setToast(null), toast.action ? 6000 : 2600);
+    const id = window.setTimeout(() => setToast((current) => current === toast ? null : current), toast.action ? 6000 : 2600);
     return () => window.clearTimeout(id);
   }, [toast]);
 

@@ -2,7 +2,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { addMeeting } from '../src/game/calendar';
 import { newState } from '../src/game/state';
-import { addTask, expandTaskForm, at, axe, chooseTime, expectNoSideScroll, expectTime, openGame, seedGame, setTime, sheet, tab, toast } from './helpers';
+import { addTask, expandTaskForm, at, axe, expectNoSideScroll, openGame, seedGame, setTime, sheet, tab, timeText, toast } from './helpers';
 
 /** Кнопки и поля меньше 44×44 на экране и в листе. Дела на шкале дня не в счёт: их высота это их длительность. */
 const tooSmall = (page: Page) =>
@@ -118,8 +118,8 @@ test('событие и задача на завтра: шкала дня, пл�
   const form = sheet(page, 'Новое событие');
   await form.getByLabel('Что за событие').fill('завтра в 10 стоматолог');
   await expect(form.locator('#meet-hint')).toHaveText('Понял: завтра, суббота, 24.10.2026, в 10:00');
-  await expectTime(form, 'Конец', '');
-  await chooseTime(form, 'Конец', '10:45');
+  await expect(timeText(form, 'Конец')).toHaveValue('');
+  await timeText(form, 'Конец').fill('10:45');
   await form.getByLabel('Где').fill('Ленина, 5');
   expect(await axe(page), 'Новое событие').toEqual([]);
   expect(await tooSmall(page), 'Новое событие').toEqual([]);
@@ -131,17 +131,17 @@ test('событие и задача на завтра: шкала дня, пл�
   // Нажатие на пустой час заводит событие на этот час.
   await page.locator('.tl').click({ position: { x: 200, y: 15 * 56 + 20 } });
   const slot = sheet(page, 'Новое событие');
-  await expectTime(slot, 'Начало', '15:00');
-  await expectTime(slot, 'Конец', '16:00');
-  await chooseTime(slot, 'Начало', '15:15');
-  await expectTime(slot, 'Конец', '16:15');
-  await chooseTime(slot, 'Начало', '15:00');
+  await expect(timeText(slot, 'Начало')).toHaveValue('15:00');
+  await expect(timeText(slot, 'Конец')).toHaveValue('16:00');
+  await timeText(slot, 'Начало').fill('15:15');
+  await expect(timeText(slot, 'Конец')).toHaveValue('16:15');
+  await timeText(slot, 'Начало').fill('15:00');
   await slot.getByLabel('Что за событие').fill('Созвон');
   await slot.getByRole('button', { name: 'Добавить в календарь' }).click();
   const call = timeline(page).getByRole('button', { name: '15:00–16:00, Созвон, событие' });
   await call.click();
   const savedCall = sheet(page, 'Событие');
-  await expectTime(savedCall, 'Конец', '16:00');
+  await expect(timeText(savedCall, 'Конец')).toHaveValue('16:00');
   await savedCall.getByRole('button', { name: 'Закрыть' }).click();
 
   // Задача без времени встаёт в «Весь день».
@@ -184,8 +184,8 @@ test('событие и задача на завтра: шкала дня, пл�
   // Событие можно поправить и удалить, а удалённую вернуть.
   await timeline(page).getByRole('button', { name: /Стоматолог/ }).click();
   const edit = sheet(page, 'Событие');
-  await expectTime(edit, 'Начало', '10:00');
-  await chooseTime(edit, 'Начало', '11:30');
+  await expect(timeText(edit, 'Начало')).toHaveValue('10:00');
+  await timeText(edit, 'Начало').fill('11:30');
   await edit.getByRole('button', { name: 'Сохранить' }).click();
   await expect(timeline(page).getByRole('button', { name: /^11:30–12:30, Стоматолог/ })).toBeVisible();
   await timeline(page).getByRole('button', { name: /Стоматолог/ }).click();
@@ -259,7 +259,7 @@ test('серия событий: повтор до даты, цвет, проп�
   await expect(page.getByRole('heading', { name: 'Пятница, 13.11.2026', level: 1 })).toBeVisible();
   await timeline(page).getByRole('button', { name: /Планёрка/ }).click();
   const series = sheet(page, 'Событие');
-  await chooseTime(series, 'Начало', '12:00');
+  await timeText(series, 'Начало').fill('12:00');
   await series.getByRole('radiogroup', { name: 'Цвет' }).getByRole('radio', { name: /Свой цвет/ }).click();
   await series.getByLabel('Код цвета').fill('#2BB3A3');
   await series.getByRole('button', { name: 'Сохранить всю серию' }).click();
@@ -370,7 +370,7 @@ test('дела на шкале дня переносятся перетаски�
   await page.getByRole('button', { name: 'Событие', exact: true }).click();
   const form = sheet(page, 'Новое событие');
   await form.getByLabel('Что за событие').fill('завтра в 10 стоматолог');
-  await chooseTime(form, 'Конец', '10:45');
+  await timeText(form, 'Конец').fill('10:45');
   await form.getByRole('button', { name: 'Добавить в календарь' }).click();
   await expect(form).toBeHidden();
   const dentist = timeline(page).getByRole('button', { name: /Стоматолог/ });
@@ -483,7 +483,7 @@ test('событие переносится через правый и левы�
   await page.getByRole('button', { name: 'Событие', exact: true }).click();
   const form = sheet(page, 'Новое событие');
   await form.getByLabel('Что за событие').fill('Стоматолог в 10');
-  await chooseTime(form, 'Конец', '10:45');
+  await timeText(form, 'Конец').fill('10:45');
   await form.getByRole('button', { name: 'Добавить в календарь' }).click();
   const event = timeline(page).getByRole('button', { name: /Стоматолог/ });
   await event.tap();

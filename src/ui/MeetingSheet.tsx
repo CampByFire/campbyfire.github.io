@@ -12,7 +12,7 @@ import { LIcon } from './Icon';
 import { QuestColorPicker } from './QuestColorPicker';
 import { Chips, WeekdayPicker } from './parts';
 import { Sheet } from './Sheets';
-import { TimeInput } from './TimeInput';
+import { TimeEntry } from './TimeEntry';
 
 type MeetingRepeatKind = RepeatKind | Exclude<MeetingRepeat, 'day' | 'week'>;
 
@@ -23,8 +23,8 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
   const [title, setTitle] = useState(editing?.title ?? '');
   const initialDay = editing?.day ?? preset ?? s.day;
   const [day, setDay] = useState<DayKey | null>(initialDay);
-  const [at, setAt] = useState(editing?.at ?? atPreset ?? '');
-  const [until, setUntil] = useState(editing?.until);
+  const [at, setAt] = useState<string | null>(editing?.at ?? atPreset ?? '');
+  const [until, setUntil] = useState<string | null | undefined>(editing?.until);
   const [place, setPlace] = useState(editing?.place ?? '');
   const storedDays = editing?.repeat === 'week' ? editing.repeatDays : undefined;
   const [repeatKind, setRepeatKind] = useState<MeetingRepeatKind>((storedDays?.length ?? 0) > 1 ? 'days' : editing?.repeat ?? 'none');
@@ -47,7 +47,7 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
   const vAt = !touched.at && parsed?.at ? parsed.at : at;
   const cleanAt = cleanTime(vAt);
   const shownAt = cleanAt ? formatTime(cleanAt, ui.clockFormat).replace(/^0/, '') : '';
-  const vUntil = until ?? (atPreset && !editing ? defaultMeetingEnd(vAt) : '');
+  const vUntil = until === undefined ? (atPreset && !editing && vAt ? defaultMeetingEnd(vAt) : '') : until;
   const name = parsed && (pDay || parsed.at) ? parsed.title : title.trim();
   const heard = parsed && ((pDay && !touched.day) || (parsed.at && !touched.at));
 
@@ -74,6 +74,10 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
     e?.preventDefault();
     if (!name) {
       input.current?.focus();
+      return;
+    }
+    if (vAt === null || (vAt && vUntil === null)) {
+      ui.toast('Проверь время события');
       return;
     }
     if (!vDay || !firstDay || noDays || color === null || (repeat && (repeatUntil === null || (repeatUntil && repeatUntil < firstDay)))) return;
@@ -136,11 +140,11 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
         setDay(value);
       }} />
       <div class="field-row">
-        <TimeInput label="Начало" format={ui.clockFormat} value={vAt} optional onChange={(value) => {
+        <TimeEntry label="Начало" format={ui.clockFormat} value={vAt} onChange={(value) => {
           setTouched((x) => ({ ...x, at: true }));
           setAt(value);
         }} />
-        <TimeInput label="Конец" format={ui.clockFormat} value={vUntil} optional disabled={!vAt} onChange={setUntil} />
+        <TimeEntry label="Конец" format={ui.clockFormat} value={vUntil} disabled={!vAt} onChange={setUntil} />
       </div>
       <p class="note">Без времени событие стоит на весь день, например день рождения или поездка.</p>
       <label class="field">

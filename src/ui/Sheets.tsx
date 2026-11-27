@@ -93,7 +93,7 @@ import { setSheetBack } from './back';
 import { MeetingSheet, MoveMeetingSheet, MoveRoutineSheet } from './MeetingSheet';
 import { PrizeSheet } from './Shop';
 import { PlanActions } from './Plan';
-import { TimeInput } from './TimeInput';
+import { TimeEntry } from './TimeEntry';
 
 export type SheetState =
   | { kind: 'planActions'; taskId: string; prev?: string; next?: string }
@@ -282,7 +282,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
   const [lvl, setLvl] = useState<Level>(from?.level ?? levelForEstimate(30));
   const [day, setDay] = useState<DayKey | null>(editing ? editing.day : preset?.day !== undefined ? preset.day : s.day);
   const [due, setDue] = useState<DayKey | null>(editing?.due ?? null);
-  const [at, setAt] = useState<string>((routine ?? from)?.at ?? '');
+  const [at, setAt] = useState<string | null>((routine ?? from)?.at ?? '');
   const [cue, setCue] = useState<string>(from?.cue ?? '');
   const [period, setPeriodKey] = useState<PeriodKey | null>(editing ? editing.period ?? null : preset?.period ?? null);
   const [repeatKind, setRepeatKind] = useState<RepeatKind>(routine?.repeat.every ?? 'none');
@@ -332,6 +332,10 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
     }
     if (noDays) {
       ui.toast('Выбери хотя бы один день');
+      return;
+    }
+    if (v.at === null) {
+      ui.toast('Проверь время задачи');
       return;
     }
     const fields = { title: name, description, questId: v.questId, level: v.lvl, estimateMin: v.estimate === ESTIMATE_BY_LEVEL[v.lvl] ? null : v.estimate, at: v.at || null, cue: cue.trim() || null };
@@ -536,7 +540,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
               <input class="input" type="date" value={v.due ?? ''} onInput={(e) => { touch('due'); setDue(e.currentTarget.value || null); }} />
             </label>
           )}
-          <TimeInput label="Во сколько" format={ui.clockFormat} value={v.at} optional onChange={(value) => { touch('at'); setAt(value); }} />
+          <TimeEntry label="Во сколько" format={ui.clockFormat} value={v.at} onChange={(value) => { touch('at'); setAt(value); }} />
         </div>
         <label class="field">
           <span class="field-label">Когда начну</span>
@@ -583,7 +587,7 @@ interface FormValues {
   lvl: Level;
   day: DayKey | null;
   due: DayKey | null;
-  at: string;
+  at: string | null;
   period: PeriodKey | null;
 }
 

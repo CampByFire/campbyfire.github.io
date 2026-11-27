@@ -1,7 +1,7 @@
 // Строка «когда начну» и напоминания через файл календаря.
 import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
-import { expandTaskForm, at, axe, chooseTime, openGame, openSettings, sheet, tab, toast } from './helpers';
+import { expandTaskForm, at, axe, openGame, openSettings, sheet, tab, timeText, toast } from './helpers';
 
 test('«когда начну» видно у огня, а файл календаря несёт её в напоминание', async ({ page }) => {
   await openGame(page, { time: at(9) });
@@ -10,7 +10,7 @@ test('«когда начну» видно у огня, а файл календ
   await expandTaskForm(form);
   await form.getByLabel('Что сделать').fill('Позвонить маме');
   await form.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio', { name: 'Работа' }).click();
-  await chooseTime(form, 'Во сколько', '19:00');
+  await timeText(form, 'Во сколько').fill('19:00');
   await form.getByLabel('Когда начну').fill('Когда приду домой, наберу номер');
   expect(await axe(page), 'Новая задача с «когда начну»').toEqual([]);
   await form.getByRole('button', { name: 'Взять в отряд' }).click();
@@ -24,7 +24,12 @@ test('«когда начну» видно у огня, а файл календ
   const remind = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Напоминания' }) });
   await expect(remind).toContainText('утренний костёр в 09:00, 1 задача со временем');
   await remind.getByRole('radiogroup', { name: 'Утренний костёр' }).getByRole('radio', { name: 'Каждый день' }).click();
-  await chooseTime(remind, 'Во сколько', '08:15');
+  const hours = remind.getByRole('combobox', { name: 'Во сколько, часы' });
+  const minutes = remind.getByRole('combobox', { name: 'Во сколько, минуты' });
+  await hours.focus();
+  await hours.selectOption('08');
+  await minutes.focus();
+  await minutes.selectOption('15');
   await page.keyboard.press('Tab');
   await expect(remind).toContainText('утренний костёр в 08:15');
   expect(await axe(page), 'Напоминания').toEqual([]);
