@@ -110,10 +110,11 @@ export function Camp({ ui }: { ui: Ui }) {
   }, [store]);
 
   const compact = root.h > 0 && root.h < 700;
+  const narrow = root.w > 0 && root.w < 480;
   const rowH = compact ? 40 : 44;
-  // Сцене оставляем столько, чтобы все фигуры с номерами были видны почти во всю ширину экрана.
-  // На низком экране она уменьшается сильнее (sceneBox), чтобы под ней уместилась ещё строка плана.
-  const contentH = (CONTENT.bottom - CONTENT.top) * (root.w / SCENE_W) * (compact ? COMPACT_SCALE : ROW_SCALE);
+  // На телефоне отводим место под сцену во всю ширину, а оставшиеся строки уходят в шторку.
+  const rowScale = narrow ? 1 : compact ? COMPACT_SCALE : ROW_SCALE;
+  const contentH = (CONTENT.bottom - CONTENT.top) * (root.w / SCENE_W) * rowScale;
   const sceneMin = Math.max(170, Math.round(contentH + TOPBAR_H + BADGE_H));
   const fit = Math.max(1, Math.min(5, Math.floor((root.h - fixedH - sceneMin) / rowH)));
   // Задача из карточки «Дальше» в списке не повторяется.
@@ -301,13 +302,15 @@ export function Camp({ ui }: { ui: Ui }) {
 
   const box = sceneBox(wrap.w, wrap.h);
   const bg = SCENE.backgrounds[v.light] ?? SCENE.backgrounds.day;
+  const backdrop = narrow && bg ? sceneBackdrop(box, bg) : undefined;
 
   return (
     <div class={`camp${compact ? ' is-compact' : ''}`} ref={rootRef}>
       <h1 class="sr-only">{W.camp}</h1>
       {/* Картинки поляны не ловят пальца, а меню по долгому нажатию в сцене не открывается совсем. */}
-      <div class="scene-wrap" ref={wrapRef} inert={isUp} onContextMenu={(e) => e.preventDefault()}>
-        {box.gaps && bg && <img class="scene-blur" src={assetUrl(bg)} alt="" aria-hidden="true" draggable={false} />}
+      <div class={`scene-wrap${backdrop ? ' has-backdrop' : ''}`} ref={wrapRef} inert={isUp} onContextMenu={(e) => e.preventDefault()}>
+        {backdrop && <div class="scene-backdrop" style={backdrop} aria-hidden="true" />}
+        {box.gaps && bg && !backdrop && <img class="scene-blur" src={assetUrl(bg)} alt="" aria-hidden="true" draggable={false} />}
         <div class="scene-box" style={box.style}>
           <Scene
             view={v}
@@ -315,8 +318,10 @@ export function Camp({ ui }: { ui: Ui }) {
             onTask={(id) => ui.open({ kind: 'task', taskId: id })}
             onLetters={() => ui.open({ kind: 'letters' })}
             unit={box.unit}
+            hasBackdrop={!!backdrop}
           />
         </div>
+        {backdrop && <div class="scene-shade" aria-hidden="true" />}
         <TopBar ui={ui} v={v} />
         {/* Нижняя полоса сцены: слева «ещё у костра», справа мысль и календарь. Одна строка, чтобы они не наезжали друг на друга. */}
         <div class="camp-bottom">
@@ -490,9 +495,9 @@ const MIN_SCALE = 0.62;
 /**
  * Картинка сцены покрывает место над листом (h; нижние SHEET_OVERLAP из них под краем листа). Если
  * нужная часть не помещается между верхней полосой и листом, картинка уменьшается, а по бокам
- * проступает размытый фон (gaps). Лишнее срезается так, чтобы нужная часть встала посередине.
+ * остаётся место для фона (gaps). Лишнее срезается так, чтобы нужная часть встала посередине.
  */
-function sceneBox(w: number, h: number): { style: preact.JSX.CSSProperties; gaps: boolean; unit?: number } {
+function sceneBox(w: number, h: number) {
   if (!w || !h) return { style: { width: '100%', aspectRatio: `${SCENE_W} / ${SCENE_H}` }, gaps: false };
   const ratio = SCENE_H / SCENE_W;
   // Между этими линиями экрана должна встать нужная часть картинки.
@@ -510,7 +515,41 @@ function sceneBox(w: number, h: number): { style: preact.JSX.CSSProperties; gaps
   let top = Math.min(0, Math.max(h - boxH, want));
   top = minTop > maxTop ? minTop : Math.min(maxTop, Math.max(minTop, top));
   const gaps = boxW < w - 0.5 || top > 0.5 || top + boxH < h - 0.5;
-  return { style: { width: `${boxW}px`, height: `${boxH}px`, left: `${(w - boxW) / 2}px`, top: `${top}px` }, gaps, unit: k };
+  const left = (w - boxW) / 2;
+  const edges = { top, right: left, bottom: h - top - boxH, left };
+  return {
+    style: {
+      width: `${boxW}px`,
+      height: `${boxH}px`,
+      left: `${left}px`,
+      top: `${top}px`,
+      '--cloud-inset': [edges.top, edges.right, edges.bottom, edges.left].map((edge) => `${-Math.max(0, edge)}px`).join(' '),
+    },
+    gaps,
+    unit: k,
+    edges,
+  };
+}
+
+/** Продлеваем края картинки в свободное место. Центр поляны остаётся на месте и совпадает с фигурами. */
+function sceneBackdrop({ gaps, unit, edges }: ReturnType<typeof sceneBox>, bg: string): preact.JSX.CSSProperties | undefined {
+  if (!gaps || !unit || !edges) return undefined;
+  const slice = { top: 110, right: 100, bottom: 54, left: 100 };
+  const sides = ['top', 'right', 'bottom', 'left'] as const;
+  // На границах частей не должно оставаться полосы шириной в долю пикселя.
+  const dpr = window.devicePixelRatio;
+  const snap = (px: number) => Math.round(px * dpr) / dpr;
+  return {
+    top: snap(Math.min(0, edges.top)),
+    right: snap(Math.min(0, edges.right)),
+    bottom: snap(Math.min(0, edges.bottom)),
+    left: snap(Math.min(0, edges.left)),
+    borderImageSource: `url("${assetUrl(bg)}")`,
+    borderImageSlice: `${slice.top} ${slice.right} ${slice.bottom} ${slice.left} fill`,
+    borderImageWidth: sides
+      .map((side) => `${snap(slice[side] * unit + Math.max(0, edges[side]))}px`)
+      .join(' '),
+  };
 }
 
 function TopBar({ ui, v }: { ui: Ui; v: CampView }) {

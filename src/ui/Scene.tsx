@@ -41,6 +41,7 @@ export function Scene(p: {
   onLetters: () => void;
   /** Сколько пикселей экрана в единице сцены; пока размер неизвестен, не задан. */
   unit?: number;
+  hasBackdrop?: boolean;
 }) {
   const { view: v } = p;
   const figures: Figure[] = [];
@@ -145,11 +146,11 @@ export function Scene(p: {
       }}
       onPointerLeave={() => hover && setHover(false)}
     >
-      {bg ? (
+      {!p.hasBackdrop && (bg ? (
         <img class="scene-bg" src={assetUrl(bg)} alt="" draggable={false} />
       ) : (
         <div class="scene-bg scene-bg-fallback" />
-      )}
+      ))}
       {/* Земля для магии: круг рун ложится под фигуры. */}
       <div class="scene-ground" aria-hidden="true" />
       <div

@@ -286,7 +286,8 @@ h2.sc {
     linear-gradient(180deg, #3d5f2a, #4f7a33 40%, #44692c);
 }
 
-.scene::after {
+.scene::after,
+.scene-shade {
   content: '';
   position: absolute;
   left: 0;
@@ -294,6 +295,20 @@ h2.sc {
   top: 0;
   height: 20%;
   background: linear-gradient(180deg, rgba(10, 8, 6, 0.5), rgba(10, 8, 6, 0));
+  pointer-events: none;
+}
+
+.has-backdrop .scene::after {
+  display: none;
+}
+
+.has-backdrop .scene {
+  overflow: visible;
+}
+
+.scene-backdrop {
+  position: absolute;
+  border: 1px solid transparent;
   pointer-events: none;
 }
 

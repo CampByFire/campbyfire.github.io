@@ -756,6 +756,10 @@
   mix-blend-mode: multiply;
 }
 
+.has-backdrop .clouds {
+  inset: var(--cloud-inset);
+}
+
 .clouds i {
   position: absolute;
   left: 0;

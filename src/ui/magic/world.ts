@@ -209,7 +209,7 @@ export function dusk(to: Light): void {
       const wrap = sc?.closest('.scene-wrap');
       if (!sc || !wrap) return;
       // Прежнее небо ложится под настоящее: Preact своих картинок не двигает, а чужой узел в начале не трогает.
-      const skies = [$('.scene-bg', sc), $('.scene-blur', wrap)].flatMap((el) => {
+      const skies = [$('.scene-bg', sc), $('.scene-backdrop, .scene-blur', wrap)].flatMap((el) => {
         if (!el?.parentElement) return [];
         const old = own(el.cloneNode(false) as HTMLElement);
         el.parentElement.prepend(old);

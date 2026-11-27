@@ -27,6 +27,16 @@ test('номера и кнопки лагеря нажимаются по все
   await page.getByRole('button', { name: /Разжечь костёр/ }).click();
   const targets = page.locator('.figure-hit, .camp-hit');
   await expect(page.locator('.figure-hit')).toHaveCount(9);
+  if (testInfo.project.use.isMobile) {
+    await expect.poll(() => page.locator('.scene-wrap').evaluate((wrap) => {
+      const area = wrap.getBoundingClientRect();
+      const bg = wrap.querySelector('.scene-backdrop, .scene-bg');
+      if (!bg) return false;
+      const art = bg.getBoundingClientRect();
+      return area.width === window.innerWidth && art.left <= area.left && art.right >= area.right &&
+        art.top <= area.top && art.bottom >= area.bottom;
+    })).toBe(true);
+  }
   await page.screenshot({ path: testInfo.outputPath('lager.png') });
   const bad = await targets.evaluateAll((buttons) => buttons.flatMap((button) => {
     const r = button.getBoundingClientRect();

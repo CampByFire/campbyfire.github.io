@@ -30,10 +30,16 @@ async function figurePoints(page: Page, title: string) {
         if (d < best.d) best = { x, y, d };
       }
     // Оставляем вокруг угла запас в экранных пикселях для радиуса касания.
+    // Chromium может передать касание ближайшей кнопке, даже когда её нет точно под пальцем.
+    const buttons = [...document.querySelectorAll('.camp button')].map((button) => button.getBoundingClientRect());
+    const buttonMargin = 16;
     let empty = null as null | { x: number; y: number };
     const marginX = Math.ceil(10 * c.width / r.width);
     const marginY = Math.ceil(10 * c.height / r.height);
     for (const [x, y] of [[2, 2], [c.width - 3, 2], [2, c.height - 3], [c.width - 3, c.height - 3]]) {
+      const point = toScreen(x, y);
+      if (buttons.some((b) => b.width > 0 && point.x >= b.left - buttonMargin && point.x <= b.right + buttonMargin &&
+        point.y >= b.top - buttonMargin && point.y <= b.bottom + buttonMargin)) continue;
       let clear = true;
       for (let dy = -marginY; dy <= marginY && clear; dy++)
         for (let dx = -marginX; dx <= marginX && clear; dx++) {
@@ -41,7 +47,7 @@ async function figurePoints(page: Page, title: string) {
           if (px >= 0 && py >= 0 && px < c.width && py < c.height && a[(py * c.width + px) * 4 + 3] > 0) clear = false;
         }
       if (clear) {
-        empty = toScreen(x, y);
+        empty = point;
         break;
       }
     }
@@ -59,6 +65,7 @@ test('нажатие на спутника открывает его задач�
   // Маски фигур читаются после разжигания, дадим им загрузиться.
   await page.waitForTimeout(500);
 
+  let tappedEmpty = false;
   for (const title of ['Сдать отчёт', 'Полить цветы']) {
     const { solid, empty } = await figurePoints(page, title);
     // Под пальцем картинка фигуры, а не кнопка: нажатие ловит сама сцена.
@@ -72,12 +79,11 @@ test('нажатие на спутника открывает его задач�
     await expect(card).toBeHidden();
 
     if (empty) {
-      const free = await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.closest('button') === null, empty);
-      if (free) {
-        await page.touchscreen.tap(empty.x, empty.y);
-        await page.waitForTimeout(300);
-        await expect(page.getByRole('dialog'), `${title}: пустой угол картинки`).toBeHidden();
-      }
+      await page.touchscreen.tap(empty.x, empty.y);
+      await page.waitForTimeout(300);
+      await expect(page.getByRole('dialog'), `${title}: пустой угол картинки`).toBeHidden();
+      tappedEmpty = true;
     }
   }
+  expect(tappedEmpty, 'Нашёлся пустой угол вне области касания кнопок').toBe(true);
 });
