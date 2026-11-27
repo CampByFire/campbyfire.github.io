@@ -297,6 +297,9 @@ export const PRIZE_TIER_NAME: Record<PrizeTier, string> = {
   dream: 'Мечты',
 };
 
+/** Целые оценки без дробной части, дробные с одним знаком. */
+export const scoreText = (score: number) => Number.isInteger(score) ? String(score) : score.toFixed(1).replace('.', ',');
+
 /** «150 золота»: число с пробелами между тысячами. Минус настоящий, а не дефис. */
 export function goldText(n: number): string {
   return `${n < 0 ? '−' : ''}${Math.abs(n).toLocaleString('ru-RU')} золота`;

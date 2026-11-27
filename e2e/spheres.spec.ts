@@ -67,12 +67,15 @@ test('колесо под котелками показывает обе оце�
   await expect(svg.locator('.wheel-value')).toHaveText(scores.map(String));
   await expect(svg.locator('.wheel-prev')).toHaveCount(spheres.length);
   await expect(wheel.locator('svg')).toHaveCount(1);
+  await expect(wheel.getByRole('list')).toHaveCount(0);
+  await expect(wheel.getByRole('button')).toHaveCount(1);
   expect((await wheel.boundingBox())!.y).toBeGreaterThan((await page.locator('.sphere-card').last().boundingBox())!.y);
   expect(await axe(page), 'Колесо баланса с оценками').toEqual([]);
 
-  const work = wheel.getByRole('button', { name: /Работа.*7 из 10.*раньше 5.*Как улучшить/ });
+  const work = page.getByRole('button', { name: /^Работа.*Оценка 7 из 10.*Предыдущая оценка 5 из 10/ });
   const note = sheet(page, 'Работа');
   await work.press('Enter');
+  await note.getByRole('button', { name: /Запиши, что сделать/ }).press('Enter');
   await expect(note.getByRole('textbox')).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(work).toBeFocused();

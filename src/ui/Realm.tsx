@@ -2,16 +2,16 @@ import { useRef } from 'preact/hooks';
 import { sphereBrews, type Brew } from '../game/alchemy';
 import { Cauldron } from './Cauldron';
 import { questHex } from '../game/color';
-import { BREW_CAPACITY, BREW_DAYS_PER_PORTION, BREW_PER_TASK } from '../game/rules';
+import { BREW_CAPACITY, BREW_DAYS_PER_PORTION, BREW_PER_TASK, SCORE_MAX } from '../game/rules';
 import { lairOf, lastRating, projectsOf, ratingDue, releasedOf, spheresOf, unrelease } from '../game/state';
 import { dayKey, formatDate, formatDue } from '../game/time';
 import type { Quest, State } from '../game/types';
-import { QUEST_ICON_NAME, W, brewIcon } from '../game/words';
+import { QUEST_ICON_NAME, W, brewIcon, scoreText } from '../game/words';
 import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
 import { QuestDot } from './parts';
 import { PageHelp } from './PageHelp';
-import { SphereWheel, SphereScores } from './SphereWheel';
+import { SphereWheel } from './SphereWheel';
 
 export function Realm({ ui }: { ui: Ui }) {
   const s = ui.store.state;
@@ -22,9 +22,9 @@ export function Realm({ ui }: { ui: Ui }) {
   const brews = sphereBrews(s);
   const last = lastRating(s);
   const previous = last ? lastRating(s, last.id) : undefined;
-  const balance = useRef<HTMLElement>(null);
+  const cauldrons = useRef<HTMLUListElement>(null);
   const openImprovement = (questId: string) => {
-    balance.current?.querySelector<HTMLButtonElement>(`[data-wheel-score="${CSS.escape(questId)}"]`)?.focus({ preventScroll: true });
+    cauldrons.current?.querySelector<HTMLButtonElement>(`[data-sphere="${CSS.escape(questId)}"]`)?.focus({ preventScroll: true });
     ui.open({ kind: 'improve', questId });
   };
   return (
@@ -46,17 +46,18 @@ export function Realm({ ui }: { ui: Ui }) {
           </button>
         </div>
         {spheres.length > 0 ? <>
-          <ul class="brew-grid">
-            {spheres.map(q => <li key={q.id}><SphereCard ui={ui} q={q} brew={brews.get(q.id)} /></li>)}
+          <ul class="brew-grid" ref={cauldrons}>
+            {spheres.map(q => (
+              <li key={q.id}><SphereCard ui={ui} q={q} brew={brews.get(q.id)} score={last?.scores[q.id]} previous={previous?.scores[q.id]} /></li>
+            ))}
           </ul>
-          <section class="balance" aria-labelledby="balance-title" ref={balance}>
+          <section class="balance" aria-labelledby="balance-title">
             <h3 class="sc" id="balance-title">{W.wheel}</h3>
             <SphereWheel spheres={spheres} last={last} previous={previous} onPick={openImprovement} />
             {last && <p class="note">Оценка {formatDue(last.id, s.day, ui.dateFormat).toLowerCase()}.{previous && ` Бледный контур показывает прошлую оценку от ${formatDate(previous.id, ui.dateFormat)}.`}</p>}
             {!last && <p class="note">Оцени сферы, чтобы заполнить колесо.</p>}
             {ratingDue(s) && <p class="note">Пора оценить сферы.</p>}
             <button class="btn btn-gold btn-wide" onClick={() => ui.open({ kind: 'rate' })}>{W.rate}</button>
-            <SphereScores spheres={spheres} last={last} previous={previous} onPick={openImprovement} />
           </section>
         </> : <p class="note">Добавь первую сферу, чтобы появился котелок.</p>}
         {loose.length > 0 && (
@@ -125,7 +126,7 @@ function openIn(s: State, questId: string): number {
   return s.tasks.filter((t) => t.questId === questId && t.status === 'open').length;
 }
 
-function SphereCard({ ui, q, brew }: { ui: Ui; q: Quest; brew?: Brew }) {
+function SphereCard({ ui, q, brew, score, previous }: { ui: Ui; q: Quest; brew?: Brew; score?: number; previous?: number }) {
   const icon = q.icon === undefined ? brewIcon(q.id) : q.icon;
   const portions = brew?.portions ?? 0;
   return (
@@ -133,7 +134,11 @@ function SphereCard({ ui, q, brew }: { ui: Ui; q: Quest; brew?: Brew }) {
       <Cauldron color={questHex(q.color)} portions={portions} icon={icon} />
       <span class="quest-card-name">{q.name}</span>
       <span class="quest-card-sub">{brew ? `Последнее дело — ${formatDue(brew.lastDay, ui.store.state.day, ui.dateFormat)}` : 'Пока нет выполненных дел'}</span>
-      <span class="sr-only">Отвар: {portions} из {BREW_CAPACITY}.{icon && ` Медальон: ${QUEST_ICON_NAME[icon]}.`}</span>
+      <span class="sr-only">
+        Отвар: {portions} из {BREW_CAPACITY}.{icon && ` Медальон: ${QUEST_ICON_NAME[icon]}.`}
+        {score === undefined ? ' Нет оценки.' : ` Оценка ${scoreText(score)} из ${SCORE_MAX}.`}
+        {previous !== undefined && ` Предыдущая оценка ${scoreText(previous)} из ${SCORE_MAX}.`}
+      </span>
     </button>
   );
 }

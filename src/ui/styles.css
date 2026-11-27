@@ -3238,32 +3238,6 @@ h3.field-label {
   .wheel-hit:hover { fill: rgba(255, 236, 200, 0.06); }
 }
 
-.wheel-scores {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
-  gap: 6px;
-  list-style: none;
-  padding: 0;
-  margin: 10px 0 0;
-}
-
-.wheel-score-row {
-  width: 100%;
-  min-height: 44px;
-  height: auto;
-}
-
-.wheel-score-row .row-title {
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.wheel-score {
-  color: var(--text-hi);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
 /* Заметка «Как улучшить» в листе сферы. */
 .row.improve-row {
   height: auto;

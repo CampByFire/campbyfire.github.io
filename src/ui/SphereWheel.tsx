@@ -1,8 +1,7 @@
 import { questHex } from '../game/color';
 import { SCORE_MAX } from '../game/rules';
 import type { Quest, Rating } from '../game/types';
-import { W } from '../game/words';
-import { QuestDot } from './parts';
+import { scoreText } from '../game/words';
 
 const SIZE = 292;
 const CENTER = SIZE / 2;
@@ -19,7 +18,6 @@ interface WheelProps {
 
 const radiusOf = (score: number) => RADIUS * score / SCORE_MAX;
 const point = (angle: number, radius: number) => [CENTER + radius * Math.sin(angle), CENTER - radius * Math.cos(angle)] as const;
-const scoreText = (score: number) => Number.isInteger(score) ? String(score) : score.toFixed(1).replace('.', ',');
 
 /** Сектора показывают последнюю оценку, а пунктир показывает предыдущую. */
 export function SphereWheel({ spheres, last, previous, onPick }: WheelProps) {
@@ -73,27 +71,5 @@ export function SphereWheel({ spheres, last, previous, onPick }: WheelProps) {
         ))}
       </svg>
     </div>
-  );
-}
-
-/** Те же оценки и переход к заметкам для клавиатуры и экранного диктора. */
-export function SphereScores({ spheres, last, previous, onPick }: WheelProps) {
-  return (
-    <ul class="wheel-scores" aria-label="Оценки сфер">
-      {spheres.map((q) => {
-        const score = last?.scores[q.id];
-        const before = previous?.scores[q.id];
-        return (
-          <li key={q.id}>
-            <button class="row wheel-score-row" data-wheel-score={q.id} onClick={() => onPick(q.id)}>
-              <QuestDot q={q} />
-              <span class="row-title">{q.name}</span>
-              <span class="wheel-score">{score === undefined ? 'нет оценки' : `${scoreText(score)} из ${SCORE_MAX}`}{before !== undefined && <span class="meta">, раньше {scoreText(before)}</span>}</span>
-              <span class="sr-only">. {W.improve}</span>
-            </button>
-          </li>
-        );
-      })}
-    </ul>
   );
 }
