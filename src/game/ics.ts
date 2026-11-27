@@ -79,7 +79,7 @@ function meetingRule(m: Meeting): string | undefined {
   const rule = {
     day: 'FREQ=DAILY',
     workday: 'FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR',
-    week: 'FREQ=WEEKLY',
+    week: m.repeatDays?.length ? rrule({ every: 'days', days: m.repeatDays }) : 'FREQ=WEEKLY',
     week2: 'FREQ=WEEKLY;INTERVAL=2',
     month: `FREQ=MONTHLY;${days}`,
     year: `FREQ=YEARLY;BYMONTH=${d.getMonth() + 1};${days}`,

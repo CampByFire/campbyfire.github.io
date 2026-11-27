@@ -321,6 +321,24 @@ describe('встречи в файле календаря', () => {
 describe('серии в файле календаря', () => {
   const flat = (s: State, now = at(9)) => buildIcs(s, now, { morning: null, morningDays: 'work', url: 'https://x/' }).replace(/\r\n /g, '');
 
+  it('серия в свои дни начинается в выбранный день и сохраняет пропуск и конец в файле', () => {
+    const s = newState(at(8));
+    const id = addMeeting(s, at(8), {
+      title: 'Прогулка', day: '2026-10-23', at: '10:00', repeat: 'week', repeatDays: [3, 1, 3], repeatUntil: '2026-11-02',
+    });
+    skipMeetingDay(s, id, '2026-10-28');
+    const m = findMeeting(s, id)!;
+    expect(m.repeatDays).toEqual([1, 3]);
+    expect(meetingOccursOn(m, '2026-10-23')).toBe(false);
+    expect(nextMeetingDay(m, s.day)).toBe('2026-10-26');
+    expect(nextMeetingDay(m, '2026-10-27')).toBe('2026-11-02');
+    expect(nextMeetingDay(m, '2026-11-03')).toBeNull();
+    const ics = flat(s);
+    expect(ics).toContain('DTSTART:20261026T100000');
+    expect(ics).toContain('RRULE:FREQ=WEEKLY;BYDAY=MO,WE;UNTIL=20261102T235959');
+    expect(ics).toContain('EXDATE:20261028T100000');
+  });
+
   it('каждый вид повтора записан правилом календаря', () => {
     const rule = (repeat: MeetingRepeat, day: string) => {
       const s = newState(at(8));

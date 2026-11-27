@@ -1,8 +1,8 @@
 // Все слова мира в одном месте: экраны берут названия только отсюда.
 import { periodEnd, periodKind, periodOf, periodStart, shiftPeriod, type PeriodKey, type PeriodKind } from './period';
 import type { PrizeIdea, PrizeTier, UndeadRank } from './rules';
-import { formatDate, parseDay, plural, type DateFormat, type Shift } from './time';
-import type { Level, MeetingRepeat, QuestKind, QuestPreset, RateEvery, Repeat } from './types';
+import { formatDate, parseDay, plural, repeatOnDays, type DateFormat, type Shift } from './time';
+import type { Level, Meeting, MeetingRepeat, QuestKind, QuestPreset, RateEvery, Repeat } from './types';
 
 export type ClassId = 'rogue' | 'barbarian' | 'mage' | 'knight';
 
@@ -99,17 +99,28 @@ export function repeatName(r: Repeat): string {
   return `по ${days.map((d) => ON_WEEKDAY[d].slice(3)).join(', ').replace(/, ([^,]*)$/, ' и $1')}`;
 }
 
-/** Повторы события в том порядке, в каком их предлагает лист события. */
-export const MEETING_REPEATS: MeetingRepeat[] = ['day', 'workday', 'week', 'week2', 'month', 'year'];
+export type RepeatKind = 'none' | Repeat['every'];
 
-export const MEETING_REPEAT_NAME: Record<MeetingRepeat, string> = {
-  day: 'Каждый день',
-  workday: 'По будням',
-  week: 'Каждую неделю',
-  week2: 'Каждые 2 недели',
-  month: 'Каждый месяц',
-  year: 'Каждый год',
+export const REPEAT_CHOICES: { value: RepeatKind; label: string }[] = [
+  { value: 'none', label: 'Не повторять' },
+  { value: 'day', label: 'Каждый день' },
+  { value: 'week', label: 'Раз в неделю' },
+  { value: 'days', label: 'Свои дни' },
+];
+
+const MEETING_REPEAT_NAME: Record<MeetingRepeat, string> = {
+  day: 'каждый день',
+  workday: 'по будням',
+  week: 'каждую неделю',
+  week2: 'каждые 2 недели',
+  month: 'каждый месяц',
+  year: 'каждый год',
 };
+
+export function meetingRepeatName({ repeat, repeatDays }: Pick<Meeting, 'repeat' | 'repeatDays'>): string | undefined {
+  if (repeat === 'week' && repeatDays?.length) return repeatName(repeatOnDays(repeatDays));
+  return repeat && MEETING_REPEAT_NAME[repeat];
+}
 
 export const PERIOD_KIND_NAME: Record<PeriodKind, string> = {
   week: 'Неделя',

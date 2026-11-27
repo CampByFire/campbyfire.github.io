@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { addMeeting, findMeeting, updateMeeting } from '../src/game/calendar';
 import { HOUR, MINUTE } from '../src/game/rules';
 import { addQuest, addRoutine, addTask, complete, findRoutine, findTask, newState, pause, rateSpheres, removeQuest, setEstimate, setImprove, setRoutineAt, setRoutineAtOn, settle, start, updateTask, waitingOf } from '../src/game/state';
 import { joinLines, mergeGames } from '../src/game/merge';
@@ -10,6 +11,27 @@ import { Sync, type Prefs } from '../src/sync/sync';
 
 // Пятница, 23 октября 2026.
 const at = (h: number, m = 0, d = 23) => new Date(2026, 9, d, h, m).getTime();
+
+it('дни недели события сливаются вместе с повтором и датой окончания', () => {
+  const now = at(9);
+  const base = newState(now);
+  const fields = { title: 'Прогулка', day: base.day, repeat: 'week' } as const;
+  const id = addMeeting(base, now, fields);
+  const local = structuredClone(base);
+  const remote = structuredClone(base);
+  updateMeeting(local, id, { ...fields, repeatDays: [1, 3], repeatUntil: '2026-11-03' });
+  updateMeeting(remote, id, { ...fields, title: 'Прогулка в парке', repeatUntil: '2026-12-01' });
+  local.touchedAt = now + 1;
+  remote.touchedAt = now;
+  const merged = mergeGames(base, local, remote, now + 2);
+  expect(findMeeting(merged, id)).toMatchObject({ title: 'Прогулка в парке', repeatDays: [1, 3], repeatUntil: '2026-11-03' });
+  const later = structuredClone(merged);
+  updateMeeting(later, id, { ...fields, repeat: 'day' });
+  const meeting = findMeeting(mergeGames(merged, merged, later, now + 3), id);
+  expect(meeting?.repeat).toBe('day');
+  expect(meeting?.repeatDays).toBeUndefined();
+  expect(meeting?.repeatUntil).toBeUndefined();
+});
 
 it('доступное время Плана сливается отдельно от распорядка и сбрасывается на обоих устройствах', () => {
   const now = at(9);

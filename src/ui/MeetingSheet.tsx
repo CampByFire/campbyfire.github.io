@@ -3,27 +3,34 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { addMeeting, cleanTime, defaultMeetingEnd, findMeeting, meetingOccursOn, moveMeeting, moveMeetingOnce, parseMeeting, removeMeeting, restoreMeeting, restoreMeetingTime, skipMeetingDay, undoMoveOnce, unskipMeetingDay, updateMeeting } from '../game/calendar';
 import { findRoutine, setRoutineAt, setRoutineAtOn } from '../game/state';
-import { formatDue, formatTime } from '../game/time';
+import { formatDue, formatTime, nextRepeat, parseDay, repeatOnDays } from '../game/time';
 import type { DayKey, MeetingRepeat, QuestColor } from '../game/types';
-import { MEETING_REPEATS, MEETING_REPEAT_NAME, dayTitle, repeatName } from '../game/words';
+import { REPEAT_CHOICES, WEEKDAY_CHIPS, dayTitle, meetingRepeatName, repeatName, type RepeatKind } from '../game/words';
 import type { Ui } from './App';
+import { DateInput } from './DateInput';
 import { LIcon } from './Icon';
 import { QuestColorPicker } from './QuestColorPicker';
-import { Chips } from './parts';
+import { Chips, WeekdayPicker } from './parts';
 import { Sheet } from './Sheets';
 import { TimeInput } from './TimeInput';
+
+type MeetingRepeatKind = RepeatKind | Exclude<MeetingRepeat, 'day' | 'week'>;
 
 /** day у нового события это его день, а у открытого события тот день серии, из которого его открыли. */
 export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui: Ui; meetingId?: string; day?: DayKey; at?: string }) {
   const s = ui.store.state;
   const editing = meetingId ? findMeeting(s, meetingId) : undefined;
   const [title, setTitle] = useState(editing?.title ?? '');
-  const [day, setDay] = useState<DayKey>(editing?.day ?? preset ?? s.day);
+  const initialDay = editing?.day ?? preset ?? s.day;
+  const [day, setDay] = useState<DayKey | null>(initialDay);
   const [at, setAt] = useState(editing?.at ?? atPreset ?? '');
   const [until, setUntil] = useState(editing?.until);
   const [place, setPlace] = useState(editing?.place ?? '');
-  const [repeat, setRepeat] = useState<MeetingRepeat | null>(editing?.repeat ?? null);
-  const [repeatUntil, setRepeatUntil] = useState(editing?.repeatUntil ?? '');
+  const storedDays = editing?.repeat === 'week' ? editing.repeatDays : undefined;
+  const [repeatKind, setRepeatKind] = useState<MeetingRepeatKind>((storedDays?.length ?? 0) > 1 ? 'days' : editing?.repeat ?? 'none');
+  const [selectedWeekday, setWeekday] = useState<number | undefined>(storedDays?.[0] ?? (editing?.repeat === 'week' ? parseDay(initialDay).getDay() : undefined));
+  const [days, setDays] = useState(storedDays ?? []);
+  const [repeatUntil, setRepeatUntil] = useState<DayKey | null>(editing?.repeatUntil ?? '');
   // undefined: обычный цвет события, null: в поле кода сейчас не цвет, под ним уже сказано, что не так.
   const [color, setColor] = useState<QuestColor | null | undefined>(editing?.color);
   // Что выбрали руками, сильнее слов во фразе.
@@ -44,6 +51,20 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
   const name = parsed && (pDay || parsed.at) ? parsed.title : title.trim();
   const heard = parsed && ((pDay && !touched.day) || (parsed.at && !touched.at));
 
+  const legacy = editing?.repeat;
+  const repeatChoices: { value: MeetingRepeatKind; label: string }[] = [...REPEAT_CHOICES];
+  if (legacy && legacy !== 'day' && legacy !== 'week') {
+    const label = meetingRepeatName({ repeat: legacy })!;
+    repeatChoices.push({ value: legacy, label: label[0].toUpperCase() + label.slice(1) });
+  }
+  const weekday = selectedWeekday ?? parseDay(vDay || initialDay).getDay();
+  const noDays = repeatKind === 'days' && days.length === 0;
+  const weekly = repeatKind === 'week' ? repeatOnDays([weekday]) : repeatKind === 'days' ? repeatOnDays(days) : null;
+  const repeat = repeatKind === 'none' ? undefined : repeatKind === 'days' ? (weekly?.every === 'day' ? 'day' : 'week') : repeatKind;
+  const anchoredWeek = legacy === 'week' && !storedDays?.length && vDay && weekday === parseDay(vDay).getDay();
+  const repeatDays = weekly?.every === 'week' && !anchoredWeek ? [weekly.weekday] : weekly?.every === 'days' ? weekly.days : undefined;
+  const firstDay = vDay && weekly ? nextRepeat(weekly, vDay) : vDay;
+
   if (meetingId && !editing) return null;
 
   const series = !!editing?.repeat;
@@ -55,11 +76,12 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
       input.current?.focus();
       return;
     }
-    if (!vDay || color === null) return;
-    const fields = { title: name, day: vDay, at: vAt || null, until: vUntil || null, place, color, repeat, repeatUntil: repeatUntil || null };
+    if (!vDay || !firstDay || noDays || color === null || (repeat && (repeatUntil === null || (repeatUntil && repeatUntil < firstDay)))) return;
+    const fields = { title: name, day: vDay, at: vAt || null, until: vUntil || null, place, color, repeat, repeatDays, repeatUntil: repeatUntil || null };
     if (editing) ui.store.act((st) => updateMeeting(st, editing.id, fields));
     else ui.store.act((st, now) => addMeeting(st, now, fields));
-    const when = `${formatDue(vDay, s.day, ui.dateFormat)}${shownAt ? ` в ${shownAt}` : ''}${repeat ? `, ${MEETING_REPEAT_NAME[repeat].toLowerCase()}` : ''}`;
+    const recurrence = meetingRepeatName(fields);
+    const when = `${formatDue(firstDay, s.day, ui.dateFormat)}${shownAt ? ` в ${shownAt}` : ''}${recurrence ? `, ${recurrence}` : ''}`;
     ui.toast(editing ? 'Событие сохранено' : `Событие в календаре: ${when}`);
     ui.close();
   };
@@ -102,28 +124,17 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
             aria-describedby={heard ? 'meet-hint' : undefined}
           />
         </label>
-        {heard && (
+        {heard && vDay && (
           <p class="field-hint" id="meet-hint" aria-live="polite">
             Понял: {dayTitle(vDay, s.day, ui.dateFormat).toLowerCase()}
             {shownAt && `, в ${shownAt}`}
           </p>
         )}
       </form>
-      <label class="field">
-        <span class="field-label">{repeat ? 'Первый день' : 'День'}</span>
-        <input
-          class="input"
-          type="date"
-          required
-          value={vDay}
-          onInput={(e) => {
-            const v = e.currentTarget.value;
-            if (!v) return;
-            setTouched((x) => ({ ...x, day: true }));
-            setDay(v);
-          }}
-        />
-      </label>
+      <DateInput label={repeat ? 'Начало серии' : 'День'} format={ui.dateFormat} value={vDay} onChange={(value) => {
+        setTouched((x) => ({ ...x, day: true }));
+        setDay(value);
+      }} />
       <div class="field-row">
         <TimeInput label="Начало" format={ui.clockFormat} value={vAt} optional onChange={(value) => {
           setTouched((x) => ({ ...x, at: true }));
@@ -136,17 +147,13 @@ export function MeetingSheet({ ui, meetingId, day: preset, at: atPreset }: { ui:
         <span class="field-label">Где</span>
         <input class="input" value={place} onInput={(e) => setPlace(e.currentTarget.value)} placeholder="Адрес, кабинет или ссылка на созвон" maxLength={200} />
       </label>
-      <Chips
-        label="Повтор"
-        value={repeat}
-        options={[{ value: null as MeetingRepeat | null, label: 'Нет' }, ...MEETING_REPEATS.map((r) => ({ value: r as MeetingRepeat | null, label: MEETING_REPEAT_NAME[r] }))]}
-        onChange={setRepeat}
-      />
+      <Chips label="Повторять" value={repeatKind} options={repeatChoices} onChange={setRepeatKind} />
+      {repeatKind === 'week' && <Chips label="В какой день недели" value={weekday} options={WEEKDAY_CHIPS} onChange={setWeekday} />}
+      {repeatKind === 'days' && <WeekdayPicker label="В какие дни" days={days} onChange={setDays} />}
+      {noDays && <p class="note note-error" role="status">Выбери хотя бы один день.</p>}
       {repeat && (
-        <label class="field">
-          <span class="field-label">Повторять до (можно не указывать)</span>
-          <input class="input" type="date" min={vDay} value={repeatUntil} onInput={(e) => setRepeatUntil(e.currentTarget.value)} />
-        </label>
+        <DateInput label="Повторять до (можно не указывать)" format={ui.dateFormat} value={repeatUntil}
+          min={firstDay || undefined} optional onChange={setRepeatUntil} />
       )}
       <QuestColorPicker initial={editing?.color} onChange={setColor} onNone={() => setColor(undefined)} label="Цвет" noneLabel="Обычный" />
       {series && <p class="note">Правка меняет все дни этого события. Чтобы убрать только один день, пропусти его.</p>}
@@ -187,7 +194,7 @@ export function MoveMeetingSheet({ ui, meetingId, day, at }: { ui: Ui; meetingId
     ui.close();
     if (was) ui.toast(`Вся серия теперь в ${when}`, { label: 'Вернуть', run: () => ui.store.act((st) => restoreMeetingTime(st, meetingId, was)) });
   };
-  return <MoveScopeSheet ui={ui} title="Перенести событие" name={m.title} repeat={m.repeat && MEETING_REPEAT_NAME[m.repeat].toLowerCase()} day={day} when={when} once={once} all={all} />;
+  return <MoveScopeSheet ui={ui} title="Перенести событие" name={m.title} repeat={meetingRepeatName(m)} day={day} when={when} once={once} all={all} />;
 }
 
 export function MoveRoutineSheet({ ui, routineId, day, at }: { ui: Ui; routineId: string; day: DayKey; at: string }) {

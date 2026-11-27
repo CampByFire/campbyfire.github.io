@@ -6,8 +6,8 @@ import { colorName, isDark, meetingTint, questHex } from '../game/color';
 import { findQuest, findRoutine, updateTask } from '../game/state';
 import { DRAG_STEP_MIN } from '../game/rules';
 import { addDays, formatClock, formatDate, formatWeekdayDate, formatTime, minutesOfDay, parseDay, type ClockFormat, type DateFormat } from '../game/time';
-import type { DayKey, Meeting, State } from '../game/types';
-import { MEETING_REPEAT_NAME, MONTH_NAME, W, WEEKDAY_NAME, agendaCount, dayTitle, repeatName } from '../game/words';
+import type { DayKey, State } from '../game/types';
+import { MONTH_NAME, W, WEEKDAY_NAME, agendaCount, dayTitle, meetingRepeatName, repeatName } from '../game/words';
 import type { Ui } from './App';
 import { useCalendarDrag } from './drag';
 import { GIcon, LIcon } from './Icon';
@@ -474,7 +474,7 @@ function TimelineEvent({ ui, s, slot, onPointerDown, dateDragProps, onShift }: {
   let tint: string | undefined;
   if (x.kind === 'meeting') {
     title = x.meeting.title;
-    kind = ['событие', repeatOf(x.meeting), x.meeting.place].filter(Boolean).join(' · ');
+    kind = ['событие', meetingRepeatName(x.meeting), x.meeting.place].filter(Boolean).join(' · ');
     cls += ' tl-ev-meet';
     open = () => ui.open({ kind: 'meeting', meetingId: x.meeting.id, day: x.day });
     if (x.meeting.color) {
@@ -522,9 +522,6 @@ function TimelineEvent({ ui, s, slot, onPointerDown, dateDragProps, onShift }: {
 
 const key = (x: AgendaItem) => (x.kind === 'meeting' ? `m-${x.meeting.id}` : x.kind === 'routine' ? `r-${x.routine.id}` : `${x.kind}-${x.task.id}`);
 
-/** Повтор события словами для подписи строки: «каждую неделю». */
-const repeatOf = (m: Meeting) => (m.repeat && MEETING_REPEAT_NAME[m.repeat]?.toLowerCase()) || null;
-
 /** Строка дня: время, название и что это такое. */
 export function AgendaRow({ ui, s, x, held, dragProps }: { ui: Ui; s: State; x: AgendaItem; held?: boolean; dragProps?: ReturnType<typeof dayMoveProps> }) {
   const time = x.at ? formatTime(x.at, ui.clockFormat).replace(/^0/, '') : x.kind === 'meeting' ? 'весь день' : '';
@@ -535,7 +532,7 @@ export function AgendaRow({ ui, s, x, held, dragProps }: { ui: Ui; s: State; x: 
   if (x.kind === 'meeting') {
     const m = x.meeting;
     title = m.title;
-    sub = ['событие', repeatOf(m), m.until && `до ${formatTime(m.until, ui.clockFormat).replace(/^0/, '')}`, m.place].filter(Boolean).join(' · ');
+    sub = ['событие', meetingRepeatName(m), m.until && `до ${formatTime(m.until, ui.clockFormat).replace(/^0/, '')}`, m.place].filter(Boolean).join(' · ');
     open = () => ui.open({ kind: 'meeting', meetingId: m.id, day: x.day });
     dot = m.color ? <ColorDot hex={questHex(m.color)} /> : <LIcon name="calendar" size={15} class="cal-ic-meet" />;
   } else if (x.kind === 'routine') {

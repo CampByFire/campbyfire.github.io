@@ -1,6 +1,8 @@
 // Календарь: события и задачи на дату, шкала дня по часам, что стоит на завтра, вход из плана и из лагеря.
 import { expect, test, type Page } from '@playwright/test';
-import { addTask, expandTaskForm, at, axe, expectNoSideScroll, openGame, setTime, sheet, tab, toast } from './helpers';
+import { addMeeting } from '../src/game/calendar';
+import { newState } from '../src/game/state';
+import { addTask, expandTaskForm, at, axe, expectNoSideScroll, openGame, seedGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Кнопки и поля меньше 44×44 на экране и в листе. Дела на шкале дня не в счёт: их высота это их длительность. */
 const tooSmall = (page: Page) =>
@@ -13,6 +15,56 @@ const tooSmall = (page: Page) =>
   );
 
 const timeline = (page: Page) => page.getByRole('region', { name: 'По часам' });
+
+test('событие с повтором в свои дни появляется только в выбранные дни недели', async ({ page }) => {
+  await openGame(page);
+  await tab(page, 'План').click();
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  await page.getByRole('button', { name: 'Событие', exact: true }).click();
+  const form = sheet(page, 'Новое событие');
+  await form.getByLabel('Что за событие').fill('Прогулка');
+  const repeat = form.getByRole('radiogroup', { name: 'Повторять' });
+  await expect(repeat.getByRole('radio')).toHaveCount(4);
+  await expect(repeat.getByRole('radio', { name: 'Не повторять' })).toBeChecked();
+  await expect(repeat.getByRole('radio', { name: 'Каждый день' })).toBeVisible();
+  await expect(repeat.getByRole('radio', { name: 'Раз в неделю' })).toBeVisible();
+  await repeat.getByRole('radio', { name: 'Свои дни' }).click();
+  const save = form.getByRole('button', { name: 'Добавить в календарь' });
+  await save.click();
+  await expect(form.getByRole('status')).toHaveText('Выбери хотя бы один день.');
+  const weekdays = form.getByRole('group', { name: 'В какие дни' });
+  await weekdays.getByRole('button', { name: 'понедельник' }).click();
+  await weekdays.getByRole('button', { name: 'среда' }).click();
+  expect(await axe(page), 'Событие в свои дни').toEqual([]);
+  await save.click();
+  await expect(form).toBeHidden();
+  await page.getByRole('button', { name: 'Октябрь', exact: true }).click();
+  await expect(page.getByRole('button', { name: '23.10.2026, пятница, сегодня: ничего' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '26.10.2026, понедельник: 1 событие' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '27.10.2026, вторник: ничего' })).toBeVisible();
+  await page.getByRole('button', { name: '28.10.2026, среда: 1 событие' }).click();
+  await page.getByRole('button', { name: /Прогулка.*по понедельникам и средам/ }).click();
+  const edit = sheet(page, 'Событие');
+  await expect(edit.getByRole('radio', { name: 'Свои дни' })).toBeChecked();
+  await expect(edit.getByRole('button', { name: 'понедельник' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(edit.getByRole('button', { name: 'среда' })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('у сохранённой ежемесячной серии остаётся её вариант повтора', async ({ page }) => {
+  const now = at(9);
+  const state = newState(now.getTime());
+  addMeeting(state, now.getTime(), { title: 'Книжный клуб', day: state.day, repeat: 'month' });
+  await seedGame(page, state);
+  await openGame(page, { time: now });
+  await tab(page, 'План').click();
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  const event = page.getByRole('button', { name: /Книжный клуб.*каждый месяц/ });
+  await event.click();
+  const edit = sheet(page, 'Событие');
+  await expect(edit.getByRole('radio', { name: 'Каждый месяц' })).toBeChecked();
+  await edit.getByRole('button', { name: 'Сохранить всю серию' }).click();
+  await expect(event).toBeVisible();
+});
 
 test('из Плана календарь открывается на сегодняшнем дне по часам', async ({ page }, testInfo) => {
   await openGame(page, { time: at(9) });
@@ -155,20 +207,21 @@ test('серия событий: повтор до даты, цвет, проп�
   await page.getByRole('button', { name: 'Событие', exact: true }).click();
   const form = sheet(page, 'Новое событие');
   await form.getByLabel('Что за событие').fill('Планёрка в 10');
-  await expect(form.getByLabel('Повторять до')).toHaveCount(0);
-  await form.getByRole('radiogroup', { name: 'Повтор' }).getByRole('radio', { name: 'Каждую неделю' }).click();
-  await expect(form.getByLabel('Первый день')).toHaveValue('2026-10-23');
-  await form.getByLabel('Повторять до').fill('2026-11-13');
+  await expect(form.getByRole('textbox', { name: 'Повторять до' })).toHaveCount(0);
+  await form.getByRole('radiogroup', { name: 'Повторять' }).getByRole('radio', { name: 'Раз в неделю' }).click();
+  await expect(form.getByRole('radiogroup', { name: 'В какой день недели' }).getByRole('radio', { name: 'пятница' })).toBeChecked();
+  await expect(form.getByRole('textbox', { name: 'Начало серии' })).toHaveValue('23.10.2026');
+  await form.getByRole('textbox', { name: 'Повторять до' }).fill('13.11.2026');
   await form.getByRole('radiogroup', { name: 'Цвет' }).getByRole('radio', { name: 'зелёное' }).click();
   expect(await axe(page), 'Новая серия').toEqual([]);
   expect(await tooSmall(page), 'Новая серия').toEqual([]);
   await expectNoSideScroll(page);
   await form.getByRole('button', { name: 'Добавить в календарь' }).click();
   await expect(form).toBeHidden();
-  await expect(toast(page)).toHaveText(/Событие в календаре: .*в 10:00, каждую неделю/);
+  await expect(toast(page)).toHaveText(/Событие в календаре: .*в 10:00, по пятницам/);
 
   // Дело на шкале в своём цвете, диктор слышит повтор и цвет словами.
-  const first = timeline(page).getByRole('button', { name: /^10:00–11:00, Планёрка, событие · каждую неделю, цвет / });
+  const first = timeline(page).getByRole('button', { name: /^10:00–11:00, Планёрка, событие · по пятницам, цвет / });
   await expect(first).toHaveCSS('border-left-color', 'rgb(106, 168, 79)');
   expect(await axe(page), 'День с цветным событием').toEqual([]);
 
@@ -186,7 +239,7 @@ test('серия событий: повтор до даты, цвет, проп�
   await page.getByRole('button', { name: /^06\.11\.2026, пятница/ }).click();
   await timeline(page).getByRole('button', { name: /Планёрка/ }).click();
   const edit = sheet(page, 'Событие');
-  await expect(edit.getByLabel('Первый день')).toHaveValue('2026-10-23');
+  await expect(edit.getByRole('textbox', { name: 'Начало серии' })).toHaveValue('23.10.2026');
   await expect(edit.getByRole('radiogroup', { name: 'Цвет' }).getByRole('radio', { name: 'зелёное' })).toBeChecked();
   expect(await axe(page), 'Лист серии').toEqual([]);
   expect(await tooSmall(page), 'Лист серии').toEqual([]);
@@ -206,7 +259,7 @@ test('серия событий: повтор до даты, цвет, проп�
   await expect(page.getByRole('heading', { name: 'Пятница, 13.11.2026', level: 1 })).toBeVisible();
   await timeline(page).getByRole('button', { name: /Планёрка/ }).click();
   const series = sheet(page, 'Событие');
-  await series.getByLabel('Начало').fill('12:00');
+  await series.getByLabel('Начало', { exact: true }).fill('12:00');
   await series.getByRole('radiogroup', { name: 'Цвет' }).getByRole('radio', { name: /Свой цвет/ }).click();
   await series.getByLabel('Код цвета').fill('#2BB3A3');
   await series.getByRole('button', { name: 'Сохранить всю серию' }).click();
@@ -226,7 +279,7 @@ test('серия событий: повтор до даты, цвет, проп�
   const again = sheet(page, 'Событие');
   await again.getByRole('radiogroup', { name: 'Цвет' }).getByRole('radio', { name: 'Обычный' }).click();
   await again.getByRole('button', { name: 'Сохранить всю серию' }).click();
-  await expect(timeline(page).getByRole('button', { name: /^12:00–13:00, Планёрка, событие · каждую неделю$/ })).toBeVisible();
+  await expect(timeline(page).getByRole('button', { name: /^12:00–13:00, Планёрка, событие · по пятницам$/ })).toBeVisible();
   await timeline(page).getByRole('button', { name: /Планёрка/ }).click();
   await sheet(page, 'Событие').getByRole('button', { name: 'Удалить всю серию' }).click();
   await expect(toast(page)).toContainText('Серия событий удалена');
@@ -363,7 +416,7 @@ test('дела на шкале дня переносятся перетаски�
   await page.getByRole('button', { name: 'Событие', exact: true }).click();
   const meet = sheet(page, 'Новое событие');
   await meet.getByLabel('Что за событие').fill('Планёрка в 8');
-  await meet.getByRole('radiogroup', { name: 'Повтор' }).getByRole('radio', { name: 'Каждую неделю' }).click();
+  await meet.getByRole('radiogroup', { name: 'Повторять' }).getByRole('radio', { name: 'Раз в неделю' }).click();
   await meet.getByRole('button', { name: 'Добавить в календарь' }).click();
   await expect(meet).toBeHidden();
   const standup = timeline(page).getByRole('button', { name: /Планёрка/ });
@@ -378,15 +431,15 @@ test('дела на шкале дня переносятся перетаски�
   // Через неделю серия стоит как была.
   for (let i = 0; i < 7; i++) await page.getByRole('button', { name: /^Позже: / }).click();
   await expect(page.getByRole('heading', { name: 'Суббота, 31.10.2026', level: 1 })).toBeVisible();
-  await expect(standup).toHaveAccessibleName('8:00–9:00, Планёрка, событие · каждую неделю');
+  await expect(standup).toHaveAccessibleName('8:00–9:00, Планёрка, событие · по субботам');
   // А «Все дни серии» двигает и этот день, и остальные.
   await dragMouse(page, standup, 2 * 56);
   await sheet(page, 'Перенести событие').getByRole('button', { name: 'Все дни серии' }).click();
   await expect(toast(page)).toContainText('Вся серия теперь в 10:00');
-  await expect(standup).toHaveAccessibleName('10:00–11:00, Планёрка, событие · каждую неделю');
+  await expect(standup).toHaveAccessibleName('10:00–11:00, Планёрка, событие · по субботам');
   await page.getByRole('button', { name: /^Позже: / }).click();
   for (let i = 0; i < 6; i++) await page.getByRole('button', { name: /^Позже: / }).click();
-  await expect(standup).toHaveAccessibleName('10:00–11:00, Планёрка, событие · каждую неделю');
+  await expect(standup).toHaveAccessibleName('10:00–11:00, Планёрка, событие · по субботам');
   expect(await axe(page), 'День после переноса').toEqual([]);
 });
 

@@ -14,6 +14,7 @@ export interface MeetingInput {
   place?: string | null;
   color?: QuestColor | null;
   repeat?: MeetingRepeat | null;
+  repeatDays?: number[];
   repeatUntil?: DayKey | null;
 }
 
@@ -39,6 +40,9 @@ function fill(m: Meeting, input: MeetingInput): void {
   else delete m.color;
   if (input.repeat) m.repeat = input.repeat;
   else delete m.repeat;
+  const repeatDays = input.repeat === 'week' ? [...new Set(input.repeatDays)].filter((d) => Number.isInteger(d) && d >= 0 && d < 7).sort() : [];
+  if (repeatDays.length) m.repeatDays = repeatDays;
+  else delete m.repeatDays;
   if (m.repeat && input.repeatUntil && input.repeatUntil >= m.day) m.repeatUntil = input.repeatUntil;
   else delete m.repeatUntil;
   // Пропуск имеет смысл только для дня серии: иначе, вернув прежний повтор, игрок нашёл бы день пропущенным.
@@ -56,8 +60,9 @@ function sameDayOfMonth(first: Date, d: Date): boolean {
 /** Попадает ли день в расписание встречи, пропуски здесь не в счёт. Повтор, которого эта версия не знает, считается одним разом. */
 function onRule(m: Meeting, day: DayKey): boolean {
   if (day < m.day) return false;
-  if (day === m.day && m.repeat !== 'workday') return true;
   if (m.repeatUntil && day > m.repeatUntil) return false;
+  if (m.repeat === 'week' && m.repeatDays?.length) return repeatsOn({ every: 'days', days: m.repeatDays }, day);
+  if (day === m.day && m.repeat !== 'workday') return true;
   const first = parseDay(m.day);
   const d = parseDay(day);
   switch (m.repeat) {

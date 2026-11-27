@@ -66,6 +66,7 @@ import { brewIcon,
   PERIOD_KIND_NAME,
   QUEST_KIND_HINT,
   QUEST_KIND_NAME,
+  REPEAT_CHOICES,
   SPHERE_KIND_NAME,
   UNDEAD_NAME,
   W,
@@ -73,6 +74,7 @@ import { brewIcon,
   periodName,
   periodTo,
   repeatName,
+  type RepeatKind,
 } from '../game/words';
 import type { Ui } from './App';
 import { CallLabel, backToWork, callToFire, finish, pauseHere } from './Camp';
@@ -259,15 +261,6 @@ const ESTIMATES: { value: number | null; label: string }[] = [
 function levelOfEstimate(min: number | null): Level {
   return min === null ? 4 : levelForEstimate(min);
 }
-
-type RepeatKind = 'none' | Repeat['every'];
-
-const REPEATS: { value: RepeatKind; label: string }[] = [
-  { value: 'none', label: 'Не повторять' },
-  { value: 'day', label: 'Каждый день' },
-  { value: 'week', label: 'Раз в неделю' },
-  { value: 'days', label: 'Свои дни' },
-];
 
 /**
  * Новая задача, правка задачи и правка повторяющейся задачи. У задачи, которую прислала
@@ -457,7 +450,7 @@ function TaskForm({ ui, preset, taskId, routineId }: { ui: Ui; preset?: { questI
           <summary>Спутник по длительности</summary>
           <p class="note">{CLASS_NAME[CLASS_BY_LEVEL[v.lvl]]}, уровень {v.lvl}. Длительность определяет класс и уровень спутника.</p>
         </details>
-        <Chips label="Повторять" value={repeatKind} options={routine && !editing ? REPEATS.slice(1) : REPEATS} onChange={setRepeatKind} />
+        <Chips label="Повторять" value={repeatKind} options={routine && !editing ? REPEAT_CHOICES.slice(1) : REPEAT_CHOICES} onChange={setRepeatKind} />
         {repeatKind === 'week' && <Chips label="В какой день недели" value={weekday} options={WEEKDAY_CHIPS} onChange={setWeekday} />}
         {repeatKind === 'days' && <WeekdayPicker label="В какие дни" days={days} onChange={setDays} />}
         {noDays && <p class="note note-error">Выбери хотя бы один день.</p>}

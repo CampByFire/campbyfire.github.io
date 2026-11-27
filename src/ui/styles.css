@@ -2002,6 +2002,26 @@ h3.field-label {
   flex: 1;
 }
 
+.date-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 8px;
+  position: relative;
+}
+
+.date-picker {
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: 44px;
+  height: 44px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.date-picker-visible {
+  grid-column: 1 / -1;
+}
+
 .field-row:has(.time-12) {
   flex-wrap: wrap;
 }

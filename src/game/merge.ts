@@ -116,7 +116,7 @@ function withImprove(q: Quest, text: string | undefined): Quest {
 }
 
 /** Повтор и его конец задаются вместе: конец от прежнего повтора к новому не подходит. */
-const MEETING_GROUPS = [['repeat', 'repeatUntil']];
+const MEETING_GROUPS = [['repeat', 'repeatDays', 'repeatUntil']];
 
 /** Пропущенные дни сливаются поштучно: пропуск с любой стороны остаётся, возвращённый день уходит из списка. */
 function mergeMeeting(b: Meeting, l: Meeting, r: Meeting, localWins: boolean): Meeting {

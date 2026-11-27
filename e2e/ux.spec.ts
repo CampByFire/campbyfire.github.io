@@ -101,6 +101,31 @@ test('формат даты меняется в Распорядке и помн
   await page.getByRole('button', { name: /На завтра ничего не запланировано/ }).click();
   await expect(page.getByRole('heading', { name: 'Суббота, 10.24.2026', exact: true })).toBeVisible();
   await expect(page.getByText('Завтра · ничего не запланировано')).toBeVisible();
+  await page.getByRole('button', { name: 'Событие', exact: true }).click();
+  const form = sheet(page, 'Новое событие');
+  await form.getByLabel('Что за событие').fill('Созвон');
+  await expect(form.getByRole('textbox', { name: 'День', exact: true })).toHaveValue('10.24.2026');
+  await form.getByRole('radio', { name: 'Каждый день' }).click();
+  const start = form.getByRole('textbox', { name: 'Начало серии' });
+  const end = form.getByRole('textbox', { name: 'Повторять до' });
+  await start.fill('10.25.2026');
+  await end.fill('10.24.2026');
+  await expect(end).toHaveAttribute('aria-invalid', 'true');
+  await end.fill('11.31.2026');
+  await expect(end).toHaveAttribute('aria-invalid', 'true');
+  await end.fill('11.06.2026');
+  await form.getByRole('button', { name: 'Добавить в календарь' }).click();
+  await expect(form).toBeHidden();
+  await openSettings(page, 'Распорядок');
+  await defaultDate.click();
+  await tab(page, 'План').click();
+  await page.getByRole('tab', { name: 'Календарь' }).click();
+  await page.getByRole('button', { name: /^Позже: Завтра/ }).click();
+  await page.getByRole('button', { name: /^Позже: Воскресенье, 25\.10\.2026/ }).click();
+  await page.getByRole('button', { name: /Созвон.*каждый день/ }).click();
+  const edit = sheet(page, 'Событие');
+  await expect(edit.getByRole('textbox', { name: 'Начало серии' })).toHaveValue('25.10.2026');
+  await expect(edit.getByRole('textbox', { name: 'Повторять до' })).toHaveValue('06.11.2026');
 });
 
 test('все пять горизонтов доступны вкладками и с клавиатуры', async ({ page }) => {
