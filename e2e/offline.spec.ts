@@ -13,9 +13,9 @@ test('после первого визита игра открывается б�
   await expect(page.locator('.app')).toBeVisible();
   await expect(page.getByRole('heading', { level: 1, name: 'Сбор отряда' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Купить хлеб/ })).toBeVisible();
-  // Картинки лагеря тоже из сохранённых.
+  // Широкий кадр для телефона тоже должен загрузиться из кэша.
   await page.getByRole('navigation', { name: 'Разделы' }).getByRole('button', { name: 'Лагерь', exact: true }).click();
-  const bg = page.locator('.scene-bg');
+  const bg = page.locator('img.scene-backdrop');
   await expect(bg).toBeVisible();
   await expect.poll(() => bg.evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
 });

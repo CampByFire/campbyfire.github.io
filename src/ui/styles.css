@@ -308,7 +308,7 @@ h2.sc {
 
 .scene-backdrop {
   position: absolute;
-  border: 1px solid transparent;
+  object-fit: contain;
   pointer-events: none;
 }
 

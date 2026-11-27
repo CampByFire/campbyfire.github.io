@@ -1,4 +1,4 @@
-// Снимает картинки лагеря: node render.mjs [preview [day|evening|night ...] | points | bbox <файлы>]
+// Снимает картинки лагеря: node render.mjs [wide | preview [day|evening|night ...] | points | bbox <файлы>]
 // Пишет public/camp/*.webp и src/scene/camp.json в приложении.
 import { createServer } from 'node:http';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -73,6 +73,7 @@ await page.goto(url);
 await page.evaluate(() => window.camp.ready);
 
 const mode = process.argv[2] ?? 'all';
+const LIGHTS = ['day', 'evening', 'night'];
 
 if (mode === 'bbox') {
   for (const f of process.argv.slice(3)) {
@@ -99,7 +100,7 @@ if (mode === 'preview') {
     ['road1', 'skeleton-warrior', 'stand'],
     ['road2', 'skeleton-mage', 'stand'],
   ];
-  const lights = process.argv.length > 3 ? process.argv.slice(3) : ['day', 'evening', 'night'];
+  const lights = process.argv.length > 3 ? process.argv.slice(3) : LIGHTS;
   for (const light of lights) {
     // Ночью отряд спит, как в приложении.
     const f = light === 'night' ? figs.map(([s, w, p]) => [s, w, s.startsWith('seat') ? 'lie' : p]) : figs;
@@ -148,19 +149,38 @@ if (mode === 'points') {
 
 mkdirSync(OUT_DIR, { recursive: true });
 // version попадает в адреса картинок: после новой съёмки телефон не покажет старые из кэша.
-const manifest = { version: Date.now().toString(36), size: [780, 840], backgrounds: {}, layers: {}, spots: {}, sprites: {} };
-await points(manifest);
+const version = Date.now().toString(36);
+const size = await page.evaluate(() => window.camp.size);
+const manifest = mode === 'wide'
+  ? JSON.parse(readFileSync(MANIFEST, 'utf8'))
+  : { size, backgrounds: {}, layers: {}, spots: {}, sprites: {} };
+if (manifest.size[0] !== size[0] || manifest.size[1] !== size[1]) {
+  throw new Error('Размер исходного кадра изменился. Пересними всю сцену командой npm run render.');
+}
+manifest.version = version;
+manifest.wide = { size: await page.evaluate(() => window.camp.wideSize), backgrounds: {} };
 
-for (const light of ['day', 'evening', 'night']) {
-  const bg = png(await page.evaluate((l) => window.camp.renderBackground(l), light));
-  const file = `bg-${light}.webp`;
+for (const light of LIGHTS) {
+  const bg = png(await page.evaluate((l) => window.camp.renderWideBackground(l), light));
+  const file = `bg-wide-${light}.webp`;
   await sharp(bg).webp({ quality: 82 }).toFile(join(OUT_DIR, file));
-  manifest.backgrounds[light] = file;
-  const fire = await crop(png(await page.evaluate((l) => window.camp.renderFire(l), light)));
-  const ff = `fire-${light}.webp`;
-  writeFileSync(join(OUT_DIR, ff), fire.out);
-  manifest.layers[`fire/${light}`] = { file: ff, x: fire.x, y: fire.y, w: fire.w, h: fire.h };
-  console.log('background', light);
+  manifest.wide.backgrounds[light] = file;
+  console.log('wide background', light);
+}
+
+if (mode !== 'wide') {
+  await points(manifest);
+  for (const light of LIGHTS) {
+    const bg = png(await page.evaluate((l) => window.camp.renderBackground(l), light));
+    const file = `bg-${light}.webp`;
+    await sharp(bg).webp({ quality: 82 }).toFile(join(OUT_DIR, file));
+    manifest.backgrounds[light] = file;
+    const fire = await crop(png(await page.evaluate((l) => window.camp.renderFire(l), light)));
+    const ff = `fire-${light}.webp`;
+    writeFileSync(join(OUT_DIR, ff), fire.out);
+    manifest.layers[`fire/${light}`] = { file: ff, x: fire.x, y: fire.y, w: fire.w, h: fire.h };
+    console.log('background', light);
+  }
 }
 
 // Герои со всеми обликами: «rogue», «rogue-b» … «rogue-e» и так далее.
@@ -177,7 +197,16 @@ for (const rank of ['minion', 'rogue', 'warrior', 'mage']) {
   for (let i = 0; i < 3; i++) jobs.push([`road${i}`, `skeleton-${rank}`, 'stand', 'day']);
 }
 
-for (const [spot, who, pose, light] of jobs) {
+// Для широкого кадра нужны тени, которые раньше срезала граница. Точки фигур остаются
+// в исходной системе координат. При частичной съёмке берём только слои у самого края.
+const [offsetX, offsetY] = manifest.wide.size.map((n, i) => (n - size[i]) / 2);
+const layerAt = (file, c) => ({ file, x: c.x - offsetX, y: c.y - offsetY, w: c.w, h: c.h });
+const touchesEdge = (s) => s.x === 0 || s.y === 0 || s.x + s.w === size[0] || s.y + s.h === size[1];
+const selected = mode === 'wide' ? jobs.filter(([spot, who, pose]) => {
+  const s = manifest.sprites[`${spot}/${who}/${pose}`];
+  return !s || touchesEdge(s) || (s.cape && touchesEdge(s.cape));
+}) : jobs;
+for (const [spot, who, pose, light] of selected) {
   const d = await page.evaluate((j) => window.camp.renderSprite(...j), [spot, who, pose, light]);
   const c = await crop(png(d.url));
   const file = `${spot}-${who}-${pose}.webp`;
@@ -188,13 +217,13 @@ for (const [spot, who, pose, light] of jobs) {
     const k = await crop(png(d.cape));
     const cf = `${spot}-${who}-${pose}-cape.webp`;
     writeFileSync(join(OUT_DIR, cf), k.out);
-    cape = { file: cf, x: k.x, y: k.y, w: k.w, h: k.h };
+    cape = layerAt(cf, k);
   }
-  manifest.sprites[`${spot}/${who}/${pose}`] = { file, x: c.x, y: c.y, w: c.w, h: c.h, head: d.head, ...(light === 'night' ? { lit: true } : {}), ...(cape ? { cape } : {}) };
+  manifest.sprites[`${spot}/${who}/${pose}`] = { ...layerAt(file, c), head: d.head, ...(light === 'night' ? { lit: true } : {}), ...(cape ? { cape } : {}) };
   process.stdout.write('.');
 }
 console.log();
 writeFileSync(MANIFEST, JSON.stringify(manifest, null, 1) + '\n');
-console.log('Готово:', jobs.length, 'фигур, манифест', MANIFEST);
+console.log('Готово:', selected.length, 'фигур, манифест', MANIFEST);
 await browser.close();
 server.close();

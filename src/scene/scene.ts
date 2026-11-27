@@ -34,6 +34,8 @@ interface CampManifest {
   chest: [number, number];
   messenger: [number, number];
   backgrounds: Partial<Record<Light, string>>;
+  /** Более широкий кадр с тем же центром и масштабом в пикселях. */
+  wide: { size: [number, number]; backgrounds: Partial<Record<Light, string>> };
   /** Части фона, которые рисуются поверх фигур за ними: костёр по свету, fire/day и т. п. */
   layers?: Record<string, Sprite>;
   spots: Record<string, [number, number]>;

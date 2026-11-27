@@ -248,6 +248,7 @@ npm install
 npm run models     # скачивает модели KayKit в kaykit/
 npm run preview    # три пробных кадра в out/
 npm run render     # картинки в public/camp/ и src/scene/camp.json
+npm run render -- wide  # широкие фоны и фигуры с обрезанными тенями
 npm run icons      # значки приложения из ночного костра
 ```
 

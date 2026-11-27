@@ -33,11 +33,13 @@ async function figurePoints(page: Page, title: string) {
     // Chromium может передать касание ближайшей кнопке, даже когда её нет точно под пальцем.
     const buttons = [...document.querySelectorAll('.camp button')].map((button) => button.getBoundingClientRect());
     const buttonMargin = 16;
+    const scene = el.closest('.scene');
     let empty = null as null | { x: number; y: number };
     const marginX = Math.ceil(10 * c.width / r.width);
     const marginY = Math.ceil(10 * c.height / r.height);
     for (const [x, y] of [[2, 2], [c.width - 3, 2], [2, c.height - 3], [c.width - 3, c.height - 3]]) {
       const point = toScreen(x, y);
+      if (!scene || document.elementFromPoint(point.x, point.y)?.closest('.scene') !== scene) continue;
       if (buttons.some((b) => b.width > 0 && point.x >= b.left - buttonMargin && point.x <= b.right + buttonMargin &&
         point.y >= b.top - buttonMargin && point.y <= b.bottom + buttonMargin)) continue;
       let clear = true;

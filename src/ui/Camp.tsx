@@ -110,7 +110,7 @@ export function Camp({ ui }: { ui: Ui }) {
   }, [store]);
 
   const compact = root.h > 0 && root.h < 700;
-  const narrow = root.w > 0 && root.w < 480;
+  const narrow = root.w > 0 && window.matchMedia('(max-width: 480px), (pointer: coarse) and (orientation: portrait)').matches;
   const rowH = compact ? 40 : 44;
   // На телефоне отводим место под сцену во всю ширину, а оставшиеся строки уходят в шторку.
   const rowScale = narrow ? 1 : compact ? COMPACT_SCALE : ROW_SCALE;
@@ -300,16 +300,18 @@ export function Camp({ ui }: { ui: Ui }) {
     if (e.pointerType !== 'touch') dragEnd();
   };
 
-  const box = sceneBox(wrap.w, wrap.h);
   const bg = SCENE.backgrounds[v.light] ?? SCENE.backgrounds.day;
-  const backdrop = narrow && bg ? sceneBackdrop(box, bg) : undefined;
+  const wide = narrow ? SCENE.wide : undefined;
+  const wideBg = wide?.backgrounds[v.light] ?? wide?.backgrounds.day;
+  const box = sceneBox(wrap.w, wrap.h, wideBg ? wide?.size : undefined);
+  const backdrop = box.backdrop;
 
   return (
     <div class={`camp${compact ? ' is-compact' : ''}`} ref={rootRef}>
       <h1 class="sr-only">{W.camp}</h1>
       {/* Картинки поляны не ловят пальца, а меню по долгому нажатию в сцене не открывается совсем. */}
       <div class={`scene-wrap${backdrop ? ' has-backdrop' : ''}`} ref={wrapRef} inert={isUp} onContextMenu={(e) => e.preventDefault()}>
-        {backdrop && <div class="scene-backdrop" style={backdrop} aria-hidden="true" />}
+        {backdrop && wideBg && <img class="scene-backdrop" src={assetUrl(wideBg)} style={backdrop} alt="" aria-hidden="true" draggable={false} />}
         {box.gaps && bg && !backdrop && <img class="scene-blur" src={assetUrl(bg)} alt="" aria-hidden="true" draggable={false} />}
         <div class="scene-box" style={box.style}>
           <Scene
@@ -494,61 +496,49 @@ const MIN_SCALE = 0.62;
 
 /**
  * Картинка сцены покрывает место над листом (h; нижние SHEET_OVERLAP из них под краем листа). Если
- * нужная часть не помещается между верхней полосой и листом, картинка уменьшается, а по бокам
- * остаётся место для фона (gaps). Лишнее срезается так, чтобы нужная часть встала посередине.
+ * нужная часть не помещается между верхней полосой и листом, весь кадр уменьшается.
+ * На телефоне края заполняет широкий фон, снятый с той же точки и в том же масштабе.
  */
-function sceneBox(w: number, h: number) {
+function sceneBox(w: number, h: number, wide?: [number, number]) {
   if (!w || !h) return { style: { width: '100%', aspectRatio: `${SCENE_W} / ${SCENE_H}` }, gaps: false };
-  const ratio = SCENE_H / SCENE_W;
   // Между этими линиями экрана должна встать нужная часть картинки.
   const from = TOPBAR_H + BADGE_H;
   const to = h - SHEET_OVERLAP;
-  const coverW = Math.max(w, h / ratio);
-  const fitW = ((to - from) / (CONTENT.bottom - CONTENT.top)) * SCENE_W;
-  const boxW = Math.max(w * MIN_SCALE, Math.min(coverW, fitW));
-  const boxH = boxW * ratio;
-  const k = boxH / SCENE_H;
+  const cover = Math.max(w / SCENE_W, h / SCENE_H);
+  const fit = (to - from) / (CONTENT.bottom - CONTENT.top);
+  const wideCover = wide ? Math.max(w / wide[0], h / wide[1]) : 0;
+  const k = Math.max(w / SCENE_W * MIN_SCALE, Math.min(cover, fit), wideCover);
+  const boxW = SCENE_W * k;
+  const boxH = SCENE_H * k;
   const want = (from + to) / 2 - ((CONTENT.top + CONTENT.bottom) / 2) * k;
   // Сначала стараемся обойтись без пустот, но нужная часть важнее: номера не уходят под верхнюю полосу.
   const minTop = from - CONTENT.top * k;
   const maxTop = to - CONTENT.bottom * k;
   let top = Math.min(0, Math.max(h - boxH, want));
   top = minTop > maxTop ? minTop : Math.min(maxTop, Math.max(minTop, top));
-  const gaps = boxW < w - 0.5 || top > 0.5 || top + boxH < h - 0.5;
   const left = (w - boxW) / 2;
-  const edges = { top, right: left, bottom: h - top - boxH, left };
+  let backdrop: preact.JSX.CSSProperties | undefined;
+  if (wide) {
+    const width = wide[0] * k;
+    const height = wide[1] * k;
+    const extraY = (height - boxH) / 2;
+    // Геометрический центр широкого кадра совпадает с центром слоя фигур.
+    top = Math.min(extraY, Math.max(h - boxH - extraY, top));
+    backdrop = { width, height, left: (w - width) / 2, top: top - extraY };
+  }
+  const gaps = boxW < w - 0.5 || top > 0.5 || top + boxH < h - 0.5;
+  const edges = [top, left, h - top - boxH, left];
   return {
     style: {
       width: `${boxW}px`,
       height: `${boxH}px`,
       left: `${left}px`,
       top: `${top}px`,
-      '--cloud-inset': [edges.top, edges.right, edges.bottom, edges.left].map((edge) => `${-Math.max(0, edge)}px`).join(' '),
+      '--cloud-inset': edges.map((edge) => `${-Math.max(0, edge)}px`).join(' '),
     },
     gaps,
     unit: k,
-    edges,
-  };
-}
-
-/** Продлеваем края картинки в свободное место. Центр поляны остаётся на месте и совпадает с фигурами. */
-function sceneBackdrop({ gaps, unit, edges }: ReturnType<typeof sceneBox>, bg: string): preact.JSX.CSSProperties | undefined {
-  if (!gaps || !unit || !edges) return undefined;
-  const slice = { top: 110, right: 100, bottom: 54, left: 100 };
-  const sides = ['top', 'right', 'bottom', 'left'] as const;
-  // На границах частей не должно оставаться полосы шириной в долю пикселя.
-  const dpr = window.devicePixelRatio;
-  const snap = (px: number) => Math.round(px * dpr) / dpr;
-  return {
-    top: snap(Math.min(0, edges.top)),
-    right: snap(Math.min(0, edges.right)),
-    bottom: snap(Math.min(0, edges.bottom)),
-    left: snap(Math.min(0, edges.left)),
-    borderImageSource: `url("${assetUrl(bg)}")`,
-    borderImageSlice: `${slice.top} ${slice.right} ${slice.bottom} ${slice.left} fill`,
-    borderImageWidth: sides
-      .map((side) => `${snap(slice[side] * unit + Math.max(0, edges[side]))}px`)
-      .join(' '),
+    backdrop,
   };
 }
 

@@ -2,6 +2,7 @@
 // Идёт на маленьком телефоне, обычном телефоне и компьютере.
 import { expect, test } from '@playwright/test';
 import { addTask as addGameTask, newState } from '../src/game/state';
+import camp from '../src/scene/camp.json' with { type: 'json' };
 import { addTask, at, expectNoSideScroll, openGame, seedGame, setTime, sheet, tab, toast } from './helpers';
 
 test('лист сворачивается до карточки и освобождает место лагерю', async ({ page }) => {
@@ -28,14 +29,21 @@ test('номера и кнопки лагеря нажимаются по все
   const targets = page.locator('.figure-hit, .camp-hit');
   await expect(page.locator('.figure-hit')).toHaveCount(9);
   if (testInfo.project.use.isMobile) {
-    await expect.poll(() => page.locator('.scene-wrap').evaluate((wrap) => {
+    await expect.poll(() => page.locator('.scene-wrap').evaluate((wrap, [sceneWidth, sceneHeight]) => {
       const area = wrap.getBoundingClientRect();
-      const bg = wrap.querySelector('.scene-backdrop, .scene-bg');
-      if (!bg) return false;
+      const bg = wrap.querySelector<HTMLImageElement>('img.scene-backdrop');
+      const box = wrap.querySelector('.scene-box')?.getBoundingClientRect();
+      if (!bg?.complete || bg.naturalWidth <= sceneWidth || !box) return false;
       const art = bg.getBoundingClientRect();
-      return area.width === window.innerWidth && art.left <= area.left && art.right >= area.right &&
-        art.top <= area.top && art.bottom >= area.bottom;
-    })).toBe(true);
+      const scale = box.width / sceneWidth;
+      const near = (a: number, b: number) => Math.abs(a - b) < 0.1;
+      return area.width === window.innerWidth && art.left <= area.left + 0.1 && art.right >= area.right - 0.1 &&
+        art.top <= area.top + 0.1 && art.bottom >= area.bottom - 0.1 &&
+        near(art.width, bg.naturalWidth * scale) && near(art.height, bg.naturalHeight * scale) &&
+        near(box.height, sceneHeight * scale) &&
+        near(art.left + art.width / 2, box.left + box.width / 2) &&
+        near(art.top + art.height / 2, box.top + box.height / 2);
+    }, camp.size)).toBe(true);
   }
   await page.screenshot({ path: testInfo.outputPath('lager.png') });
   const bad = await targets.evaluateAll((buttons) => buttons.flatMap((button) => {

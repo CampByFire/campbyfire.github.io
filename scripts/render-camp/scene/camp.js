@@ -6,6 +6,8 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 
 export const W = 780;
 export const H = 840;
+const WIDE_W = 1440;
+const WIDE_H = 1360;
 
 const KK = '/kaykit';
 const ADV = `${KK}/KayKit-Character-Pack-Adventures-1.0/addons/kaykit_character_pack_adventures/Characters/gltf`;
@@ -66,6 +68,12 @@ const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(30, W / H, 0.1, 200);
 camera.position.set(0, 10.6, 9.3);
 camera.lookAt(0, 0, -1.9);
+const wideCamera = camera.clone();
+wideCamera.aspect = WIDE_W / WIDE_H;
+// Расширяем кадр вокруг прежнего центра. Масштаб в пикселях и перспектива исходного кадра сохраняются.
+const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+wideCamera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(halfFov) * WIDE_H / H));
+wideCamera.updateProjectionMatrix();
 
 const loader = new GLTFLoader();
 const cache = new Map();
@@ -630,7 +638,7 @@ const depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
  * Плащ отдельным слоем: белый, с тем же светом и тенями, а тело и бревно только заслоняют его.
  * Приложение умножает этот слой на цвет похода и кладёт поверх фигуры.
  */
-function capeShot(ch, capeName, others) {
+function capeShot(ch, capeName, others, view) {
   const saved = [];
   let found = false;
   for (const root of [ch, ...others]) {
@@ -647,14 +655,14 @@ function capeShot(ch, capeName, others) {
       }
     });
   }
-  const url = found ? shot(true) : null;
+  const url = found ? shot(true, view) : null;
   for (const [o, m] of saved) o.material = m;
   return url;
 }
 
-function shot(transparent) {
+function shot(transparent, view = camera) {
   renderer.setClearColor(0x000000, transparent ? 0 : 1);
-  renderer.render(scene, camera);
+  renderer.render(scene, view);
   return renderer.domElement.toDataURL('image/png');
 }
 
@@ -673,11 +681,24 @@ export function project(x, y, z) {
   return [Math.round(((v.x + 1) / 2) * W), Math.round(((1 - v.y) / 2) * H)];
 }
 
-async function renderBackground(light) {
+function renderBackground(light, view = camera) {
   setLight(light);
   allWorld();
   scene.remove(catcher);
-  return shot(false);
+  return shot(false, view);
+}
+
+function inWideFrame(draw) {
+  renderer.setSize(WIDE_W, WIDE_H);
+  try {
+    return draw(wideCamera);
+  } finally {
+    renderer.setSize(W, H);
+  }
+}
+
+function renderWideBackground(light) {
+  return inWideFrame((view) => renderBackground(light, view));
 }
 
 // Слой костра поверх фигур, что сидят за ним: камни, поленья и пламя, без отсвета на земле.
@@ -730,14 +751,17 @@ async function renderSprite(spot, who, pose, light) {
   ch.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(ch);
   const head = project((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2);
-  scene.add(catcher);
-  const url = shot(true);
-  scene.remove(catcher);
   const capeName = CHARS[who]?.cape;
-  const cape = capeName ? capeShot(ch, capeName, keep) : null;
+  const sprites = inWideFrame((view) => {
+    scene.add(catcher);
+    const url = shot(true, view);
+    scene.remove(catcher);
+    const cape = capeName ? capeShot(ch, capeName, keep, view) : null;
+    return { url, cape };
+  });
   world.remove(ch);
   allWorld();
-  return { url, head, cape };
+  return { ...sprites, head };
 }
 
 /** Для проверки на глаз: вся поляна с фигурами сразу. */
@@ -770,6 +794,7 @@ window.camp = {
     setLight('day');
   })(),
   renderBackground,
+  renderWideBackground,
   renderFire,
   renderSprite,
   renderPreview,
@@ -780,4 +805,5 @@ window.camp = {
   chest: CHEST,
   messenger: MESSENGER,
   size: [W, H],
+  wideSize: [WIDE_W, WIDE_H],
 };
