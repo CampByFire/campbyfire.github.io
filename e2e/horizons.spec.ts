@@ -1,6 +1,6 @@
 // Горизонты (неделя, месяц, квартал, год) и задача одной фразой.
 import { expect, test, type Page } from '@playwright/test';
-import { expandTaskForm, at, axe, openGame, setTime, sheet, tab, toast } from './helpers';
+import { expandTaskForm, at, axe, expectTime, openGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Вкладка сбора отряда: День, Неделя, Месяц, Квартал, Год. */
 const view = (page: Page, name: string) => page.getByRole('radiogroup', { name: 'Что собирать' }).getByRole('radio', { name, exact: true });
@@ -47,7 +47,7 @@ test('фраза выставляет день, время, оценку и сф
   await expect(hint).toContainText('время: 19:00');
   await expect(hint).toContainText('займёт: 30 мин');
   await expect(hint).toContainText('сфера: Семья и отношения');
-  await expect(form.getByLabel('Во сколько')).toHaveValue('19:00');
+  await expectTime(form, 'Во сколько', '19:00');
   // Выбранное руками сильнее фразы.
   await form.getByRole('radiogroup', { name: 'Когда к костру' }).getByRole('radio', { name: 'Сегодня' }).click();
   await form.getByRole('button', { name: 'Взять в отряд' }).click();

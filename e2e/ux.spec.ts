@@ -1,12 +1,12 @@
 // Компактные разделы, порядок плана и сообщения над нижним действием.
 import { expect, test, type Page } from '@playwright/test';
 import { newState, addTask as addGameTask } from '../src/game/state';
-import { addTask, at, axe, openGame, openSettings, seedGame, sheet, tab, toast } from './helpers';
+import { addTask, at, axe, chooseTime, expandTaskForm, expectTime, openGame, openSettings, seedGame, sheet, tab, toast } from './helpers';
 
 test('настройки открываются отдельно, Назад возвращает фокус в список', async ({ page }) => {
   await openGame(page);
   await openSettings(page);
-  await expect(page.getByLabel('Работа с')).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Работа с', exact: true })).toHaveCount(0);
   for (const part of ['Распорядок', 'Напоминания', 'Сохранение', 'Магия', 'Справка', 'Стереть']) {
     const button = page.getByRole('navigation', { name: 'Разделы настроек' }).getByRole('button', { name: part, exact: true });
     await button.click();
@@ -62,7 +62,7 @@ test('формат времени меняется в Распорядке, де
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   await clock24.click();
-  await expect(page.getByLabel('до', { exact: true })).toHaveValue('18:15');
+  await expectTime(workEnd, 'до', '18:15');
   await clock12.click();
   expect(await axe(page), '12-часовой распорядок').toEqual([]);
 
@@ -82,6 +82,49 @@ test('формат времени меняется в Распорядке, де
   expect(await axe(page), 'Событие с 12-часовым временем').toEqual([]);
   await form.getByRole('button', { name: 'Добавить в календарь' }).click();
   await expect(page.getByRole('button', { name: '3:00 PM–4:15 PM, Созвон, событие' })).toBeVisible();
+});
+
+test.describe('Браузер с 12-часовой локалью', () => {
+  test.use({ locale: 'en-US' });
+
+  test('в формате 24 часа время событий и задач выбирается без AM/PM', async ({ page }) => {
+    await openGame(page);
+    await openSettings(page, 'Распорядок');
+    const formats = page.getByRole('radiogroup', { name: 'Формат времени' });
+    await formats.getByRole('radio', { name: '12 часов (AM/PM)' }).click();
+    await formats.getByRole('radio', { name: '24 часа', exact: true }).click();
+
+    await tab(page, 'План').click();
+    await page.getByRole('tab', { name: 'Календарь' }).click();
+    await page.getByRole('button', { name: 'Событие', exact: true }).click();
+    const meeting = sheet(page, 'Новое событие');
+    await meeting.getByLabel('Что за событие').fill('Поездка');
+    for (const label of ['Начало', 'Конец']) {
+      const time = meeting.getByRole('group', { name: label, exact: true });
+      await expect(time.getByRole('combobox')).toHaveCount(2);
+      await expect(time.getByRole('option', { name: '00', exact: true }).first()).toBeAttached();
+    }
+    await chooseTime(meeting, 'Начало', '00:15');
+    await chooseTime(meeting, 'Конец', '23:59');
+    await expectTime(meeting, 'Начало', '00:15');
+    await expectTime(meeting, 'Конец', '23:59');
+    await meeting.getByRole('button', { name: 'Добавить в календарь' }).click();
+    await expect(page.getByRole('button', { name: '0:15–23:59, Поездка, событие' })).toBeAttached();
+
+    await tab(page, 'Добавить задачу').click();
+    const task = sheet(page, 'Новая задача');
+    await expandTaskForm(task);
+    await task.getByLabel('Что сделать').fill('Проверить маршрут');
+    await task.getByRole('radio', { name: 'сфера Работа', exact: true }).click();
+    const taskTime = task.getByRole('group', { name: 'Во сколько', exact: true });
+    await expect(taskTime.getByRole('combobox')).toHaveCount(2);
+    await chooseTime(task, 'Во сколько', '23:45');
+    await expectTime(task, 'Во сколько', '23:45');
+    await task.getByRole('button', { name: 'Взять в отряд' }).click();
+    await expect(task).toBeHidden();
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('taskcraft-lager-v1')!).tasks[0]);
+    expect(saved).toMatchObject({ title: 'Проверить маршрут', at: '23:45' });
+  });
 });
 
 test('формат даты меняется в Распорядке и помнится после перезагрузки', async ({ page }) => {

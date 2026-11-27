@@ -1,13 +1,13 @@
 // Новая задача: уровень следует за временем, отдельно его не выбирают.
 import { expect, test } from '@playwright/test';
-import { expandTaskForm, addTask, axe, openGame, sheet, tab, toast } from './helpers';
+import { expandTaskForm, addTask, axe, chooseTime, expectTime, openGame, sheet, tab, toast } from './helpers';
 
 test('короткая форма сохраняет задачу одной фразой без раскрытия подробностей', async ({ page }, testInfo) => {
   await openGame(page);
   await tab(page, 'Добавить задачу').click();
   const form = sheet(page, 'Новая задача');
   await expect(form.getByRole('radiogroup', { name: 'Сфера или проект' }).getByRole('radio')).toHaveCount(5);
-  await expect(form.getByLabel('Во сколько')).toBeHidden();
+  await expect(form.getByRole('group', { name: 'Во сколько', exact: true })).toBeHidden();
   await expect(form.getByRole('radiogroup', { name: 'Повторять' })).toHaveCount(0);
   await form.getByLabel('Что сделать').fill('завтра в 19:00 позвонить маме #семья');
   await expect(form.getByRole('radio', { name: 'сфера Семья и отношения', exact: true })).toBeChecked();
@@ -28,13 +28,13 @@ test('подробности сохраняют выбор при сворачи
   await form.getByRole('radio', { name: 'сфера Развитие', exact: true }).click();
   const description = 'Открыть книгу\nПрочитать главу';
   await form.getByLabel('Описание').fill(description);
-  await form.getByLabel('Во сколько').fill('17:30');
+  await chooseTime(form, 'Во сколько', '17:30');
   const details = form.locator('details.form-details');
   await details.locator(':scope > summary').click();
   await details.locator(':scope > summary').focus();
   await page.keyboard.press('Enter');
   await expect(form.getByLabel('Описание')).toHaveValue(description);
-  await expect(form.getByLabel('Во сколько')).toHaveValue('17:30');
+  await expectTime(form, 'Во сколько', '17:30');
   expect(await axe(page), 'Подробная форма').toEqual([]);
   await details.locator(':scope > summary').click();
   await form.getByRole('button', { name: 'Взять в отряд' }).click();
@@ -42,7 +42,7 @@ test('подробности сохраняют выбор при сворачи
   expect(saved.description).toBe(description);
   await tab(page, 'Добавить задачу').click();
   await expect(form.getByRole('radio', { name: 'сфера Развитие', exact: true })).toBeVisible();
-  await expect(form.getByLabel('Во сколько')).toBeHidden();
+  await expect(form.getByRole('group', { name: 'Во сколько', exact: true })).toBeHidden();
 });
 
 test('время задачи само задаёт уровень и спутника', async ({ page }) => {

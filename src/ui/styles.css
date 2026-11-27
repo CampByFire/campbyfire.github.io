@@ -2022,16 +2022,22 @@ h3.field-label {
   grid-column: 1 / -1;
 }
 
-.field-row:has(.time-12) {
+.field-row:has(.time-12, .time-24) {
   flex-wrap: wrap;
 }
 .field-row:has(.time-12) .field {
   min-width: min(100%, 158px);
 }
+.field-row > .time-24 {
+  min-width: min(100%, 92px);
+}
 .time-parts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(44px, 1fr)) minmax(58px, 1.2fr);
+  grid-template-columns: repeat(2, minmax(44px, 1fr));
   gap: 4px;
+}
+.time-12 .time-parts {
+  grid-template-columns: repeat(2, minmax(44px, 1fr)) minmax(58px, 1.2fr);
 }
 .input {
   width: 100%;
