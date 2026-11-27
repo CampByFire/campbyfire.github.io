@@ -1,6 +1,6 @@
 // Алхимия: сферы как в колесе баланса, их оценка, проекты в сферах и напоминание оценить сферы.
 import { expect, test, type Page } from '@playwright/test';
-import { addQuest, addTask as addGameTask, complete, newState, spheresOf } from '../src/game/state';
+import { addQuest, addTask as addGameTask, complete, newState, rateSpheres, settle, spheresOf } from '../src/game/state';
 import { addTask, at, axe, openGame, openSettings, seedGame, setTime, sheet, tab, toast } from './helpers';
 
 /** Кнопки и поля в открытом листе, которые меньше 44×44. */
@@ -17,6 +17,9 @@ test('личные оценки сохраняются отдельно от о�
   await openGame(page);
   await tab(page, 'Алхимия').click();
   await expect(page.locator('.sphere-card')).toHaveCount(8);
+  const wheel = page.getByRole('region', { name: 'Колесо баланса' });
+  await expect(wheel.getByText('Оцени сферы, чтобы заполнить колесо.')).toBeVisible();
+  await expect(wheel.locator('.wheel-sector')).toHaveCount(0);
   await page.getByRole('button', { name: 'Оценить сферы' }).click();
   const rate = sheet(page, 'Оценить сферы');
   expect(await axe(page), 'Оценить сферы').toEqual([]);
@@ -29,6 +32,7 @@ test('личные оценки сохраняются отдельно от о�
   await rate.getByRole('button', { name: 'Сохранить оценку' }).click();
   await expect(rate).toBeHidden();
   await expect(toast(page)).toHaveText('Оценка сохранена');
+  await expect(wheel.locator('.wheel-sector')).toHaveCount(8);
   // Лист уже скрыт от диктора, но ещё закрывается. Переводим часы после его ухода.
   await expect(page.locator('.sheet-layer')).toHaveCount(0);
   await setTime(page, at(10, 0, 30));
@@ -43,6 +47,53 @@ test('личные оценки сохраняются отдельно от о�
   await again.getByRole('button', { name: 'Сохранить оценку' }).click();
   await page.locator('.sphere-card').first().click();
   await expect(sheet(page, 'Работа')).toContainText('оценка 7 из 10');
+});
+
+test('колесо под котелками показывает обе оценки и открывает заметку сферы', async ({ page }, testInfo) => {
+  const first = at(9, 0, 23);
+  const time = at(9, 0, 24);
+  const s = newState(first.getTime());
+  const spheres = spheresOf(s);
+  rateSpheres(s, first.getTime(), Object.fromEntries(spheres.map((q) => [q.id, 5])));
+  settle(s, time.getTime());
+  const scores = [7, 4, 1, 10, 6, 8, 5, 9];
+  rateSpheres(s, time.getTime(), Object.fromEntries(spheres.map((q, i) => [q.id, scores[i]])));
+  await seedGame(page, s);
+  await openGame(page, { time });
+  await tab(page, 'Алхимия').click();
+
+  const wheel = page.getByRole('region', { name: 'Колесо баланса' });
+  const svg = wheel.locator('.wheel > svg');
+  await expect(svg.locator('.wheel-value')).toHaveText(scores.map(String));
+  await expect(svg.locator('.wheel-prev')).toHaveCount(spheres.length);
+  for (const kind of ['hut', 'house', 'tower', 'castle']) {
+    await expect(svg.locator(`[data-building="${kind}"]`).first()).toBeVisible();
+  }
+  expect((await wheel.boundingBox())!.y).toBeGreaterThan((await page.locator('.sphere-card').last().boundingBox())!.y);
+  expect(await axe(page), 'Колесо баланса с оценками').toEqual([]);
+
+  const work = wheel.getByRole('button', { name: /Работа.*7 из 10.*раньше 5.*Как улучшить/ });
+  const note = sheet(page, 'Работа');
+  await work.press('Enter');
+  await expect(note.getByRole('textbox')).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(work).toBeFocused();
+
+  for (const [width, height] of [[390, 844], [360, 640], [1280, 900]]) {
+    await page.setViewportSize({ width, height });
+    await svg.scrollIntoViewIfNeeded();
+    const box = (await svg.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(width);
+    expect((await work.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  }
+  await work.blur();
+  await wheel.screenshot({ path: testInfo.outputPath('koleso-balansa.png') });
+  const box = (await svg.boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.59, box.y + box.height * 0.28);
+  await expect(note.getByRole('textbox')).toBeFocused();
+  await note.getByRole('button', { name: 'Закрыть' }).click();
+  await expect(work).toBeFocused();
 });
 
 test('котелки показывают уровень, дату и выбранный медальон на телефоне и компьютере', async ({ page }, testInfo) => {

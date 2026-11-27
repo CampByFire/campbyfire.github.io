@@ -262,6 +262,7 @@ export const W = {
   quest: 'Сфера или проект',
   quests: 'Проекты',
   spheres: 'Сферы',
+  wheel: 'Колесо баланса',
   noSphere: 'Без сферы',
   rate: 'Оценить сферы',
   improve: 'Как улучшить',

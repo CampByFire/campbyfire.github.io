@@ -3079,6 +3079,113 @@ h3.field-label {
 }
 .brew-grid .quest-card-name { flex: none; max-width: 100%; white-space: normal; }
 .brew-grid .quest-card-sub { margin: 0; }
+
+.balance {
+  margin-top: 24px;
+}
+
+.wheel {
+  display: flex;
+  justify-content: center;
+  margin: 6px 0 4px;
+}
+
+.wheel > svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.wheel-ring {
+  fill: none;
+  stroke: rgba(255, 236, 200, 0.12);
+}
+
+.wheel-sector {
+  fill-opacity: 0.78;
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+
+.wheel-ticks,
+.wheel-ticks-empty {
+  fill: none;
+  stroke-width: 0.75;
+}
+
+.wheel-ticks { stroke: rgba(255, 255, 255, 0.2); }
+.wheel-ticks-empty { stroke: rgba(255, 236, 200, 0.1); }
+
+.wheel-prev {
+  fill: none;
+  stroke: rgba(255, 236, 200, 0.55);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.wheel-value {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  fill: var(--text-hi);
+  stroke: var(--bg);
+  stroke-width: 3px;
+  paint-order: stroke;
+}
+
+.wheel-building-mark {
+  transform: var(--wheel-rim-position);
+  pointer-events: none;
+}
+
+.wheel-building-mark .wheel-value { transform: translateY(13px); }
+.wheel-building, .wheel-building-list { color: var(--gold-hi); }
+.wheel-building-list { display: none; flex: none; }
+.wheel-scores-buildings .wheel-building-list { display: inline-flex; }
+
+.wheel-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .wheel-hit:hover { fill: rgba(255, 236, 200, 0.06); }
+}
+
+.wheel-scores {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+}
+
+.wheel-score-row {
+  width: 100%;
+  min-height: 44px;
+  height: auto;
+}
+
+.wheel-score-row .row-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.wheel-score {
+  color: var(--text-hi);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@media (max-width: 374px) {
+  .wheel-building-mark { transform: var(--wheel-value-position); }
+  .wheel-building-mark .wheel-value { transform: none; }
+  .wheel-building { display: none; }
+  .wheel-building-list { display: inline-flex; }
+}
+
 /* Заметка «Как улучшить» в листе сферы. */
 .row.improve-row {
   height: auto;

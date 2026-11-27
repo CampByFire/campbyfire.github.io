@@ -37,6 +37,8 @@ export const ESTIMATE_BY_LEVEL: Record<Level, number | null> = { 1: 30, 2: 120, 
 /** Оценка сферы в колесе баланса: от 1 до 10. */
 export const SCORE_MIN = 1;
 export const SCORE_MAX = 10;
+/** Оценки, с которых на колесе появляются дом и башня. Замок соответствует 10. */
+export const SPHERE_BUILDING_SCORE = { house: 4, tower: 7 };
 /** Котелок вмещает восемь порций. За игровой день выпаривается одна. */
 export const BREW_CAPACITY = 8;
 export const BREW_PER_TASK = 3;

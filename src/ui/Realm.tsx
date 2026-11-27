@@ -1,8 +1,9 @@
+import { useRef } from 'preact/hooks';
 import { sphereBrews, type Brew } from '../game/alchemy';
 import { Cauldron } from './Cauldron';
 import { questHex } from '../game/color';
 import { BREW_CAPACITY, BREW_DAYS_PER_PORTION, BREW_PER_TASK } from '../game/rules';
-import { lairOf, projectsOf, ratingDue, releasedOf, spheresOf, unrelease } from '../game/state';
+import { lairOf, lastRating, projectsOf, ratingDue, releasedOf, spheresOf, unrelease } from '../game/state';
 import { dayKey, formatDate, formatDue } from '../game/time';
 import type { Quest, State } from '../game/types';
 import { QUEST_ICON_NAME, W, brewIcon } from '../game/words';
@@ -10,6 +11,7 @@ import type { Ui } from './App';
 import { GIcon, LIcon } from './Icon';
 import { QuestDot } from './parts';
 import { PageHelp } from './PageHelp';
+import { SphereWheel, SphereScores } from './SphereWheel';
 
 export function Realm({ ui }: { ui: Ui }) {
   const s = ui.store.state;
@@ -18,6 +20,13 @@ export function Realm({ ui }: { ui: Ui }) {
   const won = s.quests.filter((q) => !q.sphere && q.wonAt).sort((a, b) => (b.wonAt ?? 0) - (a.wonAt ?? 0));
   const released = releasedOf(s).slice(0, 30);
   const brews = sphereBrews(s);
+  const last = lastRating(s);
+  const previous = last ? lastRating(s, last.id) : undefined;
+  const balance = useRef<HTMLElement>(null);
+  const openImprovement = (questId: string) => {
+    balance.current?.querySelector<HTMLButtonElement>(`[data-wheel-score="${CSS.escape(questId)}"]`)?.focus({ preventScroll: true });
+    ui.open({ kind: 'improve', questId });
+  };
   return (
     <div class="page">
       <div class="page-heading">
@@ -25,7 +34,7 @@ export function Realm({ ui }: { ui: Ui }) {
         <PageHelp title={W.realm}>
           Каждое выполненное дело в сфере или её проекте пополняет котелок на {BREW_PER_TASK} из {BREW_CAPACITY} порций.
           Раз в {BREW_DAYS_PER_PORTION} игровых дня испаряется одна порция. Нажми на котелок, чтобы открыть проекты и заметку «Как улучшить».
-          Кнопка «Оценить сферы» сохраняет твою личную оценку.
+          Колесо баланса показывает личные оценки сфер. Бледным контуром отмечена предыдущая оценка. Нажми на сектор, чтобы открыть «Как улучшить».
         </PageHelp>
       </div>
       <section class="group">
@@ -40,8 +49,15 @@ export function Realm({ ui }: { ui: Ui }) {
           <ul class="brew-grid">
             {spheres.map(q => <li key={q.id}><SphereCard ui={ui} q={q} brew={brews.get(q.id)} /></li>)}
           </ul>
-          {ratingDue(s) && <p class="note">Пора оценить сферы.</p>}
-          <button class="btn btn-gold btn-wide" onClick={() => ui.open({ kind: 'rate' })}>{W.rate}</button>
+          <section class="balance" aria-labelledby="balance-title" ref={balance}>
+            <h3 class="sc" id="balance-title">{W.wheel}</h3>
+            <SphereWheel spheres={spheres} last={last} previous={previous} onPick={openImprovement} />
+            {last && <p class="note">Оценка {formatDue(last.id, s.day, ui.dateFormat).toLowerCase()}.{previous && ` Бледный контур показывает прошлую оценку от ${formatDate(previous.id, ui.dateFormat)}.`}</p>}
+            {!last && <p class="note">Оцени сферы, чтобы заполнить колесо.</p>}
+            {ratingDue(s) && <p class="note">Пора оценить сферы.</p>}
+            <button class="btn btn-gold btn-wide" onClick={() => ui.open({ kind: 'rate' })}>{W.rate}</button>
+            <SphereScores spheres={spheres} last={last} previous={previous} onPick={openImprovement} />
+          </section>
         </> : <p class="note">Добавь первую сферу, чтобы появился котелок.</p>}
         {loose.length > 0 && (
           <div class="sphere">
